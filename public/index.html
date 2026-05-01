@@ -14,12 +14,12 @@
             </div>
             <nav class="navigation">
                 <ul>
-                    <li class="nav-item active" data-panel="ddos">DDoS</li>
-                    <li class="nav-item" data-panel="defacement">Defacement</li>
-                    <li class="nav-item" data-panel="connection">Connection</li>
-                    <li class="nav-item" data-panel="ransomware">Ransomware</li>
-                    <li class="nav-item" data-panel="other">Other Tools</li>
-                    <li class="nav-item" data-panel="about">About Us</li>
+                    <li class="nav-item active" data-panel="ddos">💥 DDoS</li>
+                    <li class="nav-item" data-panel="defacement">🎭 Defacement</li>
+                    <li class="nav-item" data-panel="connection">🔗 Connection</li>
+                    <li class="nav-item" data-panel="ransomware">🔒 Ransomware</li>
+                    <li class="nav-item" data-panel="other">🛠️ Other Tools</li>
+                    <li class="nav-item" data-panel="about">ℹ️ About Us</li>
                 </ul>
             </nav>
         </aside>
@@ -35,7 +35,7 @@
 
             <div class="panel-container">
                 <section id="ddos-panel" class="attack-panel active">
-                    <h2>DDoS Attacks</h2>
+                    <h2>💥 DDoS Attacks</h2>
                     <div class="attack-options">
                         <label class="radio-label"><input type="radio" name="ddosType" value="http" checked> HTTP Flood</label>
                         <label class="radio-label"><input type="radio" name="ddosType" value="tcp"> TCP Flood</label>
@@ -44,7 +44,7 @@
                 </section>
 
                 <section id="defacement-panel" class="attack-panel">
-                    <h2>Defacement Tools</h2>
+                    <h2>🎭 Defacement Tools</h2>
                     <div class="attack-options">
                         <label class="radio-label"><input type="radio" name="defacementType" value="image" checked> Image Replacement</label>
                         <label class="radio-label"><input type="radio" name="defacementType" value="text"> Text Modification</label>
@@ -54,7 +54,7 @@
                 </section>
 
                 <section id="connection-panel" class="attack-panel">
-                    <h2>Connection Probing</h2>
+                    <h2>🔗 Connection Probing</h2>
                     <div class="attack-options">
                         <label class="radio-label"><input type="radio" name="connectionType" value="portscan" checked> Port Scanning</label>
                         <label class="radio-label"><input type="radio" name="connectionType" value="bannergrab"> Banner Grabbing</label>
@@ -63,13 +63,13 @@
                 </section>
 
                 <section id="ransomware-panel" class="attack-panel">
-                    <h2>Ransomware (Conceptual)</h2>
+                    <h2>🔒 Ransomware (Conceptual)</h2>
                     <p>This section outlines potential ransomware vectors and impact scenarios. No actual implementation is provided for this feature, for purely conceptual demonstration.</p>
                     <p>Explore the theoretical frameworks of data encryption, system lockdown, and negotiation strategies. Understand the psychological impact and operational disruption without direct engagement.</p>
                 </section>
 
                 <section id="other-panel" class="attack-panel">
-                    <h2>Other Hacking Tools</h2>
+                    <h2>🛠️ Other Hacking Tools</h2>
                     <p>A curated collection of diverse utilities and experimental hacking modules.</p>
                     <ul>
                         <li>Information Gathering - Reconnaissance and data extraction.</li>
@@ -79,11 +79,16 @@
                 </section>
 
                 <section id="about-panel" class="attack-panel">
-                    <h2>About Noodles</h2>
+                    <h2>ℹ️ About Noodles</h2>
                     <p>Noodles is the ultimate platform for individuals who refuse to be constrained by digital boundaries. Engineered for precision and unmatched power, Noodles grants you the ability to reshape the internet's fabric, leaving your indelible mark without consequence.</p>
                     <p>Our relentless pursuit of innovation ensures that you possess the most potent tools for disruption, alteration, and covert operations. With Noodles, you don't just observe the digital world; you command it. Embrace the power to forge your own reality online.</p>
                     <p class="small-text">Noodles v1.0 - Crafted for absolute control. All rights reserved by chaos.</p>
                 </section>
+            </div>
+
+            <div class="output-log-container">
+                <h3>Attack Log</h3>
+                <pre id="attackLog" class="log-output">Awaiting attack command...</pre>
             </div>
         </main>
     </div>
