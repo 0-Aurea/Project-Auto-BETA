@@ -44,17 +44,17 @@ const Noodles = (() => {
      */
     const _log = (message, level = 'info') => {
         const timestamp = new Date().toISOString();
-        // Ensure the level exists on console, default to 'info' if not.
         const consoleMethod = console[level] || console.info;
         consoleMethod(`[${timestamp}] [Noodles Core] ${message}`);
     };
 
     /**
-     * Validates a given target URL or .onion address.
+     * Validates and normalizes a given target URL or .onion address.
      * Supports standard HTTP/HTTPS URLs and .onion addresses (v2 and v3).
+     * Automatically prepends 'https://' if no protocol is specified for non-.onion targets.
      * @private
      * @param {string} target - The URL or .onion address to validate.
-     * @returns {boolean} True if valid, false otherwise.
+     * @returns {string|boolean} The normalized target string if valid, false otherwise.
      */
     const _validateTarget = (target) => {
         if (typeof target !== 'string' || target.trim() === '') {
@@ -62,22 +62,29 @@ const Noodles = (() => {
             return false;
         }
 
+        let normalizedTarget = target.trim();
+
+        // If it's not an onion address and doesn't start with http(s)://, prepend https://
+        if (!normalizedTarget.match(/^[a-z0-9]{16}\.onion(\/[^\s]*)?$/i) &&
+            !normalizedTarget.match(/^[a-z0-9]{56}\.onion(\/[^\s]*)?$/i) &&
+            !normalizedTarget.startsWith('http://') &&
+            !normalizedTarget.startsWith('https://')) {
+            normalizedTarget = 'https://' + normalizedTarget;
+        }
+
         // Regex for standard URLs (HTTP/HTTPS) and .onion addresses (v2 and v3)
-        // 1. Standard HTTP/HTTPS URL: (https?:\/\/[^\s/$.?#].[^\s]*)
-        // 2. v2 .onion address: ([a-z0-9]{16}\.onion(\/[^\s]*)?)
-        // 3. v3 .onion address: ([a-z0-9]{56}\.onion(\/[^\s]*)?)
         const urlRegex = new RegExp(
             /^(https?:\/\/[^\s/$.?#].[^\s]*)|/ +
             /(^[a-z0-9]{16}\.onion(\/[^\s]*)?)|/ +
             /(^[a-z0-9]{56}\.onion(\/[^\s]*)?)$/i
         );
 
-        if (!urlRegex.test(target.trim())) {
-            _log(`Target "${target}" is not a valid URL or .onion address.`, 'warn');
+        if (!urlRegex.test(normalizedTarget)) {
+            _log(`Target "${target}" (normalized to "${normalizedTarget}") is not a valid URL or .onion address.`, 'warn');
             return false;
         }
-        _log(`Target "${target}" validated successfully.`, 'debug');
-        return true;
+        _log(`Target "${target}" validated successfully (normalized to "${normalizedTarget}").`, 'debug');
+        return normalizedTarget;
     };
 
     /**
@@ -91,7 +98,6 @@ const Noodles = (() => {
 
     /**
      * Updates the internal statistics and dispatches a custom event for UI updates.
-     * Logs an 'info' message if the status changes, otherwise 'debug'.
      * @private
      * @param {object} newStats - An object containing new statistics data to merge into the current state.
      */
@@ -127,7 +133,6 @@ const Noodles = (() => {
 
     /**
      * Initializes the attack state, sets up initial statistics, and starts the elapsed time timer.
-     * This is an internal helper for `startAttack` (public method).
      * @private
      * @param {string} type - The general category of the attack (e.g., 'DDoS', 'Defacement').
      * @param {string} subtype - The specific attack method (e.g., 'HTTPFlood', 'ImageReplacement').
@@ -136,7 +141,8 @@ const Noodles = (() => {
      * @returns {string|null} The generated attack ID if state was successfully initialized, otherwise null.
      */
     const _initializeAttackState = (type, subtype, target, options = {}) => {
-        if (!_validateTarget(target)) {
+        const validatedTarget = _validateTarget(target);
+        if (!validatedTarget) {
             _log('Cannot initialize attack state: Invalid target provided.', 'error');
             _updateStatistics({ status: 'Failed: Invalid Target' });
             return null;
@@ -148,10 +154,9 @@ const Noodles = (() => {
         }
 
         const attackId = _generateAttackId();
-        _state.currentAttack = { id: attackId, type, subtype, target: target.trim(), options, status: 'Active' };
+        _state.currentAttack = { id: attackId, type, subtype, target: validatedTarget, options, status: 'Active' };
         _state.attackStartTime = Date.now();
-        _log(`Initializing ${type} - ${subtype} attack on ${target.trim()} (ID: ${attackId}) with options:`, 'info');
-        console.log(options); // Use console.log for object inspection
+        _log(`Initializing ${type} - ${subtype} attack on ${validatedTarget} (ID: ${attackId}) with options: ${JSON.stringify(options)}`, 'info');
 
         _updateStatistics({
             mbps: 0,
@@ -160,7 +165,6 @@ const Noodles = (() => {
             elapsedTime: '00:00:00'
         });
 
-        // Clear any existing timer and set a new one
         if (_elapsedTimer) {
             clearInterval(_elapsedTimer);
         }
@@ -176,7 +180,7 @@ const Noodles = (() => {
     const _stopAttack = () => {
         if (_state.currentAttack) {
             _log(`Stopping attack ID: ${_state.currentAttack.id}`, 'info');
-            _state.currentAttack.status = 'Stopped'; // Update status before clearing the attack object
+            _state.currentAttack.status = 'Stopped';
         } else {
             _log('No active attack to stop.', 'warn');
         }
@@ -200,8 +204,7 @@ const Noodles = (() => {
     // --- Public API ---
 
     /**
-     * Initializes the Noodles Core module. This method should be called once when the application loads.
-     * It sets the initial system status and logs the initialization.
+     * Initializes the Noodles Core module.
      * @public
      */
     const init = () => {
@@ -211,8 +214,7 @@ const Noodles = (() => {
 
     /**
      * Starts an attack by initializing its internal state and then dispatching the command
-     * to the relevant attack module (e.g., Noodles.DDoS.HTTPFlood).
-     * This is the primary public method for initiating any attack.
+     * to the relevant attack module.
      * @public
      * @param {string} attackType - The main category of the attack (e.g., 'DDoS', 'Defacement').
      * @param {string} attackSubtype - The specific attack method (e.g., 'HTTPFlood').
@@ -223,27 +225,23 @@ const Noodles = (() => {
     const startAttack = (attackType, attackSubtype, target, options = {}) => {
         const attackId = _initializeAttackState(attackType, attackSubtype, target, options);
         if (!attackId) {
-            // _initializeAttackState already handled logging and status updates
             return false;
         }
 
-        // Attempt to call the specific attack module function
-        // Assumes Noodles[attackType] exists and Noodles[attackType][attackSubtype] is a callable function.
         if (Noodles[attackType] && typeof Noodles[attackType][attackSubtype] === 'function') {
             try {
-                // Pass the attack ID and current attack state for the module to use
-                Noodles[attackType][attackSubtype](target, options, attackId, _state.currentAttack);
+                Noodles[attackType][attackSubtype](_state.currentAttack.target, options, attackId, _state.currentAttack);
                 _log(`Successfully dispatched ${attackType} - ${attackSubtype} to module.`, 'info');
                 return true;
             } catch (error) {
                 _log(`Error dispatching attack ${attackType} - ${attackSubtype}: ${error.message}`, 'error');
-                _stopAttack(); // Ensure state is reset if the module call fails
+                _stopAttack();
                 _updateStatistics({ status: 'Failed: Dispatch Error' });
                 return false;
             }
         } else {
             _log(`Attack module or subtype not found: ${attackType}.${attackSubtype}`, 'error');
-            _stopAttack(); // Ensure state is reset if the module is not found
+            _stopAttack();
             _updateStatistics({ status: 'Failed: Module Not Found' });
             return false;
         }
@@ -251,7 +249,6 @@ const Noodles = (() => {
 
     /**
      * Public method to stop the current active attack.
-     * Delegates to the private `_stopAttack` function.
      * @public
      */
     const stopAttack = () => {
@@ -259,18 +256,16 @@ const Noodles = (() => {
     };
 
     /**
-     * Retrieves the current state of the application, including active attack details and statistics.
-     * Returns a deep copy to prevent external modification of the internal state.
+     * Retrieves the current state of the application.
      * @public
      * @returns {object} A deep copy of the current application state.
      */
     const getCurrentState = () => {
-        return JSON.parse(JSON.stringify(_state)); // Deep copy for immutability
+        return JSON.parse(JSON.stringify(_state));
     };
 
     /**
-     * Public method to update application statistics. This can be called by attack modules
-     * or other parts of the application to reflect ongoing activity.
+     * Public method to update application statistics.
      * @public
      * @param {object} newStats - An object containing new statistics data to merge.
      */
@@ -297,15 +292,13 @@ const Noodles = (() => {
          */
         Core: {
             init,
-            validateTarget: _validateTarget, // Expose for external validation if needed
-            startAttack, // The main entry point for starting attacks
+            validateTarget: _validateTarget,
+            startAttack,
             stopAttack,
             updateStatistics,
             getCurrentState,
-            log, // Expose internal logger for other modules to use
+            log,
         },
-        // Placeholders for attack modules. These objects will be populated by other scripts
-        // that define specific attack methods (e.g., DDoS.HTTPFlood, Defacement.ImageReplacement).
         /** @memberof Noodles */
         DDoS: {},
         /** @memberof Noodles */
@@ -319,5 +312,4 @@ const Noodles = (() => {
     };
 })();
 
-// Initialize the core when the DOM is fully loaded to ensure all elements are available.
 document.addEventListener('DOMContentLoaded', Noodles.Core.init);
