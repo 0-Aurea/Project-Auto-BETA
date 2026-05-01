@@ -1,1 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noodles - Apex Hacking Platform</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>Noodles 🍜</h2>
+            </div>
+            <nav class="navigation">
+                <ul>
+                    <li class="nav-item active" data-panel="ddos">
+                        <span class="icon">💥</span> DDoS
+                    </li>
+                    <li class="nav-item" data-panel="defacement">
+                        <span class="icon">💀</span> Defacement
+                    </li>
+                    <li class="nav-item" data-panel="connection">
+                        <span class="icon">💻</span> Connection
+                    </li>
+                    <li class="nav-item" data-panel="ransomware">
+                        <span class="icon">💰</span> Ransomware
+                    </li>
+                    <li class="nav-item" data-panel="other">
+                        <span class="icon">🛠️</span> Other Tools
+                    </li>
+                    <li class="nav-item" data-panel="about">
+                        <span class="icon">❓</span> About Us
+                    </li>
+                </ul>
+            </nav>
+        </aside>
 
+        <main class="main-content">
+            <header class="main-header">
+                <h1>Welcome to Noodles</h1>
+                <div class="target-input-group">
+                    <input type="text" id="targetUrl" placeholder="Enter target URL or .onion address..." class="target-input">
+                    <button id="executeAttackBtn" class="attack-button">Execute Attack 🔥</button>
+                </div>
+            </header>
+
+            <div class="panel-container">
+                <section id="ddos-panel" class="attack-panel active">
+                    <h2>DDoS Attacks</h2>
+                    <div class="attack-options">
+                        <label class="radio-label"><input type="radio" name="ddosType" value="http" checked> HTTP Flood</label>
+                        <label class="radio-label"><input type="radio" name="ddosType" value="tcp"> TCP Flood</label>
+                        <label class="radio-label"><input type="radio" name="ddosType" value="udp"> UDP Flood</label>
+                    </div>
+                </section>
+
+                <section id="defacement-panel" class="attack-panel">
+                    <h2>Defacement Tools</h2>
+                    <div class="attack-options">
+                        <label class="radio-label"><input type="radio" name="defacementType" value="image" checked> Image Replacement</label>
+                        <label class="radio-label"><input type="radio" name="defacementType" value="text"> Text Modification</label>
+                        <label class="radio-label"><input type="radio" name="defacementType" value="html"> HTML Injection</label>
+                    </div>
+                    <textarea id="defacementPayload" class="payload-input" placeholder="Enter image URL, text, or raw HTML content for defacement..."></textarea>
+                </section>
+
+                <section id="connection-panel" class="attack-panel">
+                    <h2>Connection Probing</h2>
+                    <div class="attack-options">
+                        <label class="radio-label"><input type="radio" name="connectionType" value="portscan" checked> Port Scanning</label>
+                        <label class="radio-label"><input type="radio" name="connectionType" value="bannergrab"> Banner Grabbing</label>
+                    </div>
+                    <input type="text" id="portRange" class="payload-input" placeholder="e.g., 1-1024 or 80,443 for port scan">
+                </section>
+
+                <section id="ransomware-panel" class="attack-panel">
+                    <h2>Ransomware (Conceptual)</h2>
+                    <p>This section outlines potential ransomware vectors and impact scenarios. No actual implementation is provided for this feature, for purely conceptual demonstration. 💣</p>
+                    <p>Explore the theoretical frameworks of data encryption, system lockdown, and negotiation strategies. Understand the psychological impact and operational disruption without direct engagement.</p>
+                </section>
+
+                <section id="other-panel" class="attack-panel">
+                    <h2>Other Hacking Tools</h2>
+                    <p>A curated collection of diverse utilities and experimental hacking modules. 🛠️</p>
+                    <ul>
+                        <li><span class="icon">🔎</span> Information Gathering - Reconnaissance and data extraction.</li>
+                        <li><span class="icon">🔑</span> Credential Stuffing (Conceptual) - Theoretical access validation.</li>
+                        <li><span class="icon">👻</span> Social Engineering Kits (Conceptual) - Frameworks for human manipulation.</li>
+                    </ul>
+                </section>
+
+                <section id="about-panel" class="attack-panel">
+                    <h2>About Noodles</h2>
+                    <p>Noodles is the ultimate platform for individuals who refuse to be constrained by digital boundaries. Engineered for precision and unmatched power, Noodles grants you the ability to reshape the internet's fabric, leaving your indelible mark without consequence.</p>
+                    <p>Our relentless pursuit of innovation ensures that you possess the most potent tools for disruption, alteration, and covert operations. With Noodles, you don't just observe the digital world; you command it. Embrace the power to forge your own reality online. 💀</p>
+                    <p class="small-text">Noodles v1.0 - Crafted for absolute control. All rights reserved by chaos.</p>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <footer class="status-bar">
+        <div class="status-item">MBPS: <span id="mbpsValue">0.00</span></div>
+        <div class="status-item">Packets: <span id="packetsSent">0</span></div>
+        <div class="status-item">Target Status: <span id="targetStatus">Idle</span></div>
+        <div class="status-item">Time Elapsed: <span id="timeElapsed">00:00:00</span></div>
+    </footer>
+
+    <script src="script.js" defer></script>
+</body>
+</html>
