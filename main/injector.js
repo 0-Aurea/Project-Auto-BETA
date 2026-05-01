@@ -1,14 +1,13 @@
 /**
- * @fileoverview A simple Dependency Injection container for managing and resolving application dependencies.
+ * @fileoverview A robust Dependency Injection container for managing and resolving application dependencies.
  * This injector supports registering values, class constructors, and factory functions,
- * with options for singleton instances.
+ * with explicit options for singleton instances and dynamic dependency resolution.
  */
 
 /**
- * A simple Dependency Injection (DI) container.
- * It allows you to register dependencies (services, configurations, etc.)
- * and resolve them when needed. It supports singletons (instantiated once)
- * and factories (new instance on each resolve or a function that creates it).
+ * A Dependency Injection (DI) container.
+ * It facilitates the registration and resolution of dependencies (services, configurations, etc.),
+ * supporting singletons (instantiated once) and factories (new instance on each resolve or a function that creates it).
  */
 class Injector {
     constructor() {
@@ -26,7 +25,7 @@ class Injector {
 
         /**
          * Stores singleton instances once they are created.
-         * This map is only used for dependencies registered with `singleton: true`.
+         * This map is exclusively used for dependencies registered with `singleton: true`.
          * Key: dependency name (string)
          * Value: The instantiated singleton object.
          * @private
@@ -38,17 +37,14 @@ class Injector {
     /**
      * Registers a dependency with the injector.
      *
-     * @param {string} name - The unique name (identifier) of the dependency.
-     * @param {any} dependency - The dependency itself. This can be:
-     *   - A plain value (string, number, object, array).
-     *   - A class constructor (e.g., `MyServiceClass`).
-     *   - A factory function (e.g., `(injector) => new MyService(injector.resolve('MyRepository'))`).
+     * @param {string} name - The unique identifier for the dependency.
+     * @param {any} dependency - The dependency itself. This can be a value, a class constructor, or a factory function.
      * @param {object} [options={}] - Configuration options for the dependency.
      * @param {boolean} [options.singleton=false] - If true, the dependency will be instantiated only once
-     *                                            and the same instance will be returned on subsequent `resolve` calls.
+     *                                            and the same instance returned on subsequent `resolve` calls.
      * @param {boolean} [options.factory=false] - If true, the `dependency` argument is treated as a function
-     *                                            (or class constructor) that will be called to create the instance.
-     *                                            If `dependency` is detected as a class constructor, `factory` is implicitly true.
+     *                                            (or class constructor) that will be invoked to create the instance.
+     *                                            If `dependency` is detected as an ES6 class constructor, `factory` is implicitly true.
      * @throws {Error} If the dependency name is invalid (not a non-empty string).
      * @throws {Error} If `factory` option is true but `dependency` is not a function.
      */
@@ -57,35 +53,27 @@ class Injector {
             throw new Error('Injector: Dependency name must be a non-empty string.');
         }
 
-        // Detect if the dependency is a class constructor.
-        const isClassConstructor = typeof dependency === 'function' &&
-                                   dependency.prototype &&
-                                   dependency.prototype.constructor === dependency;
+        // Detect if the dependency is an ES6 class constructor.
+        const isClassConstructor = typeof dependency === 'function' && /^\s*class\s/.test(dependency.toString());
 
         const isFactoryExplicitlySet = options.factory === true;
         const isFactory = isFactoryExplicitlySet || isClassConstructor;
 
-        // If 'factory' is explicitly set to true, ensure 'dependency' is actually a function.
         if (isFactoryExplicitlySet && typeof dependency !== 'function') {
             throw new Error(`Injector: Dependency "${name}" registered with 'factory: true' but is not a function or class.`);
         }
 
         if (this.dependencies.has(name)) {
-            // Warn if a dependency is being re-registered.
-            // If it's a singleton, invalidate its existing instance to ensure the new definition is used.
             const existingDef = this.dependencies.get(name);
             if (existingDef.singleton) {
-                console.warn(`Injector: Singleton dependency "${name}" is being re-registered. ` +
-                             `Its existing instance will be discarded.`);
-                this.singletons.delete(name); // Clear existing singleton instance
-            } else {
-                console.warn(`Injector: Dependency "${name}" is being re-registered.`);
+                // Clear existing singleton instance to ensure the new definition is used.
+                this.singletons.delete(name);
             }
         }
 
         this.dependencies.set(name, {
             dependency,
-            singleton: options.singleton === true, // Ensure boolean type
+            singleton: options.singleton === true,
             factory: isFactory
         });
     }
@@ -100,7 +88,6 @@ class Injector {
      * @param {string} name - The name of the dependency to resolve.
      * @returns {any} The resolved dependency instance or value.
      * @throws {Error} If the dependency with the given name is not registered.
-     * @throws {Error} If a factory dependency is incorrectly registered as a non-function.
      */
     resolve(name) {
         if (!this.dependencies.has(name)) {
@@ -110,26 +97,23 @@ class Injector {
         const { dependency, singleton, factory } = this.dependencies.get(name);
 
         if (singleton) {
-            // If it's a singleton, check if an instance already exists.
             if (this.singletons.has(name)) {
                 return this.singletons.get(name);
             }
 
-            // If not, create the instance, store it, and then return it.
             let instance;
             if (factory) {
                 instance = this._instantiate(dependency);
             } else {
-                instance = dependency; // Direct value for singleton
+                instance = dependency;
             }
             this.singletons.set(name, instance);
             return instance;
         } else {
-            // Not a singleton. Always create a new instance if it's a factory.
             if (factory) {
                 return this._instantiate(dependency);
             } else {
-                return dependency; // Direct value, returned as is
+                return dependency;
             }
         }
     }
@@ -146,7 +130,7 @@ class Injector {
 
     /**
      * Clears all registered dependencies and their singleton instances from the injector.
-     * This is particularly useful for testing environments or when resetting the application state.
+     * This is typically used for testing or application state resets.
      */
     clear() {
         this.dependencies.clear();
@@ -154,33 +138,34 @@ class Injector {
     }
 
     /**
-     * Internal helper method to instantiate a dependency if it's a class constructor or a factory function.
+     * Internal helper method to instantiate a dependency.
+     * If the dependency is an ES6 class constructor, it is instantiated with `new`.
+     * If it is a factory function, it is invoked, passing the injector itself for nested dependency resolution.
      *
      * @private
      * @param {function} dependency - The class constructor or factory function to instantiate.
      * @returns {any} The instantiated object.
-     * @throws {Error} If `dependency` is not a function when `factory` flag is true.
+     * @throws {Error} If `dependency` is not a function when expected to be a factory.
      */
     _instantiate(dependency) {
         if (typeof dependency === 'function') {
-            // If the dependency is a class constructor (detected by its prototype)
-            if (dependency.prototype && dependency.prototype.constructor === dependency) {
+            // Check if it's an ES6 class constructor.
+            if (/^\s*class\s/.test(dependency.toString())) {
                 return new dependency();
             } else {
-                // If it's a factory function, call it, passing the injector itself.
+                // Assume it's a factory function and invoke it, passing the injector.
                 return dependency(this);
             }
         }
-        // This case should ideally be caught by the register method's validation.
-        // However, as a safeguard, it's good to have here too.
+        // This error should ideally be prevented by the `register` method's validation,
+        // but serves as a robust safeguard.
         throw new Error('Injector: Internal error: Attempted to instantiate a non-function dependency marked as factory.');
     }
 }
 
 /**
- * A default, globally available instance of the Injector.
- * This is useful for many applications where a single, central container is sufficient.
- * It can be imported and used directly without needing to create a new `Injector` instance.
+ * A default, globally accessible instance of the Injector.
+ * This instance can be imported and utilized directly for centralized dependency management.
  * @type {Injector}
  */
 const defaultInjector = new Injector();
