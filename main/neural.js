@@ -34,6 +34,12 @@ const Noodles = (() => {
      */
     let _elapsedTimer = null;
 
+    /**
+     * @private
+     * @type {object} _attackModules - A registry for attack handler functions, keyed by type and subtype.
+     */
+    const _attackModules = {};
+
     // --- Private Utility Functions ---
 
     /**
@@ -64,22 +70,28 @@ const Noodles = (() => {
 
         let normalizedTarget = target.trim();
 
-        // If it's not an onion address and doesn't start with http(s)://, prepend https://
-        if (!normalizedTarget.match(/^[a-z0-9]{16}\.onion(\/[^\s]*)?$/i) &&
-            !normalizedTarget.match(/^[a-z0-9]{56}\.onion(\/[^\s]*)?$/i) &&
-            !normalizedTarget.startsWith('http://') &&
-            !normalizedTarget.startsWith('https://')) {
+        // Regex for different target types
+        const onionV2Regex = /^[a-z0-9]{16}\.onion(\/[^\s]*)?$/i;
+        const onionV3Regex = /^[a-z0-9]{56}\.onion(\/[^\s]*)?$/i;
+        const httpHttpsProtocolRegex = /^https?:\/\//i;
+
+        // Prepend 'https://' if no protocol is specified and it's not an onion address
+        if (!onionV2Regex.test(normalizedTarget) &&
+            !onionV3Regex.test(normalizedTarget) &&
+            !httpHttpsProtocolRegex.test(normalizedTarget)) {
             normalizedTarget = 'https://' + normalizedTarget;
         }
 
-        // Regex for standard URLs (HTTP/HTTPS) and .onion addresses (v2 and v3)
-        const urlRegex = new RegExp(
-            /^(https?:\/\/[^\s/$.?#].[^\s]*)|/ +
-            /(^[a-z0-9]{16}\.onion(\/[^\s]*)?)|/ +
-            /(^[a-z0-9]{56}\.onion(\/[^\s]*)?)$/i
+        // Comprehensive regex for final validation, combining all valid patterns
+        // `(?:...)` creates a non-capturing group for the OR conditions.
+        const combinedUrlRegex = new RegExp(
+            `^(?:https?:\/\/[^\s/$.?#].[^\s]*|` + // Standard URL (http/https)
+            `[a-z0-9]{16}\.onion(\/[^\s]*)?|` + // Onion v2 address
+            `[a-z0-9]{56}\.onion(\/[^\s]*)?)$`, // Onion v3 address
+            'i'
         );
 
-        if (!urlRegex.test(normalizedTarget)) {
+        if (!combinedUrlRegex.test(normalizedTarget)) {
             _log(`Target "${target}" (normalized to "${normalizedTarget}") is not a valid URL or .onion address.`, 'warn');
             return false;
         }
@@ -105,7 +117,8 @@ const Noodles = (() => {
         const oldStatus = _state.statistics.status;
         Object.assign(_state.statistics, newStats);
 
-        const event = new CustomEvent('noodles:statsUpdate', { detail: { ..._state.statistics } });
+        // Dispatch event with a timestamp for better tracking
+        const event = new CustomEvent('noodles:statsUpdate', { detail: { ..._state.statistics, timestamp: Date.now() } });
         document.dispatchEvent(event);
 
         if (oldStatus !== _state.statistics.status) {
@@ -213,8 +226,34 @@ const Noodles = (() => {
     };
 
     /**
+     * Registers an attack handler function for a specific attack type and subtype.
+     * This allows attack modules to plug into the Core dynamically.
+     * @public
+     * @param {string} type - The main category of the attack (e.g., 'DDoS').
+     * @param {string} subtype - The specific attack method (e.g., 'HTTPFlood').
+     * @param {Function} handler - The function that executes the attack. It should accept (target, options, attackId, attackState, api).
+     *                             The `api` object provides `updateStatistics` and `log` for the handler to interact with Core.
+     * @returns {boolean} True if registered successfully, false if handler is invalid.
+     */
+    const registerAttackModule = (type, subtype, handler) => {
+        if (typeof handler !== 'function') {
+            _log(`Attempted to register non-function as attack handler for ${type}.${subtype}`, 'error');
+            return false;
+        }
+        if (!_attackModules[type]) {
+            _attackModules[type] = {};
+        }
+        if (_attackModules[type][subtype]) {
+            _log(`Attack handler for ${type}.${subtype} already registered. Overwriting.`, 'warn');
+        }
+        _attackModules[type][subtype] = handler;
+        _log(`Registered attack module: ${type}.${subtype}`, 'debug');
+        return true;
+    };
+
+    /**
      * Starts an attack by initializing its internal state and then dispatching the command
-     * to the relevant attack module.
+     * to the relevant registered attack module.
      * @public
      * @param {string} attackType - The main category of the attack (e.g., 'DDoS', 'Defacement').
      * @param {string} attackSubtype - The specific attack method (e.g., 'HTTPFlood').
@@ -228,21 +267,28 @@ const Noodles = (() => {
             return false;
         }
 
-        if (Noodles[attackType] && typeof Noodles[attackType][attackSubtype] === 'function') {
+        const handler = _attackModules[attackType] && _attackModules[attackType][attackSubtype];
+
+        if (typeof handler === 'function') {
             try {
-                Noodles[attackType][attackSubtype](_state.currentAttack.target, options, attackId, _state.currentAttack);
-                _log(`Successfully dispatched ${attackType} - ${attackSubtype} to module.`, 'info');
+                // Pass a limited API to the attack handler for interaction with the Core
+                const api = {
+                    updateStatistics: _updateStatistics,
+                    log: _log
+                };
+                handler(_state.currentAttack.target, options, attackId, _state.currentAttack, api);
+                _log(`Successfully dispatched ${attackType} - ${attackSubtype} to registered module.`, 'info');
                 return true;
             } catch (error) {
-                _log(`Error dispatching attack ${attackType} - ${attackSubtype}: ${error.message}`, 'error');
+                _log(`Error executing registered attack handler ${attackType}.${attackSubtype}: ${error.message}`, 'error');
                 _stopAttack();
-                _updateStatistics({ status: 'Failed: Dispatch Error' });
+                _updateStatistics({ status: 'Failed: Handler Error', error: error.message });
                 return false;
             }
         } else {
-            _log(`Attack module or subtype not found: ${attackType}.${attackSubtype}`, 'error');
+            _log(`No attack handler found for ${attackType}.${attackSubtype}.`, 'error');
             _stopAttack();
-            _updateStatistics({ status: 'Failed: Module Not Found' });
+            _updateStatistics({ status: 'Failed: Handler Not Found' });
             return false;
         }
     };
@@ -257,6 +303,7 @@ const Noodles = (() => {
 
     /**
      * Retrieves the current state of the application.
+     * Returns a deep copy to prevent external modification of internal state.
      * @public
      * @returns {object} A deep copy of the current application state.
      */
@@ -298,7 +345,10 @@ const Noodles = (() => {
             updateStatistics,
             getCurrentState,
             log,
+            registerAttackModule, // Expose the registration method
         },
+        // These can now be populated by other modules using Noodles.Core.registerAttackModule
+        // They remain as empty objects to maintain the namespace structure for external access.
         /** @memberof Noodles */
         DDoS: {},
         /** @memberof Noodles */
@@ -312,4 +362,5 @@ const Noodles = (() => {
     };
 })();
 
+// Initialize the Noodles Core when the DOM is fully loaded.
 document.addEventListener('DOMContentLoaded', Noodles.Core.init);
