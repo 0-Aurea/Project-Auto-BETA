@@ -1,7 +1,7 @@
-Flask
-Flask-Cors
-torch
-transformers
-sentencepiece
-accelerate
-safetensors
+from flask import Flask
+from flask_cors import CORS
+import torch
+import transformers
+import sentencepiece
+import accelerate
+import safetensors
