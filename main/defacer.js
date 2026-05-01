@@ -5,6 +5,10 @@
  *              and initiates requests to a powerful backend for execution.
  */
 class DefacementModule {
+    /**
+     * @constructor
+     * @description Initializes the DefacementModule by binding UI elements and setting up event listeners.
+     */
     constructor() {
         // UI Element References
         this.targetInput = document.getElementById('defacementTargetInput');
@@ -16,14 +20,14 @@ class DefacementModule {
         this.newTextInput = document.getElementById('defacementNewTextInput');
         this.htmlPayloadGroup = document.getElementById('defacementHtmlPayloadGroup');
         this.htmlPayloadInput = document.getElementById('defacementHtmlPayloadInput');
-        this.htmlSelectorInput = document.getElementById('defacementHtmlSelectorInput'); // Optional selector for HTML injection
+        this.htmlSelectorInput = document.getElementById('defacementHtmlSelectorInput');
         this.executeButton = document.getElementById('executeDefacementButton');
         this.statusDisplay = document.getElementById('defacementStatusDisplay');
 
-        // Ensure all critical elements are found
+        // Critical elements check
         if (!this.targetInput || !this.attackTypeSelect || !this.executeButton || !this.statusDisplay) {
-            console.error('DefacementModule: One or more required UI elements not found. Module may not function correctly.');
-            return; // Prevent initialization if critical elements are missing
+            console.error('DefacementModule: One or more critical UI elements not found. Module cannot function.');
+            return;
         }
 
         this.init();
@@ -31,23 +35,22 @@ class DefacementModule {
 
     /**
      * @method init
-     * @description Initializes event listeners for UI interactions.
+     * @description Initializes event listeners for UI interactions and sets initial UI state.
      */
     init() {
         this.attackTypeSelect.addEventListener('change', this.handleAttackTypeChange.bind(this));
         this.executeButton.addEventListener('click', this.handleExecuteAttack.bind(this));
-        // Set initial visibility based on default selection
-        this.handleAttackTypeChange();
+        this.handleAttackTypeChange(); // Set initial visibility
     }
 
     /**
      * @method handleAttackTypeChange
-     * @description Toggles visibility of payload input groups based on selected attack type.
+     * @description Toggles visibility of payload input groups based on the selected attack type.
      */
     handleAttackTypeChange() {
         const selectedType = this.attackTypeSelect.value;
 
-        // Hide all payload groups initially
+        // Hide all payload groups
         if (this.imagePayloadGroup) this.imagePayloadGroup.style.display = 'none';
         if (this.textPayloadGroup) this.textPayloadGroup.style.display = 'none';
         if (this.htmlPayloadGroup) this.htmlPayloadGroup.style.display = 'none';
@@ -83,7 +86,7 @@ class DefacementModule {
         }
 
         this.updateStatus('Initiating defacement attack...', 'info');
-        this.executeButton.disabled = true; // Prevent multiple attack initiations
+        this.executeButton.disabled = true;
 
         try {
             let payload = {};
@@ -111,7 +114,7 @@ class DefacementModule {
                     break;
                 case 'html-injection':
                     const htmlPayload = this.htmlPayloadInput ? this.htmlPayloadInput.value.trim() : '';
-                    const htmlSelector = this.htmlSelectorInput ? this.htmlSelectorInput.value.trim() : ''; // Optional
+                    const htmlSelector = this.htmlSelectorInput ? this.htmlSelectorInput.value.trim() : '';
                     if (!htmlPayload) {
                         this.updateStatus('HTML payload is required for HTML injection.', 'error');
                         return;
@@ -127,7 +130,7 @@ class DefacementModule {
             const response = await this.sendAttackRequest(endpoint, payload);
             if (response.success) {
                 this.updateStatus(`Defacement attack (${attackType}) initiated successfully against ${target}. Status: ${response.message}`, 'success');
-                this.clearInputs(); // Clear inputs on successful initiation
+                this.clearInputs();
             } else {
                 this.updateStatus(`Defacement attack (${attackType}) failed: ${response.message}`, 'error');
             }
@@ -135,13 +138,13 @@ class DefacementModule {
             console.error('Defacement attack execution error:', error);
             this.updateStatus(`An unexpected error occurred during defacement attack: ${error.message}`, 'error');
         } finally {
-            this.executeButton.disabled = false; // Re-enable button
+            this.executeButton.disabled = false;
         }
     }
 
     /**
      * @method validateInputs
-     * @description Performs basic client-side validation on target URL and attack-specific payloads.
+     * @description Performs client-side validation on the target URL and attack-specific payloads.
      * @param {string} target - The target URL or .onion address.
      * @param {string} attackType - The selected attack type.
      * @returns {boolean} True if inputs are valid, false otherwise.
@@ -152,8 +155,8 @@ class DefacementModule {
             return false;
         }
 
-        // Robust URL validation including .onion addresses
-        const urlRegex = /^(https?:\/\/|http?:\/\/|ftp:\/\/)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}|[a-z0-9]{16}\.onion|[a-z0-9]{56}\.onion)(:\d+)?(\/[^\s]*)?$/i;
+        // Robust URL validation for standard and .onion addresses
+        const urlRegex = /^(https?:\/\/|http?:\/\/)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}|[a-z0-9]{16}\.onion|[a-z0-9]{56}\.onion)(:\d+)?(\/[^\s]*)?$/i;
         if (!urlRegex.test(target)) {
             this.updateStatus('Invalid target URL or .onion address format. Ensure protocol (http/https) is included for standard URLs.', 'error');
             return false;
@@ -181,7 +184,6 @@ class DefacementModule {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    // Add any necessary authorization headers here (e.g., 'Authorization': 'Bearer YOUR_TOKEN')
                 },
                 body: JSON.stringify(payload)
             });
@@ -189,14 +191,13 @@ class DefacementModule {
             const responseData = await response.json();
 
             if (!response.ok) {
-                // Backend sent an error status (e.g., 4xx, 5xx)
                 throw new Error(responseData.message || `HTTP error! Status: ${response.status}`);
             }
 
             return responseData;
         } catch (error) {
             console.error(`Error sending request to ${endpoint}:`, error);
-            throw error; // Re-throw to be caught by the calling function
+            throw error;
         }
     }
 
@@ -209,7 +210,6 @@ class DefacementModule {
     updateStatus(message, type = 'info') {
         if (this.statusDisplay) {
             this.statusDisplay.textContent = message;
-            // Clear previous classes and apply new ones for styling
             this.statusDisplay.className = `status-message status-${type}`;
         }
     }
@@ -221,7 +221,7 @@ class DefacementModule {
     clearStatus() {
         if (this.statusDisplay) {
             this.statusDisplay.textContent = '';
-            this.statusDisplay.className = 'status-message'; // Reset to base class
+            this.statusDisplay.className = 'status-message';
         }
     }
 
@@ -230,16 +230,13 @@ class DefacementModule {
      * @description Clears all attack-specific input fields and resets the attack type selection.
      */
     clearInputs() {
-        // Only clear target if desired, might be useful to keep it for sequential attacks
-        // if (this.targetInput) this.targetInput.value = '';
-
+        // Target input is intentionally not cleared for user convenience
         if (this.imageUrlInput) this.imageUrlInput.value = '';
         if (this.textSelectorInput) this.textSelectorInput.value = '';
         if (this.newTextInput) this.newTextInput.value = '';
         if (this.htmlPayloadInput) this.htmlPayloadInput.value = '';
         if (this.htmlSelectorInput) this.htmlSelectorInput.value = '';
 
-        // Reset attack type selection and update UI visibility
         if (this.attackTypeSelect) this.attackTypeSelect.value = 'none';
         this.handleAttackTypeChange();
     }
