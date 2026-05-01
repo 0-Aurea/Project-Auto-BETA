@@ -16,8 +16,10 @@ html, body {
     overflow: hidden; /* Prevent body scroll, allow inner content scroll */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    line-height: 1.5; /* Improved readability */
 }
 
+/* CSS Variables */
 :root {
     /* Color Palette */
     --bg-dark: #121212; /* Very Dark Grey */
@@ -25,21 +27,34 @@ html, body {
     --bg-sidebar: #1a1a1a; /* Slightly different dark for sidebar */
     --text-light: #e0e0e0; /* Light Grey for primary text */
     --text-secondary: #a0a0a0; /* Medium Grey for secondary text */
+    --text-white: #ffffff; /* Pure white for contrast */
+
     --accent-blue: #007bff; /* Dark Blue for primary actions/accents */
+    --accent-blue-rgb: 0, 123, 255; /* RGB values for rgba() usage */
     --accent-green: #28a745; /* Dark Green for success/active states */
+    --accent-green-rgb: 40, 167, 69; /* RGB values for rgba() usage */
+
     --border-color: #333333; /* Darker grey for borders */
     --hover-blue: #0056b3; /* Darker blue for hover */
     --hover-green: #218838; /* Darker green for hover */
+
     --status-online: #28aa45; /* Green for online */
     --status-offline: #dc3545; /* Red for offline */
     --status-unresponsive: #ffc107; /* Yellow for unresponsive */
+
     --shadow-color: rgba(0, 0, 0, 0.3);
+    --shadow-color-light: rgba(0, 0, 0, 0.2);
+    --shadow-color-dark: rgba(0, 0, 0, 0.4);
 
     /* Spacing & Sizing */
     --sidebar-width: 220px;
     --border-radius: 8px;
+    --padding-sm: 10px;
     --padding-md: 15px;
+    --padding-lg: 20px;
+    --margin-sm: 10px;
     --margin-md: 15px;
+    --margin-lg: 20px;
 }
 
 /* Application Container */
@@ -62,7 +77,7 @@ html, body {
 
 .sidebar-header {
     padding: 0 var(--padding-md) var(--padding-md);
-    margin-bottom: var(--padding-md);
+    margin-bottom: var(--margin-md);
     border-bottom: 1px solid var(--border-color);
     text-align: center;
 }
@@ -91,12 +106,12 @@ html, body {
     color: var(--text-secondary);
     text-decoration: none;
     font-size: 1.0em;
-    transition: background-color 0.3s ease, color 0.3s ease, transform 0.2s ease;
+    transition: background-color 0.3s ease, color 0.3s ease, transform 0.2s ease, border-left-color 0.3s ease;
     border-left: 3px solid transparent;
 }
 
 .nav-link:hover {
-    background-color: rgba(var(--accent-blue), 0.1);
+    background-color: rgba(var(--accent-blue-rgb), 0.1); /* Using RGB variable */
     color: var(--text-light);
     border-left-color: var(--accent-blue);
     transform: translateX(5px);
@@ -104,10 +119,10 @@ html, body {
 
 .nav-link.active {
     background-color: var(--accent-blue);
-    color: #ffffff;
+    color: var(--text-white); /* Using text-white variable */
     border-left-color: var(--accent-green); /* Differentiate active highlight */
     font-weight: bold;
-    box-shadow: inset 3px 0 8px rgba(0, 0, 0, 0.2);
+    box-shadow: inset 3px 0 8px var(--shadow-color-light);
 }
 
 .nav-link.active:hover {
@@ -154,7 +169,7 @@ html, body {
 
 .panel:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 6px 15px var(--shadow-color-dark);
 }
 
 .panel-title {
@@ -162,7 +177,7 @@ html, body {
     color: var(--accent-blue);
     margin-bottom: var(--padding-md);
     border-bottom: 1px solid var(--border-color);
-    padding-bottom: 10px;
+    padding-bottom: var(--padding-sm); /* Using variable for consistency */
 }
 
 /* Form Elements */
@@ -182,8 +197,8 @@ input[type="number"],
 select,
 textarea {
     width: 100%;
-    padding: 10px 12px;
-    background-color: #2a2a2a;
+    padding: var(--padding-sm) 12px; /* Using variable for consistency */
+    background-color: #2a2a2a; /* Specific dark grey for inputs */
     border: 1px solid var(--border-color);
     border-radius: 5px;
     color: var(--text-light);
@@ -197,7 +212,7 @@ select:focus,
 textarea:focus {
     border-color: var(--accent-blue);
     outline: none;
-    box-shadow: 0 0 0 3px rgba(var(--accent-blue), 0.2);
+    box-shadow: 0 0 0 3px rgba(var(--accent-blue-rgb), 0.2); /* Using RGB variable */
 }
 
 /* Buttons */
@@ -205,7 +220,7 @@ textarea:focus {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 10px 20px;
+    padding: var(--padding-sm) var(--padding-lg); /* Using variables for consistency */
     border: none;
     border-radius: 5px;
     cursor: pointer;
@@ -213,7 +228,12 @@ textarea:focus {
     font-weight: bold;
     transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
     text-decoration: none;
-    color: #ffffff;
+    color: var(--text-white); /* Using text-white variable */
+    outline: none; /* Remove default outline */
+}
+
+.btn:focus-visible { /* For keyboard navigation accessibility */
+    box-shadow: 0 0 0 3px rgba(var(--accent-blue-rgb), 0.5);
 }
 
 .btn-primary {
@@ -223,7 +243,7 @@ textarea:focus {
 .btn-primary:hover {
     background-color: var(--hover-blue);
     transform: translateY(-1px);
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 5px var(--shadow-color-light);
 }
 
 .btn-success {
@@ -233,7 +253,7 @@ textarea:focus {
 .btn-success:hover {
     background-color: var(--hover-green);
     transform: translateY(-1px);
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 5px var(--shadow-color-light);
 }
 
 .btn i {
@@ -244,8 +264,8 @@ textarea:focus {
 .attack-options {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 10px;
+    gap: var(--margin-sm); /* Using variable for consistency */
+    margin-top: var(--margin-sm); /* Using variable for consistency */
 }
 
 .attack-option-item {
@@ -255,13 +275,13 @@ textarea:focus {
 
 .attack-option-label {
     display: block;
-    background-color: #2a2a2a;
+    background-color: #2a2a2a; /* Specific dark grey for options */
     border: 1px solid var(--border-color);
     border-radius: 5px;
-    padding: 10px 15px;
+    padding: var(--padding-sm) var(--padding-md); /* Using variables for consistency */
     text-align: center;
     cursor: pointer;
-    transition: background-color 0.3s ease, border-color 0.3s ease;
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
     color: var(--text-secondary);
 }
 
@@ -278,7 +298,7 @@ input[type="radio"].attack-type-radio {
 input[type="radio"].attack-type-radio:checked + .attack-option-label {
     background-color: var(--accent-blue);
     border-color: var(--accent-blue);
-    color: #ffffff;
+    color: var(--text-white); /* Using text-white variable */
     font-weight: bold;
 }
 
@@ -296,12 +316,12 @@ input[type="radio"].attack-type-radio:checked + .attack-option-label:hover {
 }
 
 .stat-item {
-    background-color: #2a2a2a;
+    background-color: #2a2a2a; /* Specific dark grey for stat items */
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
     padding: var(--padding-md);
     text-align: center;
-    box-shadow: 0 2px 5px var(--shadow-color);
+    box-shadow: 0 2px 5px var(--shadow-color-light);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -345,18 +365,18 @@ input[type="radio"].attack-type-radio:checked + .attack-option-label:hover {
 .about-us-content h3 {
     color: var(--accent-green);
     margin-top: var(--margin-md);
-    margin-bottom: 10px;
+    margin-bottom: var(--margin-sm); /* Using variable for consistency */
     font-size: 1.4em;
 }
 
 .about-us-content p {
-    margin-bottom: 10px;
+    margin-bottom: var(--margin-sm); /* Using variable for consistency */
 }
 
 .about-us-content ul {
     list-style: inside disc;
-    margin-left: 20px;
-    margin-bottom: 10px;
+    margin-left: var(--margin-md); /* Using variable for consistency */
+    margin-bottom: var(--margin-sm); /* Using variable for consistency */
     color: var(--text-secondary);
 }
 
@@ -369,7 +389,7 @@ input[type="radio"].attack-type-radio:checked + .attack-option-label:hover {
 .mt-md { margin-top: var(--margin-md); }
 .text-center { text-align: center; }
 
-/* Resizable - basic responsiveness for smaller screens */
+/* Responsive Adjustments */
 @media (max-width: 768px) {
     .app-container {
         flex-direction: column;
@@ -378,14 +398,14 @@ input[type="radio"].attack-type-radio:checked + .attack-option-label:hover {
     .sidebar {
         width: 100%;
         height: auto;
-        padding: 10px 0;
+        padding: var(--padding-sm) 0;
         box-shadow: 0 2px 10px var(--shadow-color);
         order: -1; /* Place sidebar at the top */
     }
 
     .sidebar-header {
-        padding-bottom: 10px;
-        margin-bottom: 10px;
+        padding-bottom: var(--padding-sm);
+        margin-bottom: var(--margin-sm);
     }
 
     .sidebar-nav {
