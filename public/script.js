@@ -1,47 +1,56 @@
 // public/script.js
-// This script is designed to connect to functionality provided from the ../main/ directory.
+// This script initializes the public-facing application by connecting to a core module.
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('public/script.js loaded. Attempting to connect to main module...');
+    console.log('public/script.js loaded. Initializing connection...');
+
+    const statusDiv = document.createElement('div');
+    statusDiv.id = 'public-script-status';
+    statusDiv.textContent = 'Loading core module...';
+    document.body.appendChild(statusDiv);
 
     try {
-        // Dynamically import the main module from the ../main/ directory.
-        // This assumes that '../main/' contains an entry file (e.g., 'index.js' or 'main.js')
-        // that is an ES module and exports the functionality needed here.
-        // Adjust the path 'index.js' if your main module's entry point is named differently.
+        // Dynamically import the main application module from the '../main/' directory.
+        // It's assumed to be an ES module exporting necessary functionality.
+        // Adjust the path 'index.js' if your main module's entry point is different (e.g., 'app.js').
         const mainModule = await import('../main/index.js');
+        console.log('Core module ../main/index.js loaded successfully.');
 
-        // If the main module exports a specific initialization function (e.g., 'setupApp'):
+        // Attempt to initialize the application using exported functions.
         if (typeof mainModule.setupApp === 'function') {
-            console.log('Successfully loaded ../main/index.js and found setupApp function.');
-            mainModule.setupApp(); // Call the setup function from the main module
-        }
-        // If the main module uses a default export for its primary function:
-        else if (typeof mainModule.default === 'function') {
-            console.log('Successfully loaded ../main/index.js and found a default export function.');
-            mainModule.default(); // Call the default export function
-        }
-        // If neither a specific 'setupApp' nor a default function is found:
-        else {
-            console.warn('Loaded ../main/index.js, but no "setupApp" function or default export found.');
-            console.log('Available exports from mainModule:', Object.keys(mainModule));
+            console.log('Calling mainModule.setupApp()...');
+            mainModule.setupApp();
+            statusDiv.textContent = 'Core module loaded and setupApp() called.';
+        } else if (typeof mainModule.default === 'function') {
+            console.log('Calling mainModule default export function...');
+            mainModule.default();
+            statusDiv.textContent = 'Core module loaded and default export called.';
+        } else {
+            console.warn('Core module loaded, but no "setupApp" function or default export found for initialization.');
+            console.log('Available exports:', Object.keys(mainModule));
+            statusDiv.textContent = 'Core module loaded, but no primary setup function found.';
         }
 
-        // Example: If the main module exports other specific utilities like 'logMessage':
+        // Example: Utilize another specific utility exported by the main module.
         if (typeof mainModule.logMessage === 'function') {
-            mainModule.logMessage('Message from public/script.js via main module.');
+            mainModule.logMessage('Message from public/script.js via core module utility.');
         }
 
     } catch (error) {
-        console.error('Failed to load or connect to module from ../main/index.js:', error);
-        console.error('Please ensure "../main/index.js" exists, is a valid ES module, and exports the expected functionality.');
-        console.error('If the main entry file is named differently (e.g., main.js, app.js), adjust the import path accordingly.');
-        console.error('Also, ensure your HTML script tag for public/script.js has type="module" if you are not using dynamic import, or that your build process handles module resolution.');
+        console.error('Failed to load or initialize core module from ../main/index.js:', error);
+        console.error('Please verify:');
+        console.error('  1. "../main/index.js" exists and is accessible.');
+        console.error('  2. It is a valid ES module.');
+        console.error('  3. The import path is correct (e.g., if entry is "main.js", update "index.js" to "main.js").');
+        console.error('  4. Your HTML script tag for public/script.js has type="module" if you are not relying solely on dynamic imports (though dynamic import handles this internally).');
+        statusDiv.textContent = 'Error loading core module. Check console for details.';
+        statusDiv.style.color = 'red';
     }
 
-    // Add any public/script.js specific initialization or UI logic here.
-    const statusDiv = document.createElement('div');
-    statusDiv.id = 'public-script-status';
-    statusDiv.textContent = 'Public script has finished its loading routine and attempted connection.';
-    document.body.appendChild(statusDiv);
+    // Any public/script.js specific UI or immediate logic can go here.
+    // The statusDiv text will have been updated by the try/catch block.
+    // If no error and no specific setup function was found, it will still show a 'loaded' message.
+    if (!statusDiv.textContent.includes('Error') && !statusDiv.textContent.includes('called') && statusDiv.textContent !== 'Loading core module...') {
+        statusDiv.textContent = 'Public script finished routine. Core module loaded, but no specific setup function was invoked.';
+    }
 });
