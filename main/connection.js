@@ -32,6 +32,22 @@ const API_ENDPOINTS = {
 // --- Core Utility Functions ---
 
 /**
+ * Validates a target string to ensure it's a valid URL, IP address, or .onion address.
+ * @param {string} target - The target string to validate.
+ * @returns {boolean} True if the target is valid, false otherwise.
+ */
+function isValidTarget(target) {
+    if (typeof target !== 'string' || target.trim() === '') {
+        return false;
+    }
+    // Regex for URL, IP address, or .onion address
+    const targetRegex = new RegExp(
+        /^(https?:\/\/)?([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+(\.[a-zA-Z]{2,})+(:\d{1,5})?(\/.*)?$|^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d{1,5})?(\/.*)?$|^([a-z0-9]{16}\.onion)(:\d{1,5})?(\/.*)?$/i
+    );
+    return targetRegex.test(target.trim());
+}
+
+/**
  * Sends a POST request to the backend API with JSON payload.
  * @param {string} endpoint - The API endpoint path.
  * @param {object} data - The payload to send.
@@ -50,7 +66,7 @@ async function sendToBackend(endpoint, data) {
         });
 
         if (!response.ok) {
-            let errorMessage = `Backend error: ${response.status} - ${response.statusText}`;
+            let errorMessage = `Backend communication error: ${response.status} - ${response.statusText}`;
             try {
                 const errorData = await response.json();
                 if (errorData && errorData.message) {
@@ -65,7 +81,7 @@ async function sendToBackend(endpoint, data) {
         return await response.json();
     } catch (error) {
         console.error(`Request to ${endpoint} failed:`, error);
-        throw error;
+        throw new Error(`Network or backend issue: ${error.message}`);
     }
 }
 
@@ -80,16 +96,16 @@ async function sendToBackend(endpoint, data) {
  */
 async function setProxyConfiguration(config) {
     if (!config || typeof config !== 'object') {
-        throw new Error('Invalid proxy configuration provided.');
+        throw new Error('Invalid proxy configuration provided. Must be an object.');
     }
-    if (!config.host || !config.port) {
-        throw new Error('Proxy host and port are mandatory.');
+    if (!config.host || typeof config.host !== 'string' || config.host.trim() === '') {
+        throw new Error('Proxy host is mandatory and must be a non-empty string.');
     }
     if (typeof config.port !== 'number' || config.port < 1 || config.port > 65535) {
         throw new Error('Proxy port must be a valid number between 1 and 65535.');
     }
     if (config.type && !['HTTP', 'SOCKS4', 'SOCKS5'].includes(config.type.toUpperCase())) {
-        throw new Error('Invalid proxy type. Supported: HTTP, SOCKS4, SOCKS5.');
+        throw new Error('Invalid proxy type. Supported types: HTTP, SOCKS4, SOCKS5.');
     }
 
     currentProxyConfig = {
@@ -121,18 +137,19 @@ function getProxyConfiguration() {
 /**
  * Initiates a port scan against the specified target.
  * The scan is executed by the backend, potentially through a configured proxy.
- * @param {string} target - The target URL, domain, or IP address (e.g., 'example.com', '192.168.1.1').
+ * @param {string} target - The target URL, domain, or IP address (e.g., 'example.com', '192.168.1.1', 'abcdefghijklmnop.onion').
  * @param {string[]} ports - An array of ports or port ranges to scan (e.g., ['80', '443', '22-25', '1-1024']).
  * @returns {Promise<object>} - A promise resolving with the port scan results from the backend.
  * @throws {Error} If target or ports are invalid, or if the backend operation fails.
  */
 async function initiatePortScan(target, ports) {
-    if (!target || typeof target !== 'string' || target.trim() === '') {
-        throw new Error('Valid target URL or IP is required for port scanning.');
+    if (!isValidTarget(target)) {
+        throw new Error('Invalid target provided. Must be a valid URL, IP, or .onion address.');
     }
     if (!Array.isArray(ports) || ports.length === 0) {
         throw new Error('At least one port or port range is required for scanning.');
     }
+    // Validate each port string format
     if (!ports.every(p => typeof p === 'string' && p.match(/^(\d{1,5}(-\d{1,5})?)$/))) {
         throw new Error('Invalid port format. Use single ports (e.g., "80") or ranges (e.g., "1-1024").');
     }
@@ -158,16 +175,22 @@ async function initiatePortScan(target, ports) {
  * This operation is performed by the backend, potentially through a configured proxy,
  * to retrieve service banners from open ports.
  * @param {string} target - The target URL, domain, or IP address.
+ * @param {number[]} [ports] - Optional array of specific ports to grab banners from. If not provided,
+ *                             the backend might attempt to grab from common ports or previously scanned open ports.
  * @returns {Promise<object>} - A promise resolving with banner information from the backend.
  * @throws {Error} If the target is invalid or the backend operation fails.
  */
-async function initiateBannerGrab(target) {
-    if (!target || typeof target !== 'string' || target.trim() === '') {
-        throw new Error('Valid target URL or IP is required for banner grabbing.');
+async function initiateBannerGrab(target, ports = []) {
+    if (!isValidTarget(target)) {
+        throw new Error('Invalid target provided. Must be a valid URL, IP, or .onion address.');
+    }
+    if (ports && !Array.isArray(ports) || !ports.every(p => typeof p === 'number' && p > 0 && p < 65536)) {
+        throw new Error('Optional ports for banner grabbing must be an array of valid port numbers (1-65535).');
     }
 
     const payload = {
         target: target.trim(),
+        ports: ports, // Pass specific ports if provided
         proxy: getProxyConfiguration()
     };
 
@@ -195,12 +218,14 @@ async function initiateBannerGrab(target) {
  */
 function updateConnectionStats(stats) {
     if (!stats || typeof stats !== 'object') {
-        console.warn('Invalid stats object provided to updateConnectionStats.');
+        console.warn('Invalid stats object provided to updateConnectionStats: must be an object.');
         return;
     }
-    if (typeof stats.mbps === 'undefined' || typeof stats.packetsSent === 'undefined' ||
-        typeof stats.targetStatus === 'undefined' || typeof stats.timeElapsed === 'undefined') {
-        console.warn('Incomplete stats object provided to updateConnectionStats. Missing required properties.');
+    const requiredProps = ['mbps', 'packetsSent', 'targetStatus', 'timeElapsed'];
+    const missingProps = requiredProps.filter(prop => typeof stats[prop] === 'undefined');
+
+    if (missingProps.length > 0) {
+        console.warn(`Incomplete stats object provided to updateConnectionStats. Missing: ${missingProps.join(', ')}.`);
         return;
     }
 
