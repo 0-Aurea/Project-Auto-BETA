@@ -50,34 +50,44 @@ class Injector {
      *                                            (or class constructor) that will be called to create the instance.
      *                                            If `dependency` is detected as a class constructor, `factory` is implicitly true.
      * @throws {Error} If the dependency name is invalid (not a non-empty string).
+     * @throws {Error} If `factory` option is true but `dependency` is not a function.
      */
     register(name, dependency, options = {}) {
         if (typeof name !== 'string' || name.trim() === '') {
             throw new Error('Injector: Dependency name must be a non-empty string.');
         }
-        if (this.dependencies.has(name)) {
-            // Warn if a dependency is being re-registered. This can indicate a configuration error
-            // or lead to unexpected behavior, especially with singletons.
-            console.warn(`Injector: Dependency "${name}" is being re-registered. ` +
-                         `Any existing singleton instance will be discarded.`);
-        }
 
         // Detect if the dependency is a class constructor.
-        // This heuristic checks if it's a function with a prototype and its constructor points to itself.
         const isClassConstructor = typeof dependency === 'function' &&
                                    dependency.prototype &&
                                    dependency.prototype.constructor === dependency;
 
+        const isFactoryExplicitlySet = options.factory === true;
+        const isFactory = isFactoryExplicitlySet || isClassConstructor;
+
+        // If 'factory' is explicitly set to true, ensure 'dependency' is actually a function.
+        if (isFactoryExplicitlySet && typeof dependency !== 'function') {
+            throw new Error(`Injector: Dependency "${name}" registered with 'factory: true' but is not a function or class.`);
+        }
+
+        if (this.dependencies.has(name)) {
+            // Warn if a dependency is being re-registered.
+            // If it's a singleton, invalidate its existing instance to ensure the new definition is used.
+            const existingDef = this.dependencies.get(name);
+            if (existingDef.singleton) {
+                console.warn(`Injector: Singleton dependency "${name}" is being re-registered. ` +
+                             `Its existing instance will be discarded.`);
+                this.singletons.delete(name); // Clear existing singleton instance
+            } else {
+                console.warn(`Injector: Dependency "${name}" is being re-registered.`);
+            }
+        }
+
         this.dependencies.set(name, {
             dependency,
             singleton: options.singleton === true, // Ensure boolean type
-            factory: options.factory === true || isClassConstructor // Implicitly a factory if it's a class
+            factory: isFactory
         });
-
-        // If a singleton was re-registered, invalidate its existing instance to ensure the new definition is used.
-        if (this.singletons.has(name)) {
-            this.singletons.delete(name);
-        }
     }
 
     /**
@@ -90,6 +100,7 @@ class Injector {
      * @param {string} name - The name of the dependency to resolve.
      * @returns {any} The resolved dependency instance or value.
      * @throws {Error} If the dependency with the given name is not registered.
+     * @throws {Error} If a factory dependency is incorrectly registered as a non-function.
      */
     resolve(name) {
         if (!this.dependencies.has(name)) {
@@ -148,24 +159,21 @@ class Injector {
      * @private
      * @param {function} dependency - The class constructor or factory function to instantiate.
      * @returns {any} The instantiated object.
+     * @throws {Error} If `dependency` is not a function when `factory` flag is true.
      */
     _instantiate(dependency) {
-        // If the dependency is a class constructor
-        if (typeof dependency === 'function' && dependency.prototype && dependency.prototype.constructor === dependency) {
-            // For simplicity, this injector assumes class constructors either take no arguments
-            // or manage their own dependencies internally (e.g., by taking the injector as an argument
-            // and calling `injector.resolve()` within their constructor).
-            // More advanced DI containers might parse constructor arguments for injection.
-            return new dependency();
-        } else if (typeof dependency === 'function') {
-            // If it's a factory function (not a class constructor), call it.
-            // A common pattern is to pass the injector instance to the factory function,
-            // allowing the factory to resolve its own sub-dependencies.
-            return dependency(this);
+        if (typeof dependency === 'function') {
+            // If the dependency is a class constructor (detected by its prototype)
+            if (dependency.prototype && dependency.prototype.constructor === dependency) {
+                return new dependency();
+            } else {
+                // If it's a factory function, call it, passing the injector itself.
+                return dependency(this);
+            }
         }
-        // This case should ideally not be reached if `factory` flag is set correctly
-        // and `_instantiate` is only called when `dependency` is indeed a function.
-        return dependency; // Fallback, though conceptually incorrect if `factory` is true here.
+        // This case should ideally be caught by the register method's validation.
+        // However, as a safeguard, it's good to have here too.
+        throw new Error('Injector: Internal error: Attempted to instantiate a non-function dependency marked as factory.');
     }
 }
 
