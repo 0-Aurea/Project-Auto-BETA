@@ -1,2 +1,7 @@
 Flask
 Flask-Cors
+torch
+transformers
+sentencepiece
+accelerate
+safetensors
