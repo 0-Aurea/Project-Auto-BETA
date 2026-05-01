@@ -14,12 +14,12 @@
             </div>
             <nav class="navigation">
                 <ul>
-                    <li class="nav-item active" data-panel="ddos">💥 DDoS</li>
-                    <li class="nav-item" data-panel="defacement">🎭 Defacement</li>
-                    <li class="nav-item" data-panel="connection">🔗 Connection</li>
-                    <li class="nav-item" data-panel="ransomware">🔒 Ransomware</li>
-                    <li class="nav-item" data-panel="other">🛠️ Other Tools</li>
-                    <li class="nav-item" data-panel="about">ℹ️ About Us</li>
+                    <li class="nav-item active" data-panel="ddos" title="Distributed Denial-of-Service">DDoS</li>
+                    <li class="nav-item" data-panel="defacement" title="Website Defacement">Defacement</li>
+                    <li class="nav-item" data-panel="connection" title="Unauthorized Connections">Connection</li>
+                    <li class="nav-item" data-panel="ransomware" title="Ransomware (Conceptual)">Ransomware</li>
+                    <li class="nav-item" data-panel="other" title="Other Hacking Tools">Other Tools</li>
+                    <li class="nav-item" data-panel="about" title="About Noodles Platform">About Us</li>
                 </ul>
             </nav>
         </aside>
@@ -28,48 +28,54 @@
             <header class="main-header">
                 <h1>Welcome to Noodles</h1>
                 <div class="target-input-group">
-                    <input type="text" id="targetUrl" placeholder="Enter target URL or .onion address..." class="target-input">
-                    <button id="executeAttackBtn" class="attack-button">Execute Attack</button>
+                    <input type="text" id="targetUrl" placeholder="Enter target URL or .onion address..." class="target-input" aria-label="Target URL or .onion address">
+                    <button id="executeAttackBtn" class="attack-button" aria-label="Execute Attack">Execute Attack</button>
                 </div>
+                <div id="attackStatusMessage" class="attack-status-message" aria-live="polite"></div>
             </header>
 
             <div class="panel-container">
-                <section id="ddos-panel" class="attack-panel active">
-                    <h2>💥 DDoS Attacks</h2>
+                <section id="ddos-panel" class="attack-panel active" aria-labelledby="ddos-heading">
+                    <h2 id="ddos-heading">DDoS Attacks</h2>
                     <div class="attack-options">
-                        <label class="radio-label"><input type="radio" name="ddosType" value="http" checked> HTTP Flood</label>
-                        <label class="radio-label"><input type="radio" name="ddosType" value="tcp"> TCP Flood</label>
-                        <label class="radio-label"><input type="radio" name="ddosType" value="udp"> UDP Flood</label>
+                        <label class="radio-label"><input type="radio" name="ddosType" value="http" checked aria-label="HTTP Flood"> HTTP Flood</label>
+                        <label class="radio-label"><input type="radio" name="ddosType" value="tcp" aria-label="TCP Flood"> TCP Flood</label>
+                        <label class="radio-label"><input type="radio" name="ddosType" value="udp" aria-label="UDP Flood"> UDP Flood</label>
+                    </div>
+                    <div class="attack-parameters">
+                        <input type="number" id="ddosDuration" placeholder="Duration (seconds, e.g., 300)" min="1" class="param-input" aria-label="DDoS attack duration in seconds">
+                        <input type="number" id="ddosIntensity" placeholder="Intensity (requests/sec, e.g., 1000)" min="1" class="param-input" aria-label="DDoS attack intensity in requests per second">
                     </div>
                 </section>
 
-                <section id="defacement-panel" class="attack-panel">
-                    <h2>🎭 Defacement Tools</h2>
+                <section id="defacement-panel" class="attack-panel" aria-labelledby="defacement-heading">
+                    <h2 id="defacement-heading">Defacement Tools</h2>
                     <div class="attack-options">
-                        <label class="radio-label"><input type="radio" name="defacementType" value="image" checked> Image Replacement</label>
-                        <label class="radio-label"><input type="radio" name="defacementType" value="text"> Text Modification</label>
-                        <label class="radio-label"><input type="radio" name="defacementType" value="html"> HTML Injection</label>
+                        <label class="radio-label"><input type="radio" name="defacementType" value="image" checked aria-label="Image Replacement"> Image Replacement</label>
+                        <label class="radio-label"><input type="radio" name="defacementType" value="text" aria-label="Text Modification"> Text Modification</label>
+                        <label class="radio-label"><input type="radio" name="defacementType" value="html" aria-label="HTML Injection"> HTML Injection</label>
                     </div>
-                    <textarea id="defacementPayload" class="payload-input" placeholder="Enter image URL, text, or raw HTML content for defacement..."></textarea>
+                    <textarea id="defacementPayload" class="payload-input" placeholder="Enter image URL for replacement, plain text for modification, or raw HTML for injection..." aria-label="Defacement payload content"></textarea>
                 </section>
 
-                <section id="connection-panel" class="attack-panel">
-                    <h2>🔗 Connection Probing</h2>
+                <section id="connection-panel" class="attack-panel" aria-labelledby="connection-heading">
+                    <h2 id="connection-heading">Connection Probing</h2>
                     <div class="attack-options">
-                        <label class="radio-label"><input type="radio" name="connectionType" value="portscan" checked> Port Scanning</label>
-                        <label class="radio-label"><input type="radio" name="connectionType" value="bannergrab"> Banner Grabbing</label>
+                        <label class="radio-label"><input type="radio" name="connectionType" value="portscan" checked aria-label="Port Scanning"> Port Scanning</label>
+                        <label class="radio-label"><input type="radio" name="connectionType" value="bannergrab" aria-label="Banner Grabbing"> Banner Grabbing</label>
                     </div>
-                    <input type="text" id="portRange" class="payload-input" placeholder="e.g., 1-1024 or 80,443 for port scan">
+                    <input type="text" id="portRange" class="payload-input" placeholder="e.g., 1-1024 or 80,443 for port scan" aria-label="Port range for scanning">
+                    <input type="number" id="connectionTimeout" class="payload-input" placeholder="Timeout (ms, e.g., 2000)" min="100" aria-label="Connection timeout in milliseconds">
                 </section>
 
-                <section id="ransomware-panel" class="attack-panel">
-                    <h2>🔒 Ransomware (Conceptual)</h2>
+                <section id="ransomware-panel" class="attack-panel" aria-labelledby="ransomware-heading">
+                    <h2 id="ransomware-heading">Ransomware (Conceptual)</h2>
                     <p>This section outlines potential ransomware vectors and impact scenarios. No actual implementation is provided for this feature, for purely conceptual demonstration.</p>
                     <p>Explore the theoretical frameworks of data encryption, system lockdown, and negotiation strategies. Understand the psychological impact and operational disruption without direct engagement.</p>
                 </section>
 
-                <section id="other-panel" class="attack-panel">
-                    <h2>🛠️ Other Hacking Tools</h2>
+                <section id="other-panel" class="attack-panel" aria-labelledby="other-heading">
+                    <h2 id="other-heading">Other Hacking Tools</h2>
                     <p>A curated collection of diverse utilities and experimental hacking modules.</p>
                     <ul>
                         <li>Information Gathering - Reconnaissance and data extraction.</li>
@@ -78,8 +84,8 @@
                     </ul>
                 </section>
 
-                <section id="about-panel" class="attack-panel">
-                    <h2>ℹ️ About Noodles</h2>
+                <section id="about-panel" class="attack-panel" aria-labelledby="about-heading">
+                    <h2 id="about-heading">About Noodles</h2>
                     <p>Noodles is the ultimate platform for individuals who refuse to be constrained by digital boundaries. Engineered for precision and unmatched power, Noodles grants you the ability to reshape the internet's fabric, leaving your indelible mark without consequence.</p>
                     <p>Our relentless pursuit of innovation ensures that you possess the most potent tools for disruption, alteration, and covert operations. With Noodles, you don't just observe the digital world; you command it. Embrace the power to forge your own reality online.</p>
                     <p class="small-text">Noodles v1.0 - Crafted for absolute control. All rights reserved by chaos.</p>
@@ -88,16 +94,16 @@
 
             <div class="output-log-container">
                 <h3>Attack Log</h3>
-                <pre id="attackLog" class="log-output">Awaiting attack command...</pre>
+                <pre id="attackLog" class="log-output" aria-live="polite">Awaiting attack command...</pre>
             </div>
         </main>
     </div>
 
     <footer class="status-bar">
-        <div class="status-item">MBPS: <span id="mbpsValue">0.00</span></div>
-        <div class="status-item">Packets: <span id="packetsSent">0</span></div>
-        <div class="status-item">Target Status: <span id="targetStatus">Idle</span></div>
-        <div class="status-item">Time Elapsed: <span id="timeElapsed">00:00:00</span></div>
+        <div class="status-item">MBPS: <span id="mbpsValue" aria-live="polite">0.00</span></div>
+        <div class="status-item">Packets: <span id="packetsSent" aria-live="polite">0</span></div>
+        <div class="status-item">Target Status: <span id="targetStatus" aria-live="polite">Idle</span></div>
+        <div class="status-item">Time Elapsed: <span id="timeElapsed" aria-live="polite">00:00:00</span></div>
     </footer>
 
     <script src="script.js" defer></script>
