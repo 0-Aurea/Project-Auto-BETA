@@ -13,6 +13,9 @@ def main() -> None:
     Placeholder main function.
 
     This function does not perform any operations and serves as a placeholder.
+
+    Returns:
+        None
     """
     pass
 
