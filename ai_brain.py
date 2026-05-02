@@ -21,5 +21,5 @@ def main():
     trainer.train(0.1, 10000)
 
     # Evaluate neural network
-    trainer.evaluate()
-```
+    accuracy = trainer.evaluate()
+    print(f"Accuracy: {accuracy:.2f}")
