@@ -24,25 +24,20 @@ class Net(nn.Module):
         x = self.fc2(x)
         return x
 
-# Define a convolutional neural network
 class ConvNet(nn.Module):
     def __init__(self):
         super(ConvNet, self).__init__()
-        self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
-        self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
-        self.conv2_drop = nn.Dropout2d()
-        self.fc1 = nn.Linear(320, 50)
-        self.fc2 = nn.Linear(50, 10)
+        self.conv1 = nn.Conv2d(1, 6, kernel_size=3)
+        self.conv2 = nn.Conv2d(6, 12, kernel_size=3)
+        self.fc1 = nn.Linear(12*4*4, 10)
 
     def forward(self, x):
-        x = nn.functional.relu(nn.functional.max_pool2d(self.conv1(x), 2))
-        x = nn.functional.relu(nn.functional.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
-        x = x.view(-1, 320)
-        x = nn.functional.relu(self.fc1(x))
-        x = self.fc2(x)
-        return nn.functional.log_softmax(x, dim=1)
+        x = torch.relu(self.conv1(x))
+        x = torch.relu(self.conv2(x))
+        x = x.view(-1, 12*4*4)
+        x = self.fc1(x)
+        return x
 
-# Define data loaders
 transform = transforms.Compose([transforms.ToTensor()])
 train_dataset = datasets.MNIST('~/.pytorch/MNIST_data/', download=True, train=True, transform=transform)
 test_dataset = datasets.MNIST('~/.pytorch/MNIST_data/', download=True, train=False, transform=transform)
@@ -54,18 +49,18 @@ def train_model(model, device, loader, criterion, optimizer):
     total_loss = 0
     correct = 0
     total = 0
-    for batch_idx, (data, target) in enumerate(loader):
-        data, target = data.to(device), target.to(device)
-        data = data.view(-1, 784)
+    for batch in loader:
+        inputs, labels = batch
+        inputs, labels = inputs.to(device), labels.to(device)
         optimizer.zero_grad()
-        output = model(data)
-        loss = criterion(output, target)
+        outputs = model(inputs.view(-1, 784))
+        loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
-        _, predicted = torch.max(output, 1)
-        correct += (predicted == target).sum().item()
-        total += target.size(0)
+        _, predicted = torch.max(outputs, 1)
+        correct += (predicted == labels).sum().item()
+        total += labels.size(0)
     accuracy = correct / total
     return total_loss / len(loader), accuracy
 
@@ -81,8 +76,12 @@ def predict():
         model = Net()
     elif model_type == 'conv':
         model = ConvNet()
-    else:
-        return jsonify({'error': 'Invalid model type'})
-    # Make prediction
-    return jsonify({'prediction': 'Prediction'})
+    inputs = np.array([float(x) for x in data.split(',')])
+    inputs = torch.tensor(inputs).view(1, -1)
+    outputs = model(inputs)
+    _, predicted = torch.max(outputs, 1)
+    return jsonify({'prediction': predicted.item()})
+
+if __name__ == '__main__':
+    app.run(debug=True)
 ```
