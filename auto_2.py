@@ -29,42 +29,53 @@ Variable names should be descriptive and indicate the purpose of the variable.
 x = 5
 
 # Good practice
-max_iterations = 5
+timeout_in_seconds = 5
 ```
 
 ### Add Docstrings
 
-Docstrings provide documentation for modules, functions, and classes.
+Docstrings provide documentation for modules, functions, and classes. They should be used to describe the purpose and behavior of the code.
 
 ```python
-def greet(name: str) -> None:
+def greet(name: str) -> str:
     """
-    Prints a personalized greeting message.
+    Returns a personalized greeting message.
 
     Args:
-        name (str): The person's name.
+        name (str): The name of the person to greet.
+
+    Returns:
+        str: A greeting message.
     """
-    print(f"Hello, {name}!")
+    return f"Hello, {name}!"
 ```
 
 ### Follow PEP 8 Guidelines
 
-*   Use 4 spaces for indentation.
-*   Limit lines to 79 characters.
-*   Use blank lines to separate logical sections of code.
+The Python Enhancement Proposal 8 (PEP 8) provides guidelines for coding style, documentation, and best practices.
+
+```python
+# Bad practice
+if True:
+    print( 'hello world' )
+
+# Good practice
+if True:
+    print("Hello, World!")
+```
 
 ### Use Type Hints
 
 Type hints indicate the expected types of function arguments and return values.
 
 ```python
-def add(a: int, b: int) -> int:
-    return a + b
+def greeting(name: str) -> str:
+    return f"Hello, {name}!"
 ```
 
 ### Error Handling
 
-Use try-except blocks to handle potential errors.
+Proper error handling is essential to make the code more robust.
 
 ```python
 try:
@@ -76,41 +87,23 @@ except ZeroDivisionError:
 
 ### Code Refactoring
 
-Refactor code to make it more readable, maintainable, and efficient.
-
-Example use case:
-
-Suppose we have a function that calculates the area and perimeter of a rectangle:
+Refactor the code to make it more efficient, readable, and maintainable.
 
 ```python
-def rectangle_properties(length, width):
-    area = length * width
-    perimeter = 2 * (length + width)
-    return area, perimeter
+# Bad practice
+numbers = [1, 2, 3, 4, 5]
+squared_numbers = []
+for number in numbers:
+    squared_numbers.append(number ** 2)
 
-# Refactored code
-def calculate_rectangle_properties(length: int, width: int) -> tuple:
-    """
-    Calculates the area and perimeter of a rectangle.
-
-    Args:
-        length (int): The length of the rectangle.
-        width (int): The width of the rectangle.
-
-    Returns:
-        tuple: A tuple containing the area and perimeter.
-    """
-    if length <= 0 or width <= 0:
-        raise ValueError("Length and width must be positive.")
-
-    area = length * width
-    perimeter = 2 * (length + width)
-    return area, perimeter
+# Good practice
+numbers = [1, 2, 3, 4, 5]
+squared_numbers = [number ** 2 for number in numbers]
 ```
 
-By applying these best practices, you can significantly improve the quality and readability of the `auto_2.py` file.
+By applying these best practices, you can improve the quality and maintainability of the `auto_2.py` file.
 
-Here is an example of how the `auto_2.py` file could look like:
+Here is an example of how the improved `auto_2.py` file might look:
 
 ```python
 # Standard library imports
@@ -124,14 +117,23 @@ from flask import Flask
 # Local application imports
 from . import module
 
-def main() -> None:
+def greet(name: str) -> str:
     """
-    The main entry point of the program.
+    Returns a personalized greeting message.
+
+    Args:
+        name (str): The name of the person to greet.
+
+    Returns:
+        str: A greeting message.
     """
+    return f"Hello, {name}!"
+
+def main():
     try:
         # Code that might raise an exception
         result = 10 / 5
-        print(result)
+        print(greet("World"))
     except ZeroDivisionError:
         print("Cannot divide by zero!")
 
