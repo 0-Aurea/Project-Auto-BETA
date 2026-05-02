@@ -22,104 +22,137 @@ from .models import MemoryModel
 
 ### Use Meaningful Variable Names
 
-Use descriptive variable names to improve code readability.
+Variable names should be descriptive and indicate the purpose of the variable.
 
 ```python
-# Before
-x = 10
+# Bad practice
+data = [1, 2, 3]
 
-# After
-memory_capacity = 10
+# Good practice
+memory_values = [1, 2, 3]
 ```
 
 ### Add Docstrings
 
-Include docstrings to provide a description of each function or class.
+Docstrings provide a description of what a function or class does.
 
 ```python
-def calculate_memory_usage(data):
+def calculate_memory_usage():
     """
-    Calculate the memory usage of the given data.
-
-    Args:
-        data (list): The data to calculate memory usage for.
+    Calculate the memory usage of the system.
 
     Returns:
         int: The memory usage in bytes.
     """
     # implementation
-```
-
-### Follow PEP 8 Guidelines
-
-Ensure that the code adheres to PEP 8 guidelines for coding style.
-
-```python
-# Before
-def calculate_memory_usage(data):return data.__sizeof__()
-
-# After
-def calculate_memory_usage(data):
-    return data.__sizeof__()
+    pass
 ```
 
 ### Use Type Hints
 
-Add type hints to indicate the expected types of function arguments and return values.
+Type hints indicate the expected type of a function's arguments and return value.
 
 ```python
-def calculate_memory_usage(data: list) -> int:
+def calculate_memory_usage() -> int:
     """
-    Calculate the memory usage of the given data.
-
-    Args:
-        data (list): The data to calculate memory usage for.
+    Calculate the memory usage of the system.
 
     Returns:
         int: The memory usage in bytes.
     """
     # implementation
+    pass
 ```
 
-### Example of Improved Code
+### Keep Functions Short and Focused
 
-Here's an example of how the improved `memory.py` file could look:
+Functions should perform a single task and be short.
 
 ```python
-# Standard library imports
+def calculate_memory_usage() -> int:
+    # implementation
+    pass
+
+def get_memory_info() -> dict:
+    # implementation
+    pass
+```
+
+### Use Logging
+
+Logging provides a way to track events in the application.
+
+```python
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
+def calculate_memory_usage() -> int:
+    try:
+        # implementation
+        logging.info("Memory usage calculated successfully.")
+    except Exception as e:
+        logging.error(f"Error calculating memory usage: {e}")
+```
+
+### Follow PEP 8
+
+The Python Enhancement Proposal 8 (PEP 8) provides guidelines for coding style.
+
+```python
+# Bad practice
+if True:
+    print('hello world')
+
+# Good practice
+if True:
+    print("Hello, World!")
+```
+
+Here's an example of an improved `memory.py` file:
+
+```python
+import logging
 import os
-import sys
+import psutil
+from typing import Dict
 
-# Related third party imports
-import numpy as np
+logging.basicConfig(level=logging.INFO)
 
-# Local application imports
-from . import utils
-from .models import MemoryModel
-
-def calculate_memory_usage(data: list) -> int:
+def get_memory_info() -> Dict[str, int]:
     """
-    Calculate the memory usage of the given data.
+    Get the memory information of the system.
 
-    Args:
-        data (list): The data to calculate memory usage for.
+    Returns:
+        Dict[str, int]: A dictionary containing the memory information.
+    """
+    memory_info = {}
+    try:
+        # Get memory information
+        memory = psutil.virtual_memory()
+        memory_info["total"] = memory.total
+        memory_info["available"] = memory.available
+        memory_info["used"] = memory.used
+        logging.info("Memory information retrieved successfully.")
+    except Exception as e:
+        logging.error(f"Error retrieving memory information: {e}")
+    return memory_info
+
+def calculate_memory_usage() -> int:
+    """
+    Calculate the memory usage of the system.
 
     Returns:
         int: The memory usage in bytes.
     """
-    memory_usage = 0
-    for item in data:
-        memory_usage += sys.getsizeof(item)
-    return memory_usage
-
-def get_memory_capacity() -> int:
-    """
-    Get the available memory capacity.
-
-    Returns:
-        int: The available memory capacity in bytes.
-    """
-    return os.sysconf('SC_AVPHYS_PAGES') * os.sysconf('SC_PAGE_SIZE')
+    try:
+        # Calculate memory usage
+        memory = psutil.virtual_memory()
+        memory_usage = memory.used
+        logging.info("Memory usage calculated successfully.")
+        return memory_usage
+    except Exception as e:
+        logging.error(f"Error calculating memory usage: {e}")
 ```
 
-By following these best practices, you can improve the readability, maintainability, and performance of the `memory.py` file.
+This improved version includes organized imports, meaningful variable names, docstrings, type hints, short and focused functions, logging, and follows PEP 8 guidelines.
