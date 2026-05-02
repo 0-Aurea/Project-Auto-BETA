@@ -12,10 +12,10 @@ def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         data: List of dictionaries containing raw data entries
         
     Returns:
-        List of processed dictionaries with lowercase keys and filtered entries
+        List of processed dictionaries with lowercase keys and valid 'id' fields
     """
     return [
-        {key.lower(): value for key, value in entry.items()}
-        for entry in data
-        if 'id' in entry
+        {k.lower(): v for k, v in item.items()}
+        for item in data
+        if isinstance(item, dict) and 'id' in item
     ]
