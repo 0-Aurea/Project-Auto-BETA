@@ -1,137 +1,112 @@
-It seems like you provided a list of code improvement suggestions for various Python files, but not the actual code for the `self_supervised_learning_loop.py` file. 
-
-However, I can still provide general suggestions for improving the `self_supervised_learning_loop.py` file.
-
-### Improving the `self_supervised_learning_loop.py` File
-
-Based on general best practices for Python files, I'll provide suggestions to improve the `self_supervised_learning_loop.py` file.
-
-### Organize Imports
-
-In a large project, it's essential to keep imports organized. Consider using the following structure:
-
-```python
-# Standard library imports
 import os
 import sys
-
-# Third-party imports
-import numpy as np
+import time
+import logging
 import torch
+from torch import nn, optim
+from typing import Dict, Any, Tuple, List, Optional
+from torch.utils.data import DataLoader
 
-# Local imports
-from . import ai_brain
-from . import data_loader
-```
+logging.basicConfig(level=logging.INFO)
 
-### Use Meaningful Variable Names
-
-Use descriptive variable names to improve code readability.
-
-```python
-# Instead of this:
-x = 10
-
-# Use this:
-num_epochs = 10
-```
-
-### Add Docstrings
-
-Include docstrings to provide a description of each function or class.
-
-```python
-def train_model(model, device, loader, optimizer, epoch):
+def train_self_supervised_model(
+    model: nn.Module,
+    data_loader: DataLoader,
+    optimizer: optim.Optimizer,
+    num_epochs: int = 10,
+    device: Optional[torch.device] = None
+) -> Tuple[nn.Module, Dict[int, float]]:
     """
-    Train the model for a single epoch.
-
+    Train a self-supervised learning model using contrastive learning.
+    
     Args:
-    - model: The PyTorch model to train.
-    - device: The device to train on (e.g., GPU or CPU).
-    - loader: The data loader for the training dataset.
-    - optimizer: The optimizer to use for training.
-    - epoch: The current epoch number.
-
+        model: Neural network model to train
+        data_loader: DataLoader containing training samples
+        optimizer: Optimization algorithm
+        num_epochs: Number of training epochs
+        device: Computation device (CPU/GPU)
+        
     Returns:
-    - None
+        Trained model and dictionary of epoch-wise losses
     """
-    # Training code here...
-```
-
-### Use Type Hints
-
-Add type hints to indicate the expected types of function arguments and return values.
-
-```python
-def train_model(model: torch.nn.Module, device: str, loader: torch.utils.data.DataLoader, optimizer: torch.optim.Optimizer, epoch: int) -> None:
-    # Training code here...
-```
-
-### Consider Using a Main Function
-
- Wrap the main execution code in a `main` function to make it easier to test and reuse.
-
-```python
-def main():
-    # Main execution code here...
-
-if __name__ == "__main__":
-    main()
-```
-
-### Follow PEP 8 Guidelines
-
-Ensure that the code adheres to PEP 8 guidelines for coding style, including:
-
-* Using consistent indentation (4 spaces)
-* Limiting line length to 79 characters
-* Using blank lines to separate logical sections of code
-
-By applying these suggestions, you can improve the readability, maintainability, and overall quality of the `self_supervised_learning_loop.py` file. 
-
-Here's an example of what the improved code might look like:
-
-```python
-import os
-import sys
-import numpy as np
-import torch
-from . import ai_brain
-from . import data_loader
-
-def train_model(model: torch.nn.Module, device: str, loader: torch.utils.data.DataLoader, optimizer: torch.optim.Optimizer, epoch: int) -> None:
-    """
-    Train the model for a single epoch.
-
-    Args:
-    - model: The PyTorch model to train.
-    - device: The device to train on (e.g., GPU or CPU).
-    - loader: The data loader for the training dataset.
-    - optimizer: The optimizer to use for training.
-    - epoch: The current epoch number.
-
-    Returns:
-    - None
-    """
-    model.train()
-    for batch_idx, (data, target) in enumerate(loader):
-        data, target = data.to(device), target.to(device)
-        optimizer.zero_grad()
-        output = model(data)
-        loss = torch.nn.CrossEntropyLoss()(output, target)
-        loss.backward()
-        optimizer.step()
-
-def main():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = ai_brain.AIBrain()
-    loader = data_loader.get_data_loader()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    num_epochs = 10
-
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    model.to(device)
+    loss_history = {}
+    
     for epoch in range(num_epochs):
-        train_model(model, device, loader, optimizer, epoch)
+        epoch_loss = 0.0
+        model.train()
+        
+        for batch in data_loader:
+            # Move batch to device
+            inputs = batch[0].to(device)
+            
+            # Forward pass
+            embeddings = model(inputs)
+            loss = contrastive_loss(embeddings)
+            
+            # Backward pass
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            
+            epoch_loss += loss.item()
+        
+        avg_loss = epoch_loss / len(data_loader)
+        loss_history[epoch] = avg_loss
+        logging.info(f"Epoch {epoch+1}/{num_epochs} - Loss: {avg_loss:.4f}")
+    
+    return model, loss_history
 
-if __name__ == "__main__":
-    main()
-```
+def contrastive_loss(
+    embeddings: torch.Tensor,
+    temperature: float = 0.07
+) -> torch.Tensor:
+    """
+    Compute contrastive loss using normalized temperature-scaled cross entropy.
+    
+    Args:
+        embeddings: Tensor of shape (batch_size, embedding_dim)
+        temperature: Scaling factor for similarity scores
+        
+    Returns:
+        Computed contrastive loss
+    """
+    # Normalize embeddings
+    embeddings = nn.functional.normalize(embeddings, p=2, dim=1)
+    
+    # Compute similarity matrix
+    similarity_matrix = torch.matmul(embeddings, embeddings.T) / temperature
+    
+    # Create labels (diagonal elements are positive pairs)
+    labels = torch.arange(similarity_matrix.size(0)).to(embeddings.device)
+    
+    # Compute loss
+    loss = nn.CrossEntropyLoss()(similarity_matrix, labels)
+    return loss
+
+def create_data_loaders(
+    dataset: torch.utils.data.Dataset,
+    batch_size: int = 256,
+    num_workers: int = 4
+) -> DataLoader:
+    """
+    Create DataLoader with optimal configuration for self-supervised learning.
+    
+    Args:
+        dataset: PyTorch Dataset object
+        batch_size: Number of samples per batch
+        num_workers: Number of worker threads for data loading
+        
+    Returns:
+        Configured DataLoader
+    """
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True if torch.cuda.is_available() else False
+    )
