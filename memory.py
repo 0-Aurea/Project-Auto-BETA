@@ -19,7 +19,6 @@ import numpy as np
 
 # Local application imports
 from . import utils
-from .models import MemoryModel
 ```
 
 ### Use Meaningful Variable Names
@@ -28,99 +27,101 @@ Variable names should be descriptive and indicate the purpose of the variable.
 
 ```python
 # Bad practice
-data = [1, 2, 3]
+x = 10
 
 # Good practice
-memory_values = [1, 2, 3]
+memory_size = 10
 ```
 
 ### Add Docstrings
 
-Docstrings provide a description of what a function or class does.
+Docstrings provide documentation for modules, functions, and classes.
 
 ```python
-# Bad practice
-def calculate_memory_usage():
-    pass
-
-# Good practice
-def calculate_memory_usage():
+def calculate_memory_usage(data):
     """
-    Calculate the memory usage of the system.
+    Calculate the memory usage of the given data.
+
+    Args:
+        data (list): The data to calculate memory usage for.
 
     Returns:
         int: The memory usage in bytes.
     """
-    pass
-```
-
-### Use Type Hints
-
-Type hints indicate the expected type of a function's arguments and return value.
-
-```python
-# Bad practice
-def calculate_memory_usage(data):
-    return data
-
-# Good practice
-def calculate_memory_usage(data: list[int]) -> int:
-    return data
+    # implementation
 ```
 
 ### Follow PEP 8 Guidelines
 
-The PEP 8 style guide provides guidelines for coding style, including indentation, spacing, and naming conventions.
+The Python Enhancement Proposal 8 (PEP 8) provides guidelines for coding style.
 
 ```python
 # Bad practice
-def calculate_memory_usage ( data ):
-    return data
+if True:
+    print( 'hello world' )
 
 # Good practice
-def calculate_memory_usage(data: list[int]) -> int:
-    return data
+if True:
+    print("hello world")
 ```
 
-### Example of Improved Code
+### Use Type Hints
 
-Here's an example of how the `memory.py` file could be improved:
+Type hints indicate the expected types of function arguments and return values.
+
+```python
+def greet(name: str) -> None:
+    print(f"Hello, {name}!")
+```
+
+### Refactored Code
+
+Here's an example of how the refactored `memory.py` file could look:
 
 ```python
 # memory.py
 
-"""
-Provides functions for working with memory.
-"""
-
+# Standard library imports
 import os
-import psutil
-from typing import List
+import sys
 
-def get_memory_usage() -> int:
+# Related third party imports
+import numpy as np
+
+# Local application imports
+from . import utils
+
+def calculate_memory_usage(data: list) -> int:
     """
-    Get the current memory usage of the system.
+    Calculate the memory usage of the given data.
+
+    Args:
+        data (list): The data to calculate memory usage for.
 
     Returns:
         int: The memory usage in bytes.
     """
-    process = psutil.Process(os.getpid())
-    return process.memory_info().rss
+    memory_usage = sys.getsizeof(data)
+    return memory_usage
 
-def get_memory_history(num_samples: int) -> List[int]:
+def get_memory_size() -> int:
     """
-    Get a list of memory usage samples.
-
-    Args:
-        num_samples (int): The number of samples to collect.
+    Get the total memory size.
 
     Returns:
-        List[int]: A list of memory usage samples in bytes.
+        int: The total memory size in bytes.
     """
-    memory_history = []
-    for _ in range(num_samples):
-        memory_history.append(get_memory_usage())
-    return memory_history
-```
+    memory_size = os.sysconf('SC_PHYSICAL_MEMORY')
+    return memory_size
 
-By following these best practices, the `memory.py` file can be improved to be more readable, maintainable, and efficient.
+def main() -> None:
+    data = [1, 2, 3, 4, 5]
+    memory_usage = calculate_memory_usage(data)
+    print(f"Memory usage: {memory_usage} bytes")
+
+    memory_size = get_memory_size()
+    print(f"Total memory size: {memory_size} bytes")
+
+if __name__ == "__main__":
+    main()
+```
