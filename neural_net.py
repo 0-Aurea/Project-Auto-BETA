@@ -17,14 +17,23 @@ class NeuralNetwork:
         return 1 / (1 + np.exp(-x))
 
     def train(self, inputs, targets, learning_rate):
+        # Forward pass
         hidden_layer = self.sigmoid(np.dot(inputs, self.weights1) + self.bias1)
         outputs = self.sigmoid(np.dot(hidden_layer, self.weights2) + self.bias2)
+
+        # Backward pass
         output_errors = targets - outputs
-        hidden_errors = output_errors.dot(self.weights2.T)
-        self.weights2 += learning_rate * hidden_layer.T.dot(output_errors)
-        self.bias2 += learning_rate * np.sum(output_errors, axis=0, keepdims=True)
-        self.weights1 += learning_rate * inputs.T.dot(hidden_errors)
-        self.bias1 += learning_rate * np.sum(hidden_errors, axis=0, keepdims=True)
+        output_delta = output_errors * outputs * (1 - outputs)
+
+        hidden_errors = output_delta.dot(self.weights2.T)
+        hidden_delta = hidden_errors * hidden_layer * (1 - hidden_layer)
+
+        # Weight updates
+        self.weights2 += learning_rate * hidden_layer.T.dot(output_delta)
+        self.bias2 += learning_rate * np.sum(output_delta, axis=0, keepdims=True)
+
+        self.weights1 += learning_rate * inputs.T.dot(hidden_delta)
+        self.bias1 += learning_rate * np.sum(hidden_delta, axis=0, keepdims=True)
 
     def forward(self, inputs):
         hidden_layer = self.sigmoid(np.dot(inputs, self.weights1) + self.bias1)
