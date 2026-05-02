@@ -10,63 +10,52 @@ In a large project, it's essential to keep imports organized. Consider using the
 ```python
 # app.py
 
-from flask import Flask, jsonify, request
-from flask_cors import CORS
-from flask_sqlalchemy import SQLAlchemy
+# Standard library imports
+import os
+import logging
 
-import config
+# Third-party imports
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+
+# Local imports
 from ai_brain import AiBrain
 from data_collector import DataCollector
 ```
 
 ### Structure the Application
 
-Consider organizing the application into sections:
+Consider structuring the application into separate sections or functions for better readability:
 
 ```python
 # app.py
 
 app = Flask(__name__)
 CORS(app)
-app.config.from_object(config.Config)
 
-db = SQLAlchemy(app)
+# Load AI brain and data collector
+ai_brain = AiBrain()
+data_collector = DataCollector()
 
-@app.before_first_request
-def create_tables():
-    db.create_all()
+# Define routes
+@app.route('/api/data', methods=['GET'])
+def get_data():
+    data = data_collector.collect_data()
+    return jsonify({'data': data})
 
-@app.route('/')
-def index():
-    return 'Welcome to the AI Application!'
+@app.route('/api/predict', methods=['POST'])
+def predict():
+    input_data = request.get_json()['input']
+    prediction = ai_brain.predict(input_data)
+    return jsonify({'prediction': prediction})
 
 if __name__ == '__main__':
     app.run(debug=True)
 ```
 
-### Implement Blueprints
-
-For larger applications, consider using blueprints to organize routes:
-
-```python
-# blueprints/ai_blueprint.py
-
-from flask import Blueprint, jsonify
-from ai_brain import AiBrain
-
-ai_blueprint = Blueprint('ai_blueprint', __name__)
-
-@ai_blueprint.route('/ai/predict', methods=['POST'])
-def predict():
-    data = request.get_json()
-    ai_brain = AiBrain()
-    prediction = ai_brain.predict(data)
-    return jsonify({'prediction': prediction})
-```
-
 ### Error Handling
 
-Implement error handling to ensure robustness:
+Implement error handling to ensure the application doesn't crash unexpectedly:
 
 ```python
 # app.py
@@ -76,65 +65,82 @@ def not_found(error):
     return jsonify({'error': 'Not found'}), 404
 
 @app.errorhandler(500)
-def internal_error(error):
+def internal_server_error(error):
+    logging.error(error)
     return jsonify({'error': 'Internal server error'}), 500
 ```
 
 ### Logging
 
-Consider adding logging to monitor the application's performance:
+Configure logging to monitor the application's performance:
 
 ```python
 # app.py
 
-import logging
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-@app.before_request
-def before_request():
-    logger.info('Request: %s %s', request.method, request.path)
+logging.basicConfig(filename='app.log', level=logging.INFO)
 ```
 
-Full Example
-------------
+### Best Practices
 
-Here's a complete example of an improved `app.py` file:
+*   Keep the `app.py` file concise and focused on the application structure.
+*   Use a consistent naming convention (e.g., PEP 8).
+*   Implement unit tests and integration tests for the application.
+
+Here's a sample improved `app.py` file:
 
 ```python
 # app.py
 
-from flask import Flask, jsonify, request
-from flask_cors import CORS
-from flask_sqlalchemy import SQLAlchemy
+"""
+Self-learning AI application.
 
-import config
+This module provides a simple Flask application for a self-learning AI system.
+"""
+
+import os
+import logging
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 from ai_brain import AiBrain
 from data_collector import DataCollector
 
 app = Flask(__name__)
 CORS(app)
-app.config.from_object(config.Config)
 
-db = SQLAlchemy(app)
+# Load AI brain and data collector
+ai_brain = AiBrain()
+data_collector = DataCollector()
 
-logger = logging.getLogger(__name__)
+# Configure logging
+logging.basicConfig(filename='app.log', level=logging.INFO)
 
-@app.before_first_request
-def create_tables():
-    db.create_all()
+# Define routes
+@app.route('/api/data', methods=['GET'])
+def get_data():
+    try:
+        data = data_collector.collect_data()
+        return jsonify({'data': data})
+    except Exception as e:
+        logging.error(e)
+        return jsonify({'error': 'Failed to collect data'}), 500
 
-@app.route('/')
-def index():
-    return 'Welcome to the AI Application!'
+@app.route('/api/predict', methods=['POST'])
+def predict():
+    try:
+        input_data = request.get_json()['input']
+        prediction = ai_brain.predict(input_data)
+        return jsonify({'prediction': prediction})
+    except Exception as e:
+        logging.error(e)
+        return jsonify({'error': 'Failed to make prediction'}), 500
 
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({'error': 'Not found'}), 404
 
 @app.errorhandler(500)
-def internal_error(error):
+def internal_server_error(error):
+    logging.error(error)
     return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
