@@ -12,16 +12,14 @@ def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     
     Args:
         data: List of dictionaries containing raw data entries. Each entry
-              should have an 'id' field to be included in the output.
+              must have an 'id' field to be included in the output.
     
     Returns:
         List of processed dictionaries with lowercase keys and only entries
-        that contained an 'id' field.
+        containing an 'id' field.
     """
-    processed = []
-    for item in data:
-        if 'id' not in item:
-            continue
-        processed_item = {key.lower(): value for key, value in item.items()}
-        processed.append(processed_item)
-    return processed
+    return [
+        {key.lower(): value for key, value in entry.items()}
+        for entry in data
+        if 'id' in entry
+    ]
