@@ -10,78 +10,95 @@ Self-learning AI brain module.
 """
 
 import numpy as np
-from neural_net import NeuralNetwork, ConvolutionalNeuralNetwork, RecurrentNeuralNetwork, Transformer
+from neural_net import (
+    NeuralNetwork, 
+    ConvolutionalNeuralNetwork, 
+    RecurrentNeuralNetwork, 
+    Transformer, 
+    Autoencoder
+)
+from trainer import Trainer
+from data_loader import DataLoader
+from data_collector import DataCollector
 
 class AIBrain:
-    def __init__(self):
+    def __init__(self, 
+                 neural_network_type: str = 'neural_network', 
+                 trainer_config: dict = None, 
+                 data_loader_config: dict = None):
         """
-        Initialize the AI brain with available neural network architectures.
-        """
-        self.architectures = {
-            'neural_network': NeuralNetwork,
-            'convolutional_neural_network': ConvolutionalNeuralNetwork,
-            'recurrent_neural_network': RecurrentNeuralNetwork,
-            'transformer': Transformer
-        }
-
-    def create_model(self, architecture, **kwargs):
-        """
-        Create a neural network model based on the specified architecture.
+        Initialize the AI brain.
 
         Args:
-            architecture (str): The type of neural network architecture.
-            **kwargs: Additional keyword arguments for the neural network.
+        - neural_network_type (str): Type of neural network to use (default: 'neural_network')
+        - trainer_config (dict): Configuration for the trainer (default: None)
+        - data_loader_config (dict): Configuration for the data loader (default: None)
+        """
+        self.neural_network_type = neural_network_type
+        self.trainer_config = trainer_config
+        self.data_loader_config = data_loader_config
+        self.neural_network = self._create_neural_network()
+
+    def _create_neural_network(self):
+        """
+        Create a neural network based on the specified type.
 
         Returns:
-            A neural network model instance.
+        - neural_network: The created neural network
         """
-        if architecture in self.architectures:
-            return self.architectures[architecture](**kwargs)
+        if self.neural_network_type == 'neural_network':
+            return NeuralNetwork()
+        elif self.neural_network_type == 'convolutional_neural_network':
+            return ConvolutionalNeuralNetwork()
+        elif self.neural_network_type == 'recurrent_neural_network':
+            return RecurrentNeuralNetwork()
+        elif self.neural_network_type == 'transformer':
+            return Transformer()
+        elif self.neural_network_type == 'autoencoder':
+            return Autoencoder()
         else:
-            raise ValueError(f"Unsupported architecture: {architecture}")
+            raise ValueError("Invalid neural network type")
 
-    def train_model(self, model, data, **kwargs):
+    def train(self):
         """
-        Train a neural network model using the provided data.
-
-        Args:
-            model: A neural network model instance.
-            data: The training data.
-            **kwargs: Additional keyword arguments for training.
-
-        Returns:
-            The trained model instance.
+        Train the AI brain using the specified trainer and data loader configurations.
         """
-        # Implement training logic here
-        pass
+        trainer = Trainer(self.trainer_config)
+        data_loader = DataLoader(self.data_loader_config)
+        data = data_loader.load_data()
+        trainer.train(self.neural_network, data)
 
-    def evaluate_model(self, model, data):
+    def collect_data(self):
         """
-        Evaluate a trained neural network model using the provided data.
-
-        Args:
-            model: A trained neural network model instance.
-            data: The evaluation data.
-
-        Returns:
-            The evaluation metrics.
+        Collect data using the data collector.
         """
-        # Implement evaluation logic here
-        pass
+        data_collector = DataCollector()
+        data_collector.collect_data()
+
+if __name__ == "__main__":
+    ai_brain = AIBrain()
+    ai_brain.train()
 ```
 
-### Improvements
-
-1. **Modular design**: The `AIBrain` class encapsulates the neural network architectures and provides methods for creating, training, and evaluating models.
-2. **Flexible architecture**: The `create_model` method allows for easy extension of supported architectures by adding new entries to the `architectures` dictionary.
-3. **Separation of concerns**: Training and evaluation logic are separated into distinct methods, making it easier to modify or replace these components.
-
-### Commit message
+### Commit Message
 
 ```
-Improve ai_brain.py with modular design and flexible architecture
+Improve AI brain module
 
-* Encapsulate neural network architectures in AIBrain class
-* Add create_model, train_model, and evaluate_model methods
-* Improve code readability and maintainability
+* Create a self-learning AI brain class
+* Add support for different neural network types
+* Integrate trainer and data loader configurations
+* Implement data collection using a data collector
 ```
+
+### Explanation
+
+The improved `ai_brain.py` file includes the following changes:
+
+1. **Modularized code**: The code is organized into a class-based structure, making it more maintainable and scalable.
+2. **Neural network type selection**: The `AIBrain` class allows selecting the type of neural network to use, making it more flexible.
+3. **Trainer and data loader configurations**: The class takes in trainer and data loader configurations, making it easier to customize the training process.
+4. **Data collection**: The `collect_data` method allows collecting data using a data collector.
+5. **Improved documentation**: The code includes docstrings and comments, making it easier to understand and use.
+
+Note that this is just one possible way to improve the `ai_brain.py` file, and there are many other approaches and modifications that could be made depending on the specific requirements and goals of the project.
