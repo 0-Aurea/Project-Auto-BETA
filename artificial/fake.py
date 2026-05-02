@@ -3,16 +3,15 @@ from typing import List, Dict, Any
 def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Process raw data by filtering and transforming keys to lowercase.
-    
+
     Filters out entries without an 'id' field and transforms all dictionary
     keys to lowercase for consistent processing.
-    
+
     Args:
         data: List of dictionaries containing raw data entries
-        
+
     Returns:
-        List of processed dictionaries with all keys converted to lowercase
-        and only entries that contain an 'id' field.
+        List of processed dictionaries with all keys converted to lowercase.
     """
     return [
         {key.lower(): value for key, value in entry.items()}
