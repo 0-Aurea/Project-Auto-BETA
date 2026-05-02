@@ -18,6 +18,7 @@ from flask import Flask
 
 # Local application imports
 from . import module
+from .subpackage import submodule
 ```
 
 ### Use Meaningful Variable Names
@@ -32,36 +33,29 @@ x = 5
 timeout_in_seconds = 5
 ```
 
-### Add Docstrings
-
-Docstrings provide documentation for modules, functions, and classes. They should be used to describe the purpose and behavior of the code.
-
-```python
-def greet(name: str) -> str:
-    """
-    Returns a personalized greeting message.
-
-    Args:
-        name (str): The name of the person to greet.
-
-    Returns:
-        str: A greeting message.
-    """
-    return f"Hello, {name}!"
-```
-
 ### Follow PEP 8 Guidelines
 
 The Python Enhancement Proposal 8 (PEP 8) provides guidelines for coding style, documentation, and best practices.
 
 ```python
 # Bad practice
-if True:
-    print( 'hello world' )
+def my_function (a,b):
+  return a+b
 
 # Good practice
-if True:
-    print("Hello, World!")
+def add_numbers(a: int, b: int) -> int:
+    """Return the sum of two numbers."""
+    return a + b
+```
+
+### Add Docstrings
+
+Docstrings provide documentation for modules, functions, classes, and methods.
+
+```python
+def greet(name: str) -> None:
+    """Print a personalized greeting message."""
+    print(f"Hello, {name}!")
 ```
 
 ### Use Type Hints
@@ -69,73 +63,80 @@ if True:
 Type hints indicate the expected types of function arguments and return values.
 
 ```python
-def greeting(name: str) -> str:
-    return f"Hello, {name}!"
+def process_data(data: list[int]) -> dict[str, int]:
+    """Process the data and return a dictionary."""
+    result = {}
+    for value in data:
+        result[str(value)] = value
+    return result
 ```
 
-### Error Handling
+### Keep Functions Short and Focused
 
-Proper error handling is essential to make the code more robust.
-
-```python
-try:
-    # Code that might raise an exception
-    result = 10 / 0
-except ZeroDivisionError:
-    print("Cannot divide by zero!")
-```
-
-### Code Refactoring
-
-Refactor the code to make it more efficient, readable, and maintainable.
+Functions should perform a single task and be concise.
 
 ```python
 # Bad practice
-numbers = [1, 2, 3, 4, 5]
-squared_numbers = []
-for number in numbers:
-    squared_numbers.append(number ** 2)
+def complex_function():
+    # multiple unrelated tasks
+    pass
 
 # Good practice
-numbers = [1, 2, 3, 4, 5]
-squared_numbers = [number ** 2 for number in numbers]
+def task1():
+    # perform task 1
+    pass
+
+def task2():
+    # perform task 2
+    pass
 ```
 
-By applying these best practices, you can improve the quality and maintainability of the `auto_2.py` file.
+### Use Logging
 
-Here is an example of how the improved `auto_2.py` file might look:
+Logging helps diagnose issues and monitor application behavior.
+
+```python
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
+def my_function():
+    try:
+        # code that might fail
+        pass
+    except Exception as e:
+        logging.error(f"An error occurred: {e}")
+```
+
+By applying these best practices, you can improve the quality and maintainability of the `auto_2.py` file. 
+
+Here is an example of how the `auto_2.py` file could look like after applying these suggestions:
 
 ```python
 # Standard library imports
+import logging
 import os
-import sys
 
 # Related third party imports
 import requests
-from flask import Flask
 
 # Local application imports
 from . import module
 
-def greet(name: str) -> str:
-    """
-    Returns a personalized greeting message.
+def greet(name: str) -> None:
+    """Print a personalized greeting message."""
+    print(f"Hello, {name}!")
 
-    Args:
-        name (str): The name of the person to greet.
+def add_numbers(a: int, b: int) -> int:
+    """Return the sum of two numbers."""
+    return a + b
 
-    Returns:
-        str: A greeting message.
-    """
-    return f"Hello, {name}!"
-
-def main():
+def main() -> None:
     try:
-        # Code that might raise an exception
-        result = 10 / 5
-        print(greet("World"))
-    except ZeroDivisionError:
-        print("Cannot divide by zero!")
+        # code that might fail
+        pass
+    except Exception as e:
+        logging.error(f"An error occurred: {e}")
 
 if __name__ == "__main__":
     main()
