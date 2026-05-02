@@ -17,141 +17,106 @@ import pandas as pd
 
 # Local application imports
 from . import utils
-from .models import DataCollector
+from .config import DATA_DIR
 ```
 
 ### Use Meaningful Variable Names
 
-Variable names should be descriptive and indicate the purpose of the variable.
+Use descriptive variable names to improve code readability.
 
 ```python
-# Bad practice
-data = []
+# Before
+data = pd.read_csv('data.csv')
 
-# Good practice
-collected_data = []
+# After
+data_file_path = 'data.csv'
+data = pd.read_csv(data_file_path)
 ```
 
-### Add Docstrings
+### Add Type Hints
 
-Docstrings provide documentation for functions and classes. They should describe the purpose, parameters, and return values.
+Add type hints to function parameters and return types to make the code more readable and self-documenting.
 
 ```python
+# Before
 def collect_data(file_path):
-    """
-    Collects data from a file.
+    data = pd.read_csv(file_path)
+    return data
 
-    Args:
-        file_path (str): The path to the file.
-
-    Returns:
-        list: A list of collected data.
-    """
-    collected_data = []
-    # ...
-    return collected_data
-```
-
-### Use Type Hints
-
-Type hints indicate the expected types of function parameters and return values.
-
-```python
-def collect_data(file_path: str) -> list:
-    """
-    Collects data from a file.
-
-    Args:
-        file_path (str): The path to the file.
-
-    Returns:
-        list: A list of collected data.
-    """
-    collected_data = []
-    # ...
-    return collected_data
+# After
+def collect_data(file_path: str) -> pd.DataFrame:
+    data = pd.read_csv(file_path)
+    return data
 ```
 
 ### Handle Exceptions
 
-Exceptions should be handled to prevent the program from crashing.
+Handle potential exceptions that may occur during file operations.
 
 ```python
-def collect_data(file_path: str) -> list:
-    try:
-        collected_data = []
-        # ...
-        return collected_data
-    except FileNotFoundError:
-        print(f"File not found: {file_path}")
-        return []
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return []
+try:
+    data = collect_data('data.csv')
+except FileNotFoundError:
+    print("The file was not found.")
+except pd.errors.EmptyDataError:
+    print("The file is empty.")
 ```
 
-### Use Logging
+### Use Docstrings
 
-Logging provides a way to track the program's execution.
+Use docstrings to provide a description of what each function does.
 
 ```python
-import logging
+def collect_data(file_path: str) -> pd.DataFrame:
+    """
+    Collects data from a CSV file.
 
-logging.basicConfig(level=logging.INFO)
+    Args:
+        file_path (str): The path to the CSV file.
 
-def collect_data(file_path: str) -> list:
-    logging.info(f"Collecting data from file: {file_path}")
-    try:
-        collected_data = []
-        # ...
-        logging.info(f"Data collected successfully")
-        return collected_data
-    except Exception as e:
-        logging.error(f"An error occurred: {e}")
-        return []
+    Returns:
+        pd.DataFrame: The collected data.
+    """
+    data = pd.read_csv(file_path)
+    return data
 ```
 
 ### Refactored Code
 
-Here's an example of the refactored `data_collector.py` file:
+Here's an example of how the refactored `data_collector.py` file could look:
 
 ```python
-import logging
 import os
+import sys
 import pandas as pd
 
 from . import utils
-from .models import DataCollector
+from .config import DATA_DIR
 
-logging.basicConfig(level=logging.INFO)
-
-def collect_data(file_path: str) -> list:
+def collect_data(file_path: str) -> pd.DataFrame:
     """
-    Collects data from a file.
+    Collects data from a CSV file.
 
     Args:
-        file_path (str): The path to the file.
+        file_path (str): The path to the CSV file.
 
     Returns:
-        list: A list of collected data.
+        pd.DataFrame: The collected data.
     """
-    logging.info(f"Collecting data from file: {file_path}")
     try:
-        collected_data = pd.read_csv(file_path).to_dict(orient='records')
-        logging.info(f"Data collected successfully")
-        return collected_data
+        data = pd.read_csv(file_path)
+        return data
     except FileNotFoundError:
-        logging.error(f"File not found: {file_path}")
-        return []
-    except Exception as e:
-        logging.error(f"An error occurred: {e}")
-        return []
+        print("The file was not found.")
+    except pd.errors.EmptyDataError:
+        print("The file is empty.")
 
 def main():
-    file_path = 'data.csv'
-    collected_data = collect_data(file_path)
-    # ...
+    data_file_path = os.path.join(DATA_DIR, 'data.csv')
+    data = collect_data(data_file_path)
+    if data is not None:
+        print(data.head())
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
 ```
