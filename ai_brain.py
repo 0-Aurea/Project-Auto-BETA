@@ -21,21 +21,8 @@ def main():
     trainer.train(0.1, 10000)
 
     # Evaluate neural network
-    error = trainer.evaluate()
-    print(f"Error: {error}")
-
-    # Evolve neural network
-    new_neural_network = trainer.evolve(2, 3, 1)
-
-    # Create new trainer
-    new_trainer = Trainer(new_neural_network, inputs, targets)
-
-    # Train new neural network
-    new_trainer.train(0.1, 10000)
-
-    # Evaluate new neural network
-    new_error = new_trainer.evaluate()
-    print(f"New Error: {new_error}")
+    accuracy = trainer.evaluate()
+    print(f"Accuracy: {accuracy:.2f}")
 
 if __name__ == "__main__":
     main()
