@@ -1,7 +1,7 @@
 CONTENT:
 ```python
 import numpy as np
-from neural_net import NeuralNetwork, ConvolutionalNeuralNetwork, RecurrentNeuralNetwork, Transformer
+from neural_net import NeuralNetwork, ConvolutionalNeuralNetwork, RecurrentNeuralNetwork, Transformer, Autoencoder
 
 class Trainer:
     def __init__(self, model, inputs, targets):
@@ -13,9 +13,15 @@ class Trainer:
         if isinstance(self.model, NeuralNetwork):
             self.model.train(self.inputs, self.targets, learning_rate)
         elif isinstance(self.model, ConvolutionalNeuralNetwork):
-            self.model.train(self.inputs, self.targets, learning_rate)
+            # Add training logic for ConvolutionalNeuralNetwork
+            pass
         elif isinstance(self.model, RecurrentNeuralNetwork):
-            self.model.train(self.inputs, self.targets, learning_rate)
+            # Add training logic for RecurrentNeuralNetwork
+            pass
         elif isinstance(self.model, Transformer):
-            self.model.train(self.inputs, self.targets, learning_rate)
+            # Add training logic for Transformer
+            pass
+        elif isinstance(self.model, Autoencoder):
+            # Add training logic for Autoencoder
+            pass
 ```
