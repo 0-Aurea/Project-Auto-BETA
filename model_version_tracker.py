@@ -18,5 +18,4 @@ def parse_version(version_str: str) -> List[int]:
     try:
         return [int(part) for part in version_str.split('.')]
     except ValueError:
-        raise ValueError(f"Invalid version string '{version_str}': "
-                         "All version parts must be integers.") from None
+        raise ValueError(f"Invalid version string: {version_str}. All parts must be integers.")
