@@ -5,6 +5,7 @@
 # Core dependencies
 numpy==1.23.5
 pandas==1.5.3
+pydantic==2.8.2  # For data validation with FastAPI
 requests==2.31.0
 typing_extensions==4.5.0
 
