@@ -11,10 +11,10 @@ import logging
 
 # Third-party imports
 import psycopg2
-from sqlalchemy import create_engine
+from psycopg2 import Error
 
 # Local application imports
-from .config import DATABASE_URL
+from config import DATABASE_HOST, DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD
 ```
 
 #### Use Meaningful Variable Names
@@ -32,10 +32,10 @@ conn = psycopg2.connect(
 
 # Good practice
 database_connection = psycopg2.connect(
-    host="localhost",
-    database="mydatabase",
-    user="myuser",
-    password="mypassword"
+    host=DATABASE_HOST,
+    database=DATABASE_NAME,
+    user=DATABASE_USER,
+    password=DATABASE_PASSWORD
 )
 ```
 
@@ -46,55 +46,86 @@ Properly handle errors and exceptions to prevent crashes and provide informative
 ```python
 try:
     database_connection = psycopg2.connect(
-        host="localhost",
-        database="mydatabase",
-        user="myuser",
-        password="mypassword"
+        host=DATABASE_HOST,
+        database=DATABASE_NAME,
+        user=DATABASE_USER,
+        password=DATABASE_PASSWORD
     )
-except psycopg2.Error as e:
-    logging.error(f"Failed to connect to database: {e}")
+except Error as e:
+    logging.error(f"Error connecting to database: {e}")
 ```
 
-#### Use SQLAlchemy for Database Interactions
+#### Use Parameterized Queries
 
-Consider using an ORM (Object-Relational Mapping) tool like SQLAlchemy to interact with your database.
+Use parameterized queries to prevent SQL injection attacks.
 
 ```python
-from sqlalchemy import create_engine, Column, Integer, String
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+# Bad practice
+cursor.execute("SELECT * FROM users WHERE name = '" + username + "'")
 
-engine = create_engine(DATABASE_URL)
-Base = declarative_base()
-
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    email = Column(String)
-
-Base.metadata.create_all(engine)
-
-Session = sessionmaker(bind=engine)
-session = Session()
+# Good practice
+query = "SELECT * FROM users WHERE name = %s"
+cursor.execute(query, (username,))
 ```
 
-#### Keep Database Configuration Separate
+#### Close Database Connections
 
-Store database configuration in a separate file or environment variables to keep sensitive information secure.
+Don't forget to close database connections when you're done with them.
 
 ```python
-# config.py
-DATABASE_URL = "postgresql://myuser:mypassword@localhost/mydatabase"
+try:
+    # Use the connection
+finally:
+    if database_connection:
+        database_connection.close()
 ```
 
-#### Follow PEP 8 Guidelines
+Here's a refactored `database.py` file incorporating these suggestions:
 
-Adhere to PEP 8 guidelines for coding style, including:
+```python
+import os
+import logging
+import psycopg2
+from psycopg2 import Error
 
-* Using 4 spaces for indentation
-* Keeping lines under 80 characters
-* Using descriptive docstrings
-* Following naming conventions
+# Load database configuration from environment variables or a configuration file
+from config import DATABASE_HOST, DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD
 
-By applying these suggestions, you can improve the quality and maintainability of your `database.py` file. If you provide the actual code, I can give more specific feedback.
+def establish_connection():
+    """Establish a connection to the database."""
+    try:
+        database_connection = psycopg2.connect(
+            host=DATABASE_HOST,
+            database=DATABASE_NAME,
+            user=DATABASE_USER,
+            password=DATABASE_PASSWORD
+        )
+        logging.info("Connected to database")
+        return database_connection
+    except Error as e:
+        logging.error(f"Error connecting to database: {e}")
+        return None
+
+def execute_query(query, params=None):
+    """Execute a query on the database."""
+    database_connection = establish_connection()
+    if database_connection:
+        try:
+            cursor = database_connection.cursor()
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            database_connection.commit()
+            logging.info("Query executed successfully")
+        except Error as e:
+            logging.error(f"Error executing query: {e}")
+        finally:
+            database_connection.close()
+
+# Example usage
+if __name__ == "__main__":
+    query = "SELECT * FROM users WHERE name = %s"
+    params = ("john_doe",)
+    execute_query(query, params)
+```
