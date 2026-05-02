@@ -25,7 +25,7 @@ from data_collector import DataCollector
 
 ### Structure the Application
 
-Consider organizing the application into separate sections:
+Consider organizing the application into separate sections or functions for better readability:
 
 ```python
 # app.py
@@ -37,7 +37,7 @@ CORS(app)
 ai_brain = AiBrain()
 data_collector = DataCollector()
 
-# Routes
+# Define routes
 @app.route('/api/data', methods=['GET'])
 def get_data():
     data = data_collector.collect_data()
@@ -55,7 +55,7 @@ if __name__ == '__main__':
 
 ### Error Handling
 
-Implement error handling to ensure the application remains robust:
+Implement error handling mechanisms to ensure the application doesn't crash unexpectedly:
 
 ```python
 # app.py
@@ -70,30 +70,77 @@ def internal_server_error(error):
     return jsonify({'error': 'Internal server error'}), 500
 ```
 
+### Security Considerations
+
+Consider implementing security measures such as authentication and authorization:
+
+```python
+# app.py
+
+from flask_jwt_extended import JWTManager, jwt_required
+
+app.config['JWT_SECRET_KEY'] = 'super-secret'  # Change this!
+jwt = JWTManager(app)
+
+@app.route('/api/protected', methods=['GET'])
+@jwt_required
+def protected():
+    return jsonify({'message': 'Hello, authenticated user!'})
+```
+
 ### Best Practices
 
-* Use a consistent naming convention (e.g., PEP 8).
-* Keep functions short and focused on a single task.
-* Use type hints for function parameters and return types.
-* Implement logging to monitor application performance.
+* Follow PEP 8 guidelines for coding style and naming conventions.
+* Use type hints and docstrings to improve code readability.
+* Keep the `app.py` file concise and focused on the application logic.
 
-Example Use Case
----------------
+Here's an example of an improved `app.py` file incorporating these suggestions:
 
-To run the application:
+```python
+# app.py
 
-```bash
-python app.py
-```
+"""
+Flask application for the self-learning AI system.
+"""
 
-Send a GET request to collect data:
+import os
+import logging
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from ai_brain import AiBrain
+from data_collector import DataCollector
 
-```bash
-curl http://localhost:5000/api/data
-```
+app = Flask(__name__)
+CORS(app)
 
-Send a POST request to make a prediction:
+# Load AI brain and data collector
+ai_brain = AiBrain()
+data_collector = DataCollector()
 
-```bash
-curl -X POST -H "Content-Type: application/json" -d '{"input": [1, 2, 3]}' http://localhost:5000/api/predict
+# Define routes
+@app.route('/api/data', methods=['GET'])
+def get_data():
+    """Return collected data."""
+    data = data_collector.collect_data()
+    return jsonify({'data': data})
+
+@app.route('/api/predict', methods=['POST'])
+def predict():
+    """Make a prediction using the AI brain."""
+    input_data = request.get_json()['input']
+    prediction = ai_brain.predict(input_data)
+    return jsonify({'prediction': prediction})
+
+# Error handling
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'Not found'}), 404
+
+@app.errorhandler(500)
+def internal_server_error(error):
+    logging.error(error)
+    return jsonify({'error': 'Internal server error'}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True)
 ```
