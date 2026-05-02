@@ -12,13 +12,13 @@ In a large project, it's essential to keep imports organized. Consider using the
 import os
 import sys
 
-# Related third party imports
+# Third-party imports
 import requests
 from flask import Flask
 
 # Local application imports
-from . import module
-from .module import function
+from . import module1
+from . import module2
 ```
 
 ### Use Meaningful Variable Names
@@ -30,94 +30,144 @@ Variable names should be descriptive and indicate the purpose of the variable.
 x = 5
 
 # Good practice
-number_of_iterations = 5
+max_iterations = 5
 ```
 
 ### Add Docstrings
 
-Docstrings provide documentation for modules, functions, and classes. They should be used to describe the purpose and behavior of the code.
+Docstrings provide documentation for modules, functions, and classes.
 
 ```python
-def greet(name: str) -> None:
-    """
-    Print a personalized greeting message.
+# Bad practice
+def greet(name):
+  print(f"Hello, {name}!")
 
-    Args:
-        name (str): The name of the person to greet.
-    """
-    print(f"Hello, {name}!")
+# Good practice
+def greet(name: str) -> None:
+  """
+  Print a personalized greeting message.
+
+  Args:
+    name (str): The person's name.
+  """
+  print(f"Hello, {name}!")
 ```
 
 ### Follow PEP 8 Guidelines
 
-The Python Enhancement Proposal 8 (PEP 8) provides guidelines for coding style, including:
+The PEP 8 style guide provides guidelines for coding style, including:
 
 *   Use 4 spaces for indentation.
 *   Limit lines to 79 characters.
-*   Use blank lines to separate functions and classes.
+*   Use blank lines to separate logical sections of code.
 
 ### Use Type Hints
 
-Type hints indicate the expected types of function arguments and return values.
+Type hints indicate the expected types of function arguments and return types.
 
 ```python
-def greet(name: str) -> str:
-    return f"Hello, {name}!"
+# Bad practice
+def greet(name):
+  print(f"Hello, {name}!")
+
+# Good practice
+def greet(name: str) -> None:
+  print(f"Hello, {name}!")
 ```
 
 ### Error Handling
 
-Proper error handling is essential for robust code. Consider using try-except blocks to handle potential errors.
+Implement try-except blocks to handle potential errors.
 
 ```python
 try:
-    # Code that might raise an exception
-    result = 1 / 0
+  # Code that might raise an exception
+  result = 10 / 0
 except ZeroDivisionError:
-    # Handle the exception
-    print("Error: Division by zero!")
+  # Handle the exception
+  print("Error: Division by zero!")
 ```
 
 ### Code Refactoring
 
-Refactor the code to make it more efficient, readable, and maintainable.
-
-### Updated Code
-
-Here's an example of how the `auto_1.py` file could be improved:
+Refactor code to make it more efficient, readable, and maintainable.
 
 ```python
-# Standard library imports
-import os
-import sys
+# Bad practice
+numbers = [1, 2, 3, 4, 5]
+squared_numbers = []
+for num in numbers:
+  squared_numbers.append(num ** 2)
 
-# Related third party imports
-import requests
-from flask import Flask
+# Good practice
+numbers = [1, 2, 3, 4, 5]
+squared_numbers = [num ** 2 for num in numbers]
+```
 
-# Local application imports
-from . import module
-from .module import function
+Example Use Case
+---------------
 
-def greet(name: str) -> None:
+Suppose the `auto_1.py` file contains a simple calculator class:
+
+```python
+# auto_1.py
+
+class Calculator:
+  def add(self, a, b):
+    return a + b
+
+  def subtract(self, a, b):
+    return a - b
+
+calculator = Calculator()
+result = calculator.add(10, 5)
+print(result)  # Output: 15
+```
+
+By applying the suggestions above, the improved `auto_1.py` file could look like this:
+
+```python
+# auto_1.py
+
+"""
+A simple calculator class.
+"""
+
+class Calculator:
+  """
+  A calculator class with basic arithmetic operations.
+  """
+
+  def add(self, a: int, b: int) -> int:
     """
-    Print a personalized greeting message.
+    Add two numbers.
 
     Args:
-        name (str): The name of the person to greet.
+      a (int): The first number.
+      b (int): The second number.
+
+    Returns:
+      int: The sum of a and b.
+    """
+    return a + b
+
+  def subtract(self, a: int, b: int) -> int:
+    """
+    Subtract two numbers.
+
+    Args:
+      a (int): The first number.
+      b (int): The second number.
+
+    Returns:
+      int: The difference of a and b.
     """
     try:
-        # Code that might raise an exception
-        print(f"Hello, {name}!")
+      return a - b
     except Exception as e:
-        # Handle the exception
-        print(f"An error occurred: {e}")
+      print(f"An error occurred: {e}")
 
-def main() -> None:
-    number_of_iterations = 5
-    for _ in range(number_of_iterations):
-        greet("World")
-
-if __name__ == "__main__":
-    main()
+calculator = Calculator()
+result = calculator.add(10, 5)
+print(result)  # Output: 15
 ```
