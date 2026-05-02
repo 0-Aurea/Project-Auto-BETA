@@ -10,50 +10,52 @@ In a large project, it's essential to keep imports organized. Consider using the
 ```python
 # app.py
 
-import os
-import sys
-
-# Third-party imports
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
-
-# Local imports
-from ai_brain import AI Brain
+from ai_brain import AiBrain
 from data_loader import DataLoader
 from data_collector import DataCollector
 
-# Initialize the Flask app
 app = Flask(__name__)
 CORS(app)
 ```
 
-### Structure the App
+### Structure the Application
 
-Consider organizing the app into sections:
+Consider organizing the application into sections:
+
+*   **Initialization**: Initialize the application, import blueprints, and register error handlers.
+*   **Routes**: Define routes for the application.
+*   **Models and Services**: Import and use models and services.
 
 ```python
 # app.py
 
-# ... imports ...
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+from ai_brain import AiBrain
+from data_loader import DataLoader
+from data_collector import DataCollector
 
-# Initialize the Flask app
 app = Flask(__name__)
 CORS(app)
 
-# Define routes
+# Initialization
+ai_brain = AiBrain()
+data_loader = DataLoader()
+data_collector = DataCollector()
+
+# Routes
 @app.route('/api/data', methods=['GET'])
 def get_data():
-    data_loader = DataLoader()
     data = data_loader.load_data()
     return jsonify(data)
 
 @app.route('/api/train', methods=['POST'])
 def train_model():
-    ai_brain = AI Brain()
-    ai_brain.train_model()
+    data = request.get_json()
+    ai_brain.train_model(data)
     return jsonify({'message': 'Model trained successfully'})
-
-# ... other routes ...
 
 if __name__ == '__main__':
     app.run(debug=True)
@@ -61,25 +63,25 @@ if __name__ == '__main__':
 
 ### Error Handling
 
-Implement error handling to ensure the app doesn't crash in case of errors:
+Implement error handling to ensure the application responds to errors:
 
 ```python
 # app.py
 
-# ... routes ...
+from flask import jsonify
 
 @app.errorhandler(404)
 def not_found(error):
-    return jsonify({'message': 'Not found'}), 404
+    return jsonify({'error': 'Not found'}), 404
 
 @app.errorhandler(500)
 def internal_server_error(error):
-    return jsonify({'message': 'Internal server error'}), 500
+    return jsonify({'error': 'Internal server error'}), 500
 ```
 
 ### Logging
 
-Consider adding logging to track app activity:
+Consider adding logging to track application events:
 
 ```python
 # app.py
@@ -89,35 +91,57 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ... routes ...
+@app.before_request
+def before_request():
+    logger.info('Request: %s %s', request.method, request.path)
+```
 
+Full Code
+```python
+# app.py
+
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+from ai_brain import AiBrain
+from data_loader import DataLoader
+from data_collector import DataCollector
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = Flask(__name__)
+CORS(app)
+
+# Initialization
+ai_brain = AiBrain()
+data_loader = DataLoader()
+data_collector = DataCollector()
+
+# Routes
 @app.route('/api/data', methods=['GET'])
 def get_data():
-    try:
-        data_loader = DataLoader()
-        data = data_loader.load_data()
-        logger.info('Data loaded successfully')
-        return jsonify(data)
-    except Exception as e:
-        logger.error(f'Error loading data: {e}')
-        return jsonify({'message': 'Error loading data'}), 500
+    logger.info('Loading data')
+    data = data_loader.load_data()
+    return jsonify(data)
+
+@app.route('/api/train', methods=['POST'])
+def train_model():
+    logger.info('Training model')
+    data = request.get_json()
+    ai_brain.train_model(data)
+    return jsonify({'message': 'Model trained successfully'})
+
+@app.errorhandler(404)
+def not_found(error):
+    logger.error('Not found: %s', error)
+    return jsonify({'error': 'Not found'}), 404
+
+@app.errorhandler(500)
+def internal_server_error(error):
+    logger.error('Internal server error: %s', error)
+    return jsonify({'error': 'Internal server error'}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True)
 ```
-
-Example Use Case
----------------
-
-Here's an example use case for the improved `app.py` file:
-
-```bash
-curl -X GET http://localhost:5000/api/data
-```
-
-This should return a JSON response with the loaded data.
-
-```bash
-curl -X POST http://localhost:5000/api/train
-```
-
-This should train the model and return a JSON response with a success message.
-
-By following these suggestions, you can improve the structure, readability, and maintainability of the `app.py` file.
