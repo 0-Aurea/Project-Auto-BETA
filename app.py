@@ -1,7 +1,4 @@
-import os
-import sys
-import time
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
@@ -14,21 +11,22 @@ def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         data: List of dictionaries containing raw data entries
         
     Returns:
-        List of processed dictionaries with filtered and transformed keys
+        List of dictionaries with lowercase keys and valid 'id' fields
         
     Raises:
-        ValueError: If input data is not a list of dictionaries
+        ValueError: If input is not a list
     """
     if not isinstance(data, list):
-        raise ValueError("Input data must be a list of dictionaries.")
-        
-    processed = []
-    for entry in data:
+        raise ValueError("Input data must be a list of dictionaries")
+
+    def _process_entry(entry: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Process individual dictionary entry."""
         if not isinstance(entry, dict):
-            raise ValueError("Each item in data must be a dictionary.")
-        if 'id' not in entry:
-            continue
-        # Convert keys to lowercase
-        lowercased = {key.lower(): value for key, value in entry.items()}
-        processed.append(lowercased)
-    return processed
+            return None
+            
+        processed = {key.lower(): value for key, value in entry.items()}
+        return processed if 'id' in processed else None
+
+    return [entry for entry in 
+            (_process_entry(item) for item in data) 
+            if entry is not None]
