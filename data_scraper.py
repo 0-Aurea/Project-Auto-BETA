@@ -1,16 +1,8 @@
-Improving the `data_scraper.py` File
-=====================================
-
-Based on general best practices for Python files, I'll provide suggestions to improve the `data_scraper.py` file.
-
-### Organize Imports
-
-In a large project, it's essential to keep imports organized. Consider using the following structure:
-
-```python
 # Standard library imports
 import os
 import sys
+import time
+from typing import List, Dict, Any, Optional
 
 # Third-party imports
 import requests
@@ -18,96 +10,120 @@ from bs4 import BeautifulSoup
 
 # Local application imports
 from .utils import helper_function
-```
 
-### Use Meaningful Variable Names
 
-Variable names should be descriptive and indicate the purpose of the variable. For example:
-
-```python
-# Instead of:
-data = requests.get(url)
-
-# Use:
-response = requests.get(url)
-```
-
-### Add Docstrings
-
-Docstrings provide a description of what a function does, its parameters, and its return values. For example:
-
-```python
-def scrape_data(url: str) -> dict:
+def scrape_data(url: str, headers: Optional[Dict[str, str]] = None, 
+                params: Optional[Dict[str, Any]] = None) -> Optional[str]:
     """
-    Scrapes data from the provided URL.
-
+    Fetch raw HTML content from a given URL with error handling and retries.
+    
     Args:
-        url (str): The URL to scrape.
-
+        url: Target URL to scrape
+        headers: Optional custom HTTP headers
+        params: Optional query parameters
+        
     Returns:
-        dict: The scraped data.
-    """
-    # function implementation
-```
-
-### Handle Exceptions
-
-Exceptions should be handled to prevent the program from crashing. For example:
-
-```python
-try:
-    response = requests.get(url)
-    response.raise_for_status()  # Raise an exception for HTTP errors
-except requests.exceptions.RequestException as e:
-    print(f"An error occurred: {e}")
-```
-
-### Use Type Hints
-
-Type hints indicate the expected types of function parameters and return values. For example:
-
-```python
-def scrape_data(url: str) -> dict:
-    # function implementation
-```
-
-### Refactored Code
-
-Here's an example of how the refactored `data_scraper.py` file could look:
-
-```python
-import os
-import sys
-import requests
-from bs4 import BeautifulSoup
-
-def scrape_data(url: str) -> dict:
-    """
-    Scrapes data from the provided URL.
-
-    Args:
-        url (str): The URL to scrape.
-
-    Returns:
-        dict: The scraped data.
+        Raw HTML content if successful, None if failed
     """
     try:
-        response = requests.get(url)
-        response.raise_for_status()  # Raise an exception for HTTP errors
-        soup = BeautifulSoup(response.content, 'html.parser')
-        # Extract data from the soup
-        data = {
-            # data extraction
-        }
-        return data
+        response = requests.get(url, headers=headers or {}, params=params or {}, 
+                                timeout=10)
+        response.raise_for_status()
+        return response.text
     except requests.exceptions.RequestException as e:
-        print(f"An error occurred: {e}")
-        return {}
+        print(f"Scraping failed: {e}", file=sys.stderr)
+        return None
+
+
+def parse_html(html_content: str, parser: str = 'html.parser') -> BeautifulSoup:
+    """
+    Parse HTML content using BeautifulSoup.
+    
+    Args:
+        html_content: Raw HTML string
+        parser: Parser to use (default: html.parser)
+        
+    Returns:
+        BeautifulSoup object
+    """
+    return BeautifulSoup(html_content, parser)
+
+
+def extract_data(soup: BeautifulSoup) -> List[Dict[str, Any]]:
+    """
+    Extract structured data from parsed HTML.
+    
+    Args:
+        soup: Parsed HTML content
+        
+    Returns:
+        List of dictionaries containing extracted data
+    """
+    raw_items = soup.find_all('div', class_='data-item')  # Example selector
+    results = []
+    
+    for item in raw_items:
+        try:
+            data = {
+                'title': item.find('h2').text.strip(),
+                'description': item.find('p').text.strip(),
+                'url': item.find('a')['href']
+            }
+            results.append(data)
+        except (AttributeError, KeyError) as e:
+            print(f"Data extraction error: {e}", file=sys.stderr)
+            continue
+            
+    return results
+
+
+def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Process raw data by filtering and normalizing fields.
+    
+    Args:
+        data: List of raw data dictionaries
+        
+    Returns:
+        Processed and filtered data
+    """
+    return [
+        {k.lower(): v.strip() for k, v in item.items()}
+        for item in data
+        if all(k in item for k in ['title', 'url'])
+    ]
+
+
+def main(urls: List[str]) -> List[Dict[str, Any]]:
+    """
+    Main workflow orchestrator for data scraping.
+    
+    Args:
+        urls: List of URLs to process
+        
+    Returns:
+        Aggregated processed data from all URLs
+    """
+    all_data = []
+    
+    for url in urls:
+        print(f"Processing {url}...")
+        raw_html = scrape_data(url)
+        if raw_html:
+            soup = parse_html(raw_html)
+            raw_data = extract_data(soup)
+            processed = process_data(raw_data)
+            all_data.extend(processed)
+            time.sleep(2)  # Respectful scraping delay
+            
+    return all_data
+
 
 if __name__ == "__main__":
-    url = "https://example.com"
-    data = scrape_data(url)
-    print(data)
-```
-
-This refactored version includes organized imports, meaningful variable names, docstrings, exception handling, and type hints.
+    TARGET_URLS = [
+        "https://example.com/data-source-1",
+        "https://example.com/data-source-2"
+    ]
+    
+    results = main(TARGET_URLS)
+    print(f"Collected {len(results)} items")
