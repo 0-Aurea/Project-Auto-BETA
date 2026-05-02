@@ -15,13 +15,7 @@ class Trainer:
 
     def evaluate(self):
         _, outputs = self.neural_network.forward(self.inputs)
-        return np.mean(np.square(self.targets - outputs))
-
-    def evolve(self, new_input_size, new_hidden_size, new_output_size):
-        new_neural_network = NeuralNetwork(new_input_size, new_hidden_size, new_output_size)
-        new_neural_network.weights1 = self.neural_network.weights1
-        new_neural_network.weights2 = self.neural_network.weights2
-        new_neural_network.bias1 = self.neural_network.bias1
-        new_neural_network.bias2 = self.neural_network.bias2
-        return new_neural_network
+        predicted = np.round(outputs)
+        accuracy = np.mean(predicted == self.targets)
+        return accuracy
 ```
