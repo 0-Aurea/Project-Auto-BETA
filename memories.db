@@ -1,1 +1,93 @@
+import sqlite3
+import os
 
+class MemoriesDB:
+    """
+    A class to interact with the memories.db SQLite database.
+
+    Attributes:
+    ----------
+    db_path : str
+        The path to the SQLite database file.
+
+    Methods:
+    -------
+    create_table()
+        Creates a table in the database if it does not exist.
+    insert_memory(memory)
+        Inserts a memory into the database.
+    get_memories()
+        Retrieves all memories from the database.
+    """
+
+    def __init__(self, db_path='memories.db'):
+        """
+        Initializes the MemoriesDB class.
+
+        Parameters:
+        ----------
+        db_path : str, optional
+            The path to the SQLite database file (default is 'memories.db').
+        """
+        self.db_path = db_path
+        self.conn = sqlite3.connect(db_path)
+        self.cursor = self.conn.cursor()
+
+    def create_table(self):
+        """
+        Creates a table in the database if it does not exist.
+
+        The table is named 'memories' and has two columns: 'id' (primary key) and 'memory'.
+        """
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS memories
+            (id INTEGER PRIMARY KEY AUTOINCREMENT, memory TEXT)
+        ''')
+        self.conn.commit()
+
+    def insert_memory(self, memory):
+        """
+        Inserts a memory into the database.
+
+        Parameters:
+        ----------
+        memory : str
+            The memory to be inserted.
+        """
+        self.cursor.execute('INSERT INTO memories (memory) VALUES (?)', (memory,))
+        self.conn.commit()
+
+    def get_memories(self):
+        """
+        Retrieves all memories from the database.
+
+        Returns:
+        -------
+        list
+            A list of memories.
+        """
+        self.cursor.execute('SELECT * FROM memories')
+        return self.cursor.fetchall()
+
+    def close_connection(self):
+        """
+        Closes the connection to the database.
+        """
+        self.conn.close()
+
+
+def main():
+    db = MemoriesDB()
+    db.create_table()
+
+    # Example usage:
+    db.insert_memory('This is a memory.')
+    memories = db.get_memories()
+    for memory in memories:
+        print(memory)
+
+    db.close_connection()
+
+
+if __name__ == '__main__':
+    main()
