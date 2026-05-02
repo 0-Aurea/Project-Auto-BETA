@@ -1,7 +1,7 @@
 CONTENT:
 ```python
 import numpy as np
-from neural_net import NeuralNetwork, ConvolutionalNeuralNetwork
+from neural_net import NeuralNetwork, ConvolutionalNeuralNetwork, RecurrentNeuralNetwork
 from trainer import Trainer
 
 def main():
@@ -18,20 +18,31 @@ def main():
     trainer = Trainer(neural_network, inputs, targets)
 
     # Train neural network
-    trainer.train(0.1, 10000)
-
-    # Evaluate neural network
-    accuracy = trainer.evaluate()
-    print(f"Accuracy: {accuracy:.2f}")
+    trainer.train(0.1, 1000)
 
     # Initialize convolutional neural network
     convolutional_neural_network = ConvolutionalNeuralNetwork(1, 10, 10)
 
-    # Train convolutional neural network
-    convolutional_trainer = Trainer(convolutional_neural_network, inputs, targets)
-    convolutional_trainer.train(0.1, 10000)
+    # Create training data for convolutional neural network
+    inputs_conv = np.random.rand(100, 1, 10, 10)
+    targets_conv = np.random.rand(100, 10)
 
-    # Evaluate convolutional neural network
-    convolutional_accuracy = convolutional_trainer.evaluate()
-    print(f"Convolutional Accuracy: {convolutional_accuracy:.2f}")
+    # Create trainer for convolutional neural network
+    trainer_conv = Trainer(convolutional_neural_network, inputs_conv, targets_conv)
+
+    # Train convolutional neural network
+    trainer_conv.train(0.1, 1000)
+
+    # Initialize recurrent neural network
+    recurrent_neural_network = RecurrentNeuralNetwork(1, 10, 1)
+
+    # Create training data for recurrent neural network
+    inputs_rec = np.random.rand(100, 1, 10)
+    targets_rec = np.random.rand(100, 1)
+
+    # Create trainer for recurrent neural network
+    trainer_rec = Trainer(recurrent_neural_network, inputs_rec, targets_rec)
+
+    # Train recurrent neural network
+    trainer_rec.train(0.1, 1000)
 ```
