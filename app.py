@@ -35,60 +35,26 @@ class ConvNet(nn.Module):
         self.fc2 = nn.Linear(50, 10)
 
     def forward(self, x):
-        x = nn.functional.relu(nn.functional.max_pool2d(self.conv1(x), 2))
-        x = nn.functional.relu(nn.functional.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
+        x = torch.relu(self.conv1(x))
+        x = torch.relu(self.conv2(x))
+        x = self.conv2_drop(x)
         x = x.view(-1, 320)
-        x = nn.functional.relu(self.fc1(x))
+        x = torch.relu(self.fc1(x))
         x = self.fc2(x)
-        return nn.functional.log_softmax(x, dim=1)
+        return x
 
-# Load data
-transform = transforms.Compose([transforms.ToTensor()])
-train_dataset = datasets.MNIST('~/.pytorch/MNIST_data/', download=True, train=True, transform=transform)
-test_dataset = datasets.MNIST('~/.pytorch/MNIST_data/', download=True, train=False, transform=transform)
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
+# Define a recurrent neural network
+class RecurrentNet(nn.Module):
+    def __init__(self):
+        super(RecurrentNet, self).__init__()
+        self.rnn = nn.RNN(10, 20, num_layers=1, batch_first=True)
+        self.fc = nn.Linear(20, 1)
 
-# Train a simple neural network
-def train_model(model, device, loader, criterion, optimizer):
-    model.train()
-    total_loss = 0
-    correct = 0
-    total = 0
-    for batch_idx, (data, target) in enumerate(loader):
-        data, target = data.to(device), target.to(device)
-        data = data.view(-1, 784)
-        optimizer.zero_grad()
-        output = model(data)
-        loss = criterion(output, target)
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.item()
-        _, predicted = torch.max(output, 1)
-        correct += (predicted == target).sum().item()
-        total += target.size(0)
-    accuracy = correct / total
-    return total_loss / len(loader), accuracy
-
-# Train a convolutional neural network
-def train_conv_model(model, device, loader, criterion, optimizer):
-    model.train()
-    total_loss = 0
-    correct = 0
-    total = 0
-    for batch_idx, (data, target) in enumerate(loader):
-        data, target = data.to(device), target.to(device)
-        optimizer.zero_grad()
-        output = model(data)
-        loss = criterion(output, target)
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.item()
-        _, predicted = torch.max(output, 1)
-        correct += (predicted == target).sum().item()
-        total += target.size(0)
-    accuracy = correct / total
-    return total_loss / len(loader), accuracy
+    def forward(self, x):
+        h0 = torch.zeros(1, x.size(0), 20).to(x.device)
+        out, _ = self.rnn(x, h0)
+        out = self.fc(out[:, -1, :])
+        return out
 
 @app.route('/')
 def index():
@@ -98,17 +64,27 @@ def index():
 def predict():
     data = request.form['data']
     model_type = request.form['model_type']
+
     if model_type == 'simple':
         model = Net()
-    elif model_type == 'conv':
+    elif model_type == 'convolutional':
         model = ConvNet()
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model.to(device)
-    data = np.array([float(x) for x in data.split(',')])
-    data = torch.tensor(data).view(1, -1)
-    output = model(data.to(device))
-    _, predicted = torch.max(output, 1)
-    return jsonify({'prediction': predicted.item()})
+    elif model_type == 'recurrent':
+        model = RecurrentNet()
+
+    inputs = np.array([float(x) for x in data.split(',')])
+
+    if model_type == 'simple':
+        inputs = torch.tensor(inputs).float()
+        outputs = model(inputs)
+    elif model_type == 'convolutional':
+        inputs = torch.tensor(inputs).float().view(1, 1, 28, 28)
+        outputs = model(inputs)
+    elif model_type == 'recurrent':
+        inputs = torch.tensor(inputs).float().view(1, 10, 1)
+        outputs = model(inputs)
+
+    return jsonify({'output': outputs.detach().numpy().tolist()})
 
 if __name__ == '__main__':
     app.run(debug=True)
