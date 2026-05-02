@@ -8,9 +8,14 @@ CONTENT:
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <form method="post">
+    <form method="post" action="/predict">
         <label for="data">Enter 784 comma-separated values:</label>
         <input type="text" id="data" name="data">
+        <label for="model_type">Select model type:</label>
+        <select id="model_type" name="model_type">
+            <option value="simple">Simple Neural Network</option>
+            <option value="conv">Convolutional Neural Network</option>
+        </select>
         <input type="submit" value="Make Prediction">
     </form>
 </body>
