@@ -1,45 +1,25 @@
 import os
 import sys
 import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
-def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def process_data(data: List[Dict[str, Any]]) -> List[Dict[Str, Any]]:
     """
-    Process raw data by filtering and transforming keys to lowercase.
+    Process raw data by filtering entries with valid 'id' and converting keys to lowercase.
     
-    Filters out entries without an 'id' field and transforms all dictionary
-    keys to lowercase for consistency. Removes entries with invalid data types.
+    Filters out entries that do not contain an 'id' key or where the 'id' is not a string.
+    Transforms all keys in the remaining entries to lowercase for consistency.
     
     Args:
-        data: List of dictionaries containing raw data entries. Each entry
-              should have at minimum an 'id' field.
+        data: A list of dictionaries representing raw data entries. Each entry must
+              have an 'id' key with a string value to be included in the output.
     
     Returns:
-        List of processed dictionaries with lowercase keys and valid entries.
+        A list of processed dictionaries with all keys in lowercase and only entries
+        that passed the 'id' validation.
     """
-    start_time = time.time()
-    
-    processed_data = []
-    for entry in data:
-        try:
-            # Skip entries without required 'id' field
-            if 'id' not in entry:
-                continue
-                
-            # Create new dictionary with lowercase keys
-            processed_entry = {
-                key.lower(): value 
-                for key, value in entry.items()
-                if isinstance(value, (str, int, float, bool))
-            }
-            
-            if len(processed_entry) == len(entry):
-                processed_data.append(processed_entry)
-                
-        except (ValueError, TypeError):
-            # Skip entries with unprocessible data
-            continue
-    
-    elapsed_time = time.time() - start_time
-    print(f"Processed {len(processed_data)} entries in {elapsed_time:.2f}s")
-    return processed_data
+    return [
+        {key.lower(): value for key, value in entry.items()}
+        for entry in data
+        if isinstance(entry.get("id"), str)
+    ]
