@@ -12,7 +12,7 @@ def main():
     database = Database(db_name)
     self_supervised_learning = SelfSupervisedLearning(db_name)
 
-    url = 'http://example.com'
+    url = 'http://google.com'
     text = self_supervised_learning.scrape_data(url)
     inputs = []
     targets = []
