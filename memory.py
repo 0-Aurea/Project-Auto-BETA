@@ -26,133 +26,102 @@ Variable names should be descriptive and indicate the purpose of the variable.
 
 ```python
 # Bad practice
-data = [1, 2, 3]
+x = 1024
 
 # Good practice
-memory_values = [1, 2, 3]
+memory_capacity = 1024  # in megabytes
+```
+
+### Follow PEP 8 Guidelines
+
+The Python Enhancement Proposal 8 (PEP 8) provides guidelines for coding style, documentation, and best practices.
+
+```python
+# Bad practice
+def calculateMemoryUsage():
+    pass
+
+# Good practice
+def calculate_memory_usage():
+    """Calculates the memory usage in megabytes."""
+    pass
 ```
 
 ### Add Docstrings
 
-Docstrings provide a description of what a function or class does.
+Docstrings provide a description of what a function or class does, its parameters, and its return values.
 
 ```python
-def calculate_memory_usage():
+def calculate_memory_usage(memory_capacity):
     """
-    Calculate the memory usage of the system.
+    Calculates the memory usage in megabytes.
+
+    Args:
+        memory_capacity (int): The total memory capacity in megabytes.
 
     Returns:
-        int: The memory usage in bytes.
+        int: The used memory in megabytes.
     """
-    # implementation
     pass
 ```
 
 ### Use Type Hints
 
-Type hints indicate the expected type of a function's arguments and return value.
+Type hints indicate the expected type of a function's parameters and return value.
 
 ```python
-def calculate_memory_usage() -> int:
+def calculate_memory_usage(memory_capacity: int) -> int:
     """
-    Calculate the memory usage of the system.
+    Calculates the memory usage in megabytes.
+
+    Args:
+        memory_capacity (int): The total memory capacity in megabytes.
 
     Returns:
-        int: The memory usage in bytes.
+        int: The used memory in megabytes.
     """
-    # implementation
     pass
 ```
 
-### Keep Functions Short and Focused
+### Example of Improved Code
 
-Functions should perform a single task and be short.
-
-```python
-def calculate_memory_usage() -> int:
-    # implementation
-    pass
-
-def get_memory_info() -> dict:
-    # implementation
-    pass
-```
-
-### Use Logging
-
-Logging provides a way to track events in the application.
+Here's an example of how the improved `memory.py` file could look:
 
 ```python
-import logging
-
-logging.basicConfig(level=logging.INFO)
-
-def calculate_memory_usage() -> int:
-    try:
-        # implementation
-        logging.info("Memory usage calculated successfully.")
-    except Exception as e:
-        logging.error(f"Error calculating memory usage: {e}")
-```
-
-### Follow PEP 8
-
-The Python Enhancement Proposal 8 (PEP 8) provides guidelines for coding style.
-
-```python
-# Bad practice
-if True:
-    print('hello world')
-
-# Good practice
-if True:
-    print("Hello, World!")
-```
-
-Here's an example of an improved `memory.py` file:
-
-```python
-import logging
+# Standard library imports
 import os
-import psutil
-from typing import Dict
+import sys
 
-logging.basicConfig(level=logging.INFO)
+# Related third party imports
+import numpy as np
 
-def get_memory_info() -> Dict[str, int]:
+# Local application imports
+from . import utils
+from .models import MemoryModel
+
+def calculate_memory_usage(memory_capacity: int) -> int:
     """
-    Get the memory information of the system.
+    Calculates the memory usage in megabytes.
+
+    Args:
+        memory_capacity (int): The total memory capacity in megabytes.
 
     Returns:
-        Dict[str, int]: A dictionary containing the memory information.
+        int: The used memory in megabytes.
     """
-    memory_info = {}
-    try:
-        # Get memory information
-        memory = psutil.virtual_memory()
-        memory_info["total"] = memory.total
-        memory_info["available"] = memory.available
-        memory_info["used"] = memory.used
-        logging.info("Memory information retrieved successfully.")
-    except Exception as e:
-        logging.error(f"Error retrieving memory information: {e}")
+    used_memory = memory_capacity - (memory_capacity * 0.2)  # assume 20% is free
+    return used_memory
+
+def get_memory_info() -> MemoryModel:
+    """
+    Retrieves information about the system's memory.
+
+    Returns:
+        MemoryModel: An object containing memory information.
+    """
+    memory_info = MemoryModel()
+    memory_info.total = psutil.virtual_memory().total / (1024.0 ** 3)
+    memory_info.used = psutil.virtual_memory().used / (1024.0 ** 3)
+    memory_info.free = psutil.virtual_memory().free / (1024.0 ** 3)
     return memory_info
-
-def calculate_memory_usage() -> int:
-    """
-    Calculate the memory usage of the system.
-
-    Returns:
-        int: The memory usage in bytes.
-    """
-    try:
-        # Calculate memory usage
-        memory = psutil.virtual_memory()
-        memory_usage = memory.used
-        logging.info("Memory usage calculated successfully.")
-        return memory_usage
-    except Exception as e:
-        logging.error(f"Error calculating memory usage: {e}")
 ```
-
-This improved version includes organized imports, meaningful variable names, docstrings, type hints, short and focused functions, logging, and follows PEP 8 guidelines.
