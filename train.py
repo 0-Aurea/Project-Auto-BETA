@@ -3,8 +3,7 @@ CONTENT:
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from app import Net, ConvNet, RecurrentNet
-from neural_net import NeuralNetwork, ConvolutionalNeuralNetwork, RecurrentNeuralNetwork, Transformer
+from neural_net import NeuralNetwork, ConvolutionalNeuralNetwork, RecurrentNeuralNetwork, Transformer, Autoencoder
 
 def train_model(model, device, loader, criterion, optimizer):
     model.train()
@@ -31,18 +30,19 @@ def train_model(model, device, loader, criterion, optimizer):
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Convolutional neural network
-    conv_net = ConvNet().to(device)
+    # Convolutional Neural Network
+    model = ConvolutionalNeuralNetwork().to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(conv_net.parameters(), lr=0.01)
+    optimizer = optim.SGD(model.parameters(), lr=0.01)
 
-    # Create dataset and data loader
     transform = transforms.Compose([transforms.ToTensor()])
     train_dataset = datasets.MNIST('~/.pytorch/MNIST_data/', download=True, train=True, transform=transform)
+    test_dataset = datasets.MNIST('~/.pytorch/MNIST_data/', download=True, train=False, transform=transform)
     train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
 
     for epoch in range(10):
-        loss, accuracy = train_model(conv_net, device, train_loader, criterion, optimizer)
+        loss, accuracy = train_model(model, device, train_loader, criterion, optimizer)
         print(f'Epoch {epoch+1}, Loss: {loss:.4f}, Accuracy: {accuracy:.4f}')
 
 if __name__ == "__main__":
