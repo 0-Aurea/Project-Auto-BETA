@@ -10,13 +10,13 @@ logging.basicConfig(level=logging.INFO)
 
 
 def get_connection() -> psycopg2.extensions.connection:
-    """Establish and return a PostgreSQL database connection using environment variables.
-
+    """Establish and return a PostgreSQL database connection using config variables.
+    
     Returns:
         psycopg2.extensions.connection: Active database connection object
-
+    
     Raises:
-        psycopg2.Error: If connection parameters are invalid or database is unreachable
+        psycopg2.Error: If connection fails due to configuration or network issues
     """
     try:
         connection = psycopg2.connect(
