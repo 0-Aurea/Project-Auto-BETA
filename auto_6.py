@@ -14,7 +14,7 @@ def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         List of processed dictionaries with lowercase keys and no missing 'id'.
     """
     return [
-        {key.lower(): value for key, value in entry.items()}
-        for entry in data
-        if 'id' in entry
+        {key.lower(): value for key, value in item.items()}
+        for item in data
+        if 'id' in item
     ]
