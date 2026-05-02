@@ -15,7 +15,7 @@ class Trainer:
 
     def evaluate(self):
         _, outputs = self.neural_network.forward(self.inputs)
-        predicted = np.round(outputs)
+        predicted = (outputs > 0.5).astype(int)
         accuracy = np.mean(predicted == self.targets)
         return accuracy
 ```
