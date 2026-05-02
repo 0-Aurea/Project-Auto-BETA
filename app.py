@@ -28,25 +28,28 @@ class Net(nn.Module):
 class ConvNet(nn.Module):
     def __init__(self):
         super(ConvNet, self).__init__()
-        self.conv1 = nn.Conv2d(1, 6, kernel_size=3)
-        self.conv2 = nn.Conv2d(6, 12, kernel_size=3)
-        self.fc1 = nn.Linear(12*4*4, 10)
+        self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
+        self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
+        self.conv2_drop = nn.Dropout2d()
+        self.fc1 = nn.Linear(320, 50)
+        self.fc2 = nn.Linear(50, 10)
 
     def forward(self, x):
-        x = torch.relu(self.conv1(x))
-        x = torch.relu(self.conv2(x))
-        x = x.view(-1, 12*4*4)
-        x = self.fc1(x)
-        return x
+        x = nn.functional.relu(nn.functional.max_pool2d(self.conv1(x), 2))
+        x = nn.functional.relu(nn.functional.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
+        x = x.view(-1, 320)
+        x = nn.functional.relu(self.fc1(x))
+        x = self.fc2(x)
+        return nn.functional.log_softmax(x, dim=1)
 
-# Load MNIST dataset
+# Load data
 transform = transforms.Compose([transforms.ToTensor()])
 train_dataset = datasets.MNIST('~/.pytorch/MNIST_data/', download=True, train=True, transform=transform)
 test_dataset = datasets.MNIST('~/.pytorch/MNIST_data/', download=True, train=False, transform=transform)
-
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
 
+# Train a simple neural network
 def train_model(model, device, loader, criterion, optimizer):
     model.train()
     total_loss = 0
@@ -67,20 +70,25 @@ def train_model(model, device, loader, criterion, optimizer):
     accuracy = correct / total
     return total_loss / len(loader), accuracy
 
-def evaluate_model(model, device, loader):
-    model.eval()
+# Train a convolutional neural network
+def train_conv_model(model, device, loader, criterion, optimizer):
+    model.train()
+    total_loss = 0
     correct = 0
     total = 0
-    with torch.no_grad():
-        for data, target in loader:
-            data, target = data.to(device), target.to(device)
-            data = data.view(-1, 784)
-            output = model(data)
-            _, predicted = torch.max(output, 1)
-            correct += (predicted == target).sum().item()
-            total += target.size(0)
+    for batch_idx, (data, target) in enumerate(loader):
+        data, target = data.to(device), target.to(device)
+        optimizer.zero_grad()
+        output = model(data)
+        loss = criterion(output, target)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+        _, predicted = torch.max(output, 1)
+        correct += (predicted == target).sum().item()
+        total += target.size(0)
     accuracy = correct / total
-    return accuracy
+    return total_loss / len(loader), accuracy
 
 @app.route('/')
 def index():
@@ -89,12 +97,19 @@ def index():
 @app.route('/predict', methods=['POST'])
 def predict():
     data = request.form['data']
+    model_type = request.form['model_type']
+    if model_type == 'simple':
+        model = Net()
+    elif model_type == 'conv':
+        model = ConvNet()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
     data = np.array([float(x) for x in data.split(',')])
     data = torch.tensor(data).view(1, -1)
-    model = Net()
-    output = model(data)
+    output = model(data.to(device))
     _, predicted = torch.max(output, 1)
     return jsonify({'prediction': predicted.item()})
 
 if __name__ == '__main__':
     app.run(debug=True)
+```
