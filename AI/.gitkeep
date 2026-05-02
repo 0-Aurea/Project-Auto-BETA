@@ -1,0 +1,10 @@
+"""
+AI Directory Placeholder
+
+This .gitkeep file maintains the AI directory in version control.
+It serves as a marker for the machine learning project structure.
+"""
+
+# Prevent accidental execution
+if __name__ == "__main__":
+    pass
