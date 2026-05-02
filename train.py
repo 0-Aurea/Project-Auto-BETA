@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from app import Net, ConvNet, RecurrentNet
+from neural_net import NeuralNetwork, ConvolutionalNeuralNetwork, RecurrentNeuralNetwork, Transformer
 
 def train_model(model, device, loader, criterion, optimizer):
     model.train()
@@ -28,32 +29,22 @@ def train_model(model, device, loader, criterion, optimizer):
     return total_loss / len(loader), accuracy
 
 def main():
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Train a simple neural network
-    model = Net().to(device)
+    # Convolutional neural network
+    conv_net = ConvNet().to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.01)
+    optimizer = optim.SGD(conv_net.parameters(), lr=0.01)
+
+    # Create dataset and data loader
+    transform = transforms.Compose([transforms.ToTensor()])
+    train_dataset = datasets.MNIST('~/.pytorch/MNIST_data/', download=True, train=True, transform=transform)
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 
     for epoch in range(10):
-        loss, accuracy = train_model(model, device, train_loader, criterion, optimizer)
+        loss, accuracy = train_model(conv_net, device, train_loader, criterion, optimizer)
         print(f'Epoch {epoch+1}, Loss: {loss:.4f}, Accuracy: {accuracy:.4f}')
 
-    # Train a convolutional neural network
-    model = ConvNet().to(device)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.01)
-
-    for epoch in range(10):
-        loss, accuracy = train_model(model, device, train_loader, criterion, optimizer)
-        print(f'Epoch {epoch+1}, Loss: {loss:.4f}, Accuracy: {accuracy:.4f}')
-
-    # Train a recurrent neural network
-    model = RecurrentNet().to(device)
-    criterion = nn.MSELoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.01)
-
-    for epoch in range(10):
-        loss, accuracy = train_model(model, device, train_loader, criterion, optimizer)
-        print(f'Epoch {epoch+1}, Loss: {loss:.4f}, Accuracy: {accuracy:.4f}')
+if __name__ == "__main__":
+    main()
 ```
