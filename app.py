@@ -24,7 +24,6 @@ class Net(nn.Module):
         x = self.fc2(x)
         return x
 
-# Define a convolutional neural network
 class ConvNet(nn.Module):
     def __init__(self):
         super(ConvNet, self).__init__()
@@ -35,24 +34,24 @@ class ConvNet(nn.Module):
         self.fc2 = nn.Linear(50, 10)
 
     def forward(self, x):
-        x = torch.relu(self.conv1(x))
-        x = torch.relu(self.conv2(x))
-        x = self.conv2_drop(x)
+        x = nn.functional.relu(nn.functional.max_pool2d(self.conv1(x), 2))
+        x = nn.functional.relu(nn.functional.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
         x = x.view(-1, 320)
-        x = torch.relu(self.fc1(x))
+        x = nn.functional.relu(self.fc1(x))
         x = self.fc2(x)
-        return x
+        return nn.functional.log_softmax(x, dim=1)
 
-# Define a recurrent neural network
 class RecurrentNet(nn.Module):
     def __init__(self):
         super(RecurrentNet, self).__init__()
-        self.rnn = nn.RNN(10, 20, num_layers=1, batch_first=True)
-        self.fc = nn.Linear(20, 1)
+        self.rnn = nn.LSTM(1, 10, num_layers=1, batch_first=True)
+        self.fc = nn.Linear(10, 1)
 
     def forward(self, x):
-        h0 = torch.zeros(1, x.size(0), 20).to(x.device)
-        out, _ = self.rnn(x, h0)
+        h0 = torch.zeros(1, x.size(0), 10).to(x.device)
+        c0 = torch.zeros(1, x.size(0), 10).to(x.device)
+
+        out, _ = self.rnn(x, (h0, c0))
         out = self.fc(out[:, -1, :])
         return out
 
@@ -63,28 +62,21 @@ def index():
 @app.route('/predict', methods=['POST'])
 def predict():
     data = request.form['data']
+    data = np.array([float(x) for x in data.split(',')])
     model_type = request.form['model_type']
 
-    if model_type == 'simple':
+    if model_type == 'nn':
         model = Net()
-    elif model_type == 'convolutional':
+    elif model_type == 'conv':
         model = ConvNet()
     elif model_type == 'recurrent':
         model = RecurrentNet()
 
-    inputs = np.array([float(x) for x in data.split(',')])
-
-    if model_type == 'simple':
-        inputs = torch.tensor(inputs).float()
-        outputs = model(inputs)
-    elif model_type == 'convolutional':
-        inputs = torch.tensor(inputs).float().view(1, 1, 28, 28)
-        outputs = model(inputs)
-    elif model_type == 'recurrent':
-        inputs = torch.tensor(inputs).float().view(1, 10, 1)
-        outputs = model(inputs)
-
-    return jsonify({'output': outputs.detach().numpy().tolist()})
+    model.eval()
+    with torch.no_grad():
+        output = model(torch.tensor(data).float())
+        prediction = torch.argmax(output)
+        return jsonify({'prediction': prediction.item()})
 
 if __name__ == '__main__':
     app.run(debug=True)
