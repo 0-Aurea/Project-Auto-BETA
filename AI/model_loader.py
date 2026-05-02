@@ -2,63 +2,72 @@ import os
 import requests
 import torch
 from typing import Optional, Any
-
+import logging
 
 class ModelLoader:
-    """Loads machine learning models, with support for downloading and loading from various formats."""
+    """
+    Loads machine learning models, with support for downloading and loading from various formats.
+
+    Attributes:
+        model_path (str): Path to existing model file.
+    """
 
     def __init__(self, model_path: Optional[str] = None):
-        """Initialize ModelLoader with optional model path.
-
-        Args:
-            model_path: Path to existing model file. Defaults to None.
         """
-        self.model_path = model_path
-
-    def download_model(self, url: str, destination: str, proxies: Optional[dict] = None) -> None:
-        """Download model from URL to destination path.
+        Initialize ModelLoader with optional model path.
 
         Args:
-            url: URL to download model from.
-            destination: File path to save model to.
-            proxies: Optional dictionary of proxy settings.
+            model_path (str, optional): Path to existing model file. Defaults to None.
 
         Raises:
-            requests.HTTPError: If download fails.
-            IOError: If writing to destination fails.
+            ValueError: If model_path is not a string or None.
+        """
+        if model_path is not None and not isinstance(model_path, str):
+            raise ValueError("model_path must be a string or None")
+        self.model_path = model_path
+        logging.basicConfig(level=logging.INFO)
+        self.logger = logging.getLogger(__name__)
+
+    def download_model(self, url: str, destination: str) -> None:
+        """
+        Download a model from a URL and save it to a destination.
+
+        Args:
+            url (str): URL of the model to download.
+            destination (str): Path to save the downloaded model.
+
+        Raises:
+            requests.RequestException: If the download fails.
         """
         try:
-            os.makedirs(os.path.dirname(destination), exist_ok=True)
-            response = requests.get(url, proxies=proxies)
+            response = requests.get(url, stream=True)
             response.raise_for_status()
-            with open(destination, 'wb') as f:
-                f.write(response.content)
-            self.model_path = destination
+            with open(destination, 'wb') as file:
+                for chunk in response.iter_content(chunk_size=8192):
+                    file.write(chunk)
+            self.logger.info(f"Model downloaded and saved to {destination}")
         except requests.RequestException as e:
-            raise RuntimeError(f"Model download failed: {e}") from e
-        except IOError as e:
-            raise RuntimeError(f"Failed to write model to {destination}: {e}") from e
+            self.logger.error(f"Failed to download model: {e}")
 
-    def load_model(self, model_format: str = 'pytorch') -> Any:
-        """Load model from self.model_path in specified format.
-
-        Args:
-            model_format: Model format (currently only 'pytorch' supported).
+    def load_model(self) -> Any:
+        """
+        Load a model from the specified model path.
 
         Returns:
-            Loaded model object or state dict.
+            Any: The loaded model.
 
         Raises:
-            ValueError: If model path is not set or format is unsupported.
-            RuntimeError: If model loading fails.
+            FileNotFoundError: If the model file does not exist.
         """
         if self.model_path is None:
-            raise ValueError("Model path not set. Download model first or provide a path.")
-
-        if model_format == 'pytorch':
-            try:
-                return torch.load(self.model_path, map_location=torch.device('cpu'))
-            except Exception as e:
-                raise RuntimeError(f"Failed to load PyTorch model from {self.model_path}: {e}") from e
-        else:
-            raise ValueError(f"Unsupported model format: {model_format}")
+            raise ValueError("Model path is not specified")
+        if not os.path.exists(self.model_path):
+            raise FileNotFoundError(f"Model file not found: {self.model_path}")
+        try:
+            # Assuming the model is a PyTorch model
+            model = torch.load(self.model_path, map_location=torch.device('cpu'))
+            self.logger.info(f"Model loaded from {self.model_path}")
+            return model
+        except Exception as e:
+            self.logger.error(f"Failed to load model: {e}")
+            raise
