@@ -17,161 +17,190 @@ from ai_brain import AutoEncoder
 from app import DataProcessor
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class SelfSupervisedLearningService:
-    """Service class for self-supervised learning model training and evaluation."""
+
+class SelfSupervisedDataset(Dataset):
+    """Custom dataset for self-supervised learning tasks."""
     
-    def __init__(self, model: Optional[nn.Module] = None, 
-                 batch_size: int = 32, learning_rate: float = 1e-3):
+    def __init__(self, data: List[Dict[str, Any]], transform: Optional[transforms.Compose] = None):
         """
-        Initialize the self-supervised learning service.
+        Initialize dataset with data and optional transformations.
         
         Args:
-            model: PyTorch model to use for training
-            batch_size: Mini-batch size for training
-            learning_rate: Optimizer learning rate
+            data: List of processed data samples
+            transform: Optional torchvision transforms
         """
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = model.to(self.device) if model else self._initialize_default_model().to(self.device)
-        self.batch_size = batch_size
-        self.learning_rate = learning_rate
-        self.criterion = nn.MSELoss()
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
-        
-    def _initialize_default_model(self) -> nn.Module:
-        """Create and return a default autoencoder model."""
-        return AutoEncoder(input_dim=784, hidden_dim=256, latent_dim=64)
-    
-    def _preprocess_data(self, raw_data: List[Dict[str, Any]]) -> Tuple[torch.Tensor, torch.Tensor]:
+        self.data = data
+        self.transform = transform or self._default_transforms()
+
+    def _default_transforms(self) -> transforms.Compose:
+        """Return default data augmentation transforms."""
+        return transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+
+    def __len__(self) -> int:
+        """Return the size of the dataset."""
+        return len(self.data)
+
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Convert raw data to PyTorch tensors.
+        Get a single sample by index.
         
         Args:
-            raw_data: List of raw data dictionaries
+            idx: Index of the sample to retrieve
             
         Returns:
-            Tuple of (features tensor, labels tensor)
+            Tuple of (input_tensor, target_tensor)
         """
-        processor = DataProcessor()
-        processed = processor.process_data(raw_data)
-        
-        features = np.array([item['features'] for item in processed])
-        labels = np.array([item['labels'] for item in processed])
-        
-        return torch.tensor(features, dtype=torch.float32), torch.tensor(labels, dtype=torch.float32)
+        sample = self.data[idx]
+        # Implement actual data loading logic based on your data structure
+        input_tensor = self.transform(sample['input'])
+        target_tensor = self.transform(sample['target'])
+        return input_tensor, target_tensor
+
+
+class SelfSupervisedTrainer:
+    """Trainer class for self-supervised learning models."""
     
-    def train(self, raw_data: List[Dict[str, Any]], 
-              epochs: int = 10, validation_split: float = 0.2) -> Dict[str, float]:
+    def __init__(self, model: AutoEncoder, device: torch.device):
         """
-        Train the self-supervised model.
+        Initialize trainer with model and device.
         
         Args:
-            raw_data: Raw input data to train on
+            model: AutoEncoder instance to train
+            device: Torch device (CPU/GPU)
+        """
+        self.model = model.to(device)
+        self.device = device
+        self.criterion = nn.MSELoss()
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-3)
+
+    def train(self, train_loader: DataLoader, val_loader: Optional[DataLoader] = None, 
+              epochs: int = 50) -> Dict[str, List[float]]:
+        """
+        Train the model for specified number of epochs.
+        
+        Args:
+            train_loader: Training data loader
+            val_loader: Optional validation data loader
             epochs: Number of training epochs
-            validation_split: Fraction of data to use for validation
             
         Returns:
             Dictionary containing training metrics
         """
-        # Convert to tensors and split data
-        features, _ = self._preprocess_data(raw_data)
-        train_features, val_features = train_test_split(features, test_size=validation_split)
-        
-        # Create data loaders
-        train_loader = DataLoader(train_features, batch_size=self.batch_size, shuffle=True)
-        val_loader = DataLoader(val_features, batch_size=self.batch_size)
-        
-        metrics = {"train_loss": [], "val_loss": []}
+        metrics = {'train_loss': [], 'val_loss': []}
         
         for epoch in range(epochs):
-            epoch_start = time.time()
+            start_time = time.time()
             train_loss = self._train_epoch(train_loader)
-            val_loss = self._validate_epoch(val_loader)
+            metrics['train_loss'].append(train_loss)
             
-            metrics["train_loss"].append(train_loss)
-            metrics["val_loss"].append(val_loss)
+            val_loss = self._validate(val_loader) if val_loader else float('nan')
+            metrics['val_loss'].append(val_loss)
             
-            logger.info(f"Epoch {epoch+1}/{epochs} completed in {time.time()-epoch_start:.2f}s")
-            logger.info(f"  Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+            logger.info(f"Epoch {epoch+1}/{epochs} completed in {time.time()-start_time:.2f}s | "
+                        f"Train loss: {train_loss:.4f} | Val loss: {val_loss:.4f}")
             
         return metrics
-        
+
     def _train_epoch(self, data_loader: DataLoader) -> float:
-        """Train for one epoch."""
+        """Train for one epoch and return average loss."""
         self.model.train()
         total_loss = 0
         
-        for batch in data_loader:
-            inputs = batch.to(self.device)
+        for inputs, _ in data_loader:
+            inputs = inputs.to(self.device)
             
-            # Create augmented views
-            view1, view2 = self._generate_augmentations(inputs)
-            
-            # Forward pass
-            outputs1 = self.model(view1)
-            outputs2 = self.model(view2)
-            
-            # Calculate loss
-            loss = self.criterion(outputs1, outputs2)
-            
-            # Backward pass
             self.optimizer.zero_grad()
+            outputs = self.model(inputs)
+            loss = self.criterion(outputs, inputs)
             loss.backward()
             self.optimizer.step()
             
-            total_loss += loss.item()
+            total_loss += loss.item() * inputs.size(0)
             
-        return total_loss / len(data_loader)
-    
-    def _validate_epoch(self, data_loader: DataLoader) -> float:
-        """Validate model performance."""
+        return total_loss / len(data_loader.dataset)
+
+    def _validate(self, data_loader: DataLoader) -> float:
+        """Validate model and return average loss."""
         self.model.eval()
         total_loss = 0
         
         with torch.no_grad():
-            for batch in data_loader:
-                inputs = batch.to(self.device)
+            for inputs, _ in data_loader:
+                inputs = inputs.to(self.device)
                 outputs = self.model(inputs)
                 loss = self.criterion(outputs, inputs)
-                total_loss += loss.item()
+                total_loss += loss.item() * inputs.size(0)
                 
-        return total_loss / len(data_loader)
+        return total_loss / len(data_loader.dataset)
+
+
+def prepare_data(data: List[Dict[str, Any]], 
+                 test_size: float = 0.2, 
+                 batch_size: int = 32) -> Tuple[DataLoader, DataLoader]:
+    """
+    Prepare data loaders for training and validation.
     
-    def _generate_augmentations(self, inputs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Generate augmented views of the input data.
+    Args:
+        data: Raw data to process and split
+        test_size: Proportion of data for validation
+        batch_size: Batch size for data loaders
         
-        Args:
-            inputs: Input tensor batch
-            
-        Returns:
-            Tuple of two augmented views
-        """
-        # Example augmentations - can be customized
-        transform = transforms.Compose([
-            transforms.RandomResizedCrop(size=(32, 32), scale=(0.8, 1.0)),
-            transforms.RandomHorizontalFlip(p=0.5),
-            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-            transforms.ToTensor()
-        ])
-        
-        view1 = transform(inputs)
-        view2 = transform(inputs)
-        return view1, view2
+    Returns:
+        Tuple of (train_loader, val_loader)
+    """
+    # Process data using DataProcessor
+    processed_data = DataProcessor.process_data(data)
     
-    def save_model(self, path: str) -> None:
-        """Save model state to disk."""
-        torch.save({
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-        }, path)
-        logger.info(f"Model saved to {path}")
+    # Split data
+    train_data, val_data = train_test_split(processed_data, test_size=test_size)
+    
+    # Create datasets and data loaders
+    transform = transforms.Compose([
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomRotation(degrees=15)
+    ])
+    
+    train_dataset = SelfSupervisedDataset(train_data, transform=transform)
+    val_dataset = SelfSupervisedDataset(val_data, transform=transform)
+    
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+    
+    return train_loader, val_loader
+
+
+def main(data: List[Dict[str, Any]]) -> Dict[str, List[float]]:
+    """
+    Execute complete self-supervised training pipeline.
+    
+    Args:
+        data: Raw input data for training
         
-    def load_model(self, path: str) -> None:
-        """Load model state from disk."""
-        checkpoint = torch.load(path)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        logger.info(f"Model loaded from {path}")
+    Returns:
+        Dictionary containing training metrics
+    """
+    try:
+        # Initialize model components
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = AutoEncoder(input_dim=3*224*224)  # Adjust dimensions based on actual input
+        
+        # Prepare data
+        train_loader, val_loader = prepare_data(data)
+        
+        # Initialize trainer
+        trainer = SelfSupervisedTrainer(model, device)
+        
+        # Train model
+        metrics = trainer.train(train_loader, val_loader, epochs=100)
+        
+        return metrics
+        
+    except Exception as e:
+        logger.error(f"Training failed with error: {str(e)}", exc_info=True)
+        raise
