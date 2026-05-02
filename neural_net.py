@@ -9,58 +9,45 @@ class NeuralNetwork:
         input_size: Number of input features
         hidden_size: Number of neurons in hidden layer
         output_size: Number of output classes
-        weights_input_hidden: Input-to-hidden layer weights
-        weights_hidden_output: Hidden-to-output layer weights
-        bias_hidden: Hidden layer bias
-        bias_output: Output layer bias
+        weights_input_hidden: Input-to-hidden layer weights (shape: [hidden_size, input_size])
+        weights_hidden_output: Hidden-to-output layer weights (shape: [output_size, hidden_size])
+        bias_hidden: Hidden layer bias (shape: [hidden_size, 1])
+        bias_output: Output layer bias (shape: [output_size, 1])
     """
 
     def __init__(self, input_size: int, hidden_size: int, output_size: int):
-        """Initialize network with given layer dimensions."""
+        """Initialize network with given layer dimensions using He initialization."""
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
         
-        # He initialization for ReLU activation
-        self.weights_input_hidden = np.random.randn(input_size, hidden_size) * np.sqrt(2./input_size)
-        self.bias_hidden = np.zeros((1, hidden_size))
+        # He initialization for weights
+        self.weights_input_hidden = np.random.randn(hidden_size, input_size) * np.sqrt(2./input_size)
+        self.weights_hidden_output = np.random.randn(output_size, hidden_size) * np.sqrt(2./hidden_size)
         
-        self.weights_hidden_output = np.random.randn(hidden_size, output_size) * np.sqrt(2./hidden_size)
-        self.bias_output = np.zeros((1, output_size))
+        # Biases initialized to zero
+        self.bias_hidden = np.zeros((hidden_size, 1))
+        self.bias_output = np.zeros((output_size, 1))
 
     def forward(self, X: np.ndarray) -> np.ndarray:
-        """Compute forward pass through the network."""
-        self.hidden_input = np.dot(X, self.weights_input_hidden) + self.bias_hidden
-        self.hidden_output = self._relu(self.hidden_input)
-        self.output = np.dot(self.hidden_output, self.weights_hidden_output) + self.bias_output
-        return self._softmax(self.output)
-
-    def _relu(self, X: np.ndarray) -> np.ndarray:
-        """Rectified Linear Unit activation function."""
-        return np.maximum(0, X)
+        """Compute forward pass through the network.
+        
+        Args:
+            X: Input data with shape [input_size, batch_size]
+            
+        Returns:
+            Output probabilities with shape [output_size, batch_size]
+        """
+        # Hidden layer computation
+        hidden_input = self.weights_input_hidden @ X + self.bias_hidden
+        hidden_output = np.tanh(hidden_input)
+        
+        # Output layer computation
+        output_input = self.weights_hidden_output @ hidden_output + self.bias_output
+        output = self._softmax(output_input)
+        return output
 
     def _softmax(self, X: np.ndarray) -> np.ndarray:
-        """Numerically stable softmax implementation."""
-        exps = np.exp(X - np.max(X, axis=1, keepdims=True))
-        return exps / np.sum(exps, axis=1, keepdims=True)
-
-    def train(self, X: np.ndarray, y: np.ndarray, 
-              learning_rate: float = 0.01, epochs: int = 100) -> None:
-        """Train the network using stochastic gradient descent."""
-        for _ in range(epochs):
-            # Forward pass
-            output = self.forward(X)
-            
-            # Backward pass
-            output_error = output - y
-            hidden_error = np.dot(output_error, self.weights_hidden_output.T)
-            hidden_error[self.hidden_input <= 0] = 0  # ReLU derivative
-            
-            # Gradient descent update
-            self.weights_hidden_output -= learning_rate * np.dot(
-                self.hidden_output.T, output_error)
-            self.bias_output -= learning_rate * np.sum(output_error, axis=0)
-            
-            self.weights_input_hidden -= learning_rate * np.dot(
-                X.T, hidden_error)
-            self.bias_hidden -= learning_rate * np.sum(hidden_error, axis=0)
+        """Compute softmax activation function."""
+        exp_values = np.exp(X - np.max(X, axis=0, keepdims=True))
+        return exp_values / np.sum(exp_values, axis=0, keepdims=True)
