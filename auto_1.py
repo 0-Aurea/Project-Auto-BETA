@@ -12,8 +12,8 @@ def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
               must have an 'id' field to be included in the processed output.
     
     Returns:
-        List of processed dictionaries with lowercase keys. Entries without
-        an 'id' field are excluded from the result.
+        List of processed dictionaries with lowercase keys and only entries
+        that contained an 'id' field.
     """
     return [
         {key.lower(): value for key, value in entry.items()}
