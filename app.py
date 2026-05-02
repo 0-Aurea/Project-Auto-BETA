@@ -18,27 +18,27 @@ import os
 import logging
 from flask import Flask, jsonify, request
 
-# Project-specific imports
-from ai_brain import AI Brain
+# Local imports
+from ai_brain import AI_Brain
 from data_collector import DataCollector
 from data_loader import DataLoader
 
-# Initialize the Flask app
+# Initialize Flask app
 app = Flask(__name__)
 
-# Initialize logging
-logging.basicConfig(level=logging.INFO)
+# Initialize AI brain
+ai_brain = AI_Brain()
+
+# Initialize data collector
+data_collector = DataCollector()
+
+# Initialize data loader
+data_loader = DataLoader()
 ```
 
 ### Structure the Code
 
-Consider breaking down the `app.py` file into sections:
-
-1.  **Import and Initialize**: Import necessary modules, initialize the Flask app, and set up logging.
-2.  **Define Routes**: Define API endpoints for the application.
-3.  **Main Function**: Run the application.
-
-### Example Code
+Organize the code into sections using comments:
 
 ```python
 # app.py
@@ -47,56 +47,85 @@ Consider breaking down the `app.py` file into sections:
 Main application file.
 """
 
+# Imports and Initialization
 import os
 import logging
 from flask import Flask, jsonify, request
 
-# Project-specific imports
-from ai_brain import AI Brain
+# Local imports
+from ai_brain import AI_Brain
 from data_collector import DataCollector
 from data_loader import DataLoader
 
-# Initialize the Flask app
+# Initialize Flask app
 app = Flask(__name__)
 
-# Initialize logging
-logging.basicConfig(level=logging.INFO)
+# Initialize AI brain
+ai_brain = AI_Brain()
 
-# Define routes
+# Initialize data collector
+data_collector = DataCollector()
+
+# Initialize data loader
+data_loader = DataLoader()
+
+# Routes
 @app.route('/api/data', methods=['GET'])
 def get_data():
-    data_loader = DataLoader()
     data = data_loader.load_data()
-    return jsonify(data)
+    return jsonify({'data': data})
 
 @app.route('/api/train', methods=['POST'])
 def train_model():
-    ai_brain = AI Brain()
-    data_collector = DataCollector()
-    data = data_collector.collect_data()
+    data = request.get_json()
     ai_brain.train_model(data)
     return jsonify({'message': 'Model trained successfully'})
 
+# Utilities
+def init_logging():
+    logging.basicConfig(level=logging.INFO)
+
+# Main
 if __name__ == '__main__':
-    # Run the application
+    init_logging()
     app.run(debug=True)
+```
+
+### Error Handling
+
+Implement basic error handling:
+
+```python
+# app.py
+
+# ...
+
+# Routes
+@app.route('/api/data', methods=['GET'])
+def get_data():
+    try:
+        data = data_loader.load_data()
+        return jsonify({'data': data})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/train', methods=['POST'])
+def train_model():
+    try:
+        data = request.get_json()
+        ai_brain.train_model(data)
+        return jsonify({'message': 'Model trained successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ...
 ```
 
 ### Best Practices
 
-*   Keep the `app.py` file concise and focused on the main application logic.
-*   Use a consistent naming convention (e.g., PEP 8).
-*   Consider using a virtual environment (e.g., `venv`) to manage dependencies.
-*   Use logging to monitor the application's performance and debug issues.
+* Use a consistent naming convention (e.g., PEP 8).
+* Keep functions short and focused on a single task.
+* Use type hints for function parameters and return types.
+* Use docstrings to document functions and modules.
 
-### Commit Message
-
-If you're committing these changes to a Git repository, consider using a descriptive commit message:
-
-```
-Improve app.py file structure and organization
-
-* Organize imports and code structure
-* Define API endpoints for data loading and model training
-* Initialize logging and Flask app
-```
+By following these suggestions, you can improve the structure and maintainability of your `app.py` file.
