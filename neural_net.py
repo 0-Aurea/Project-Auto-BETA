@@ -30,3 +30,23 @@ class NeuralNetwork:
         hidden_layer = self.sigmoid(np.dot(inputs, self.weights1) + self.bias1)
         outputs = self.sigmoid(np.dot(hidden_layer, self.weights2) + self.bias2)
         return hidden_layer, outputs
+
+class ConvolutionalNeuralNetwork:
+    def __init__(self, input_channels, kernel_size, output_size):
+        self.input_channels = input_channels
+        self.kernel_size = kernel_size
+        self.output_size = output_size
+
+        self.weights = np.random.rand(input_channels, kernel_size, kernel_size)
+        self.bias = np.zeros((1, output_size))
+
+    def forward(self, inputs):
+        outputs = np.zeros((inputs.shape[0], self.output_size))
+        for i in range(inputs.shape[0]):
+            for j in range(inputs.shape[1]):
+                for k in range(self.kernel_size):
+                    for l in range(self.kernel_size):
+                        outputs[i] += inputs[i, j, k, l] * self.weights[k, l]
+        outputs += self.bias
+        return outputs
+```
