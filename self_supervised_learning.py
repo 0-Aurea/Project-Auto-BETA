@@ -36,7 +36,7 @@ input_data = torch.randn(1, 3, 224, 224)
 
 ### Add Docstrings
 
-Docstrings provide a description of what a function or class does. They are essential for readability and usability.
+Docstrings provide documentation for functions, classes, and modules. They should describe the purpose, parameters, and return values.
 
 ```python
 def train(model, device, input_data, labels):
@@ -52,16 +52,16 @@ def train(model, device, input_data, labels):
     Returns:
         None
     """
-    # Training code here
+    # Training code
 ```
 
 ### Use Type Hints
 
-Type hints indicate the expected types of function arguments and return values. They make the code more readable and self-documenting.
+Type hints indicate the expected types of function parameters and return values.
 
 ```python
 def train(model: SelfSupervisedModel, device: torch.device, input_data: torch.Tensor, labels: torch.Tensor) -> None:
-    # Training code here
+    # Training code
 ```
 
 ### Follow PEP 8
@@ -103,12 +103,25 @@ def train(model: SelfSupervisedModel, device: torch.device, input_data: torch.Te
     input_data = input_data.to(device)
     labels = labels.to(device)
 
-    # Training code here
+    # Training code
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    loss_fn = nn.MSELoss()
 
-def main() -> None:
-    # Main code here
-    pass
+    for epoch in range(10):
+        optimizer.zero_grad()
+        outputs = model(input_data)
+        loss = loss_fn(outputs, labels)
+        loss.backward()
+        optimizer.step()
+        print(f'Epoch {epoch+1}, Loss: {loss.item()}')
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    # Example usage
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = SelfSupervisedModel()
+    input_data = torch.randn(1, 3, 224, 224)
+    labels = torch.randn(1, 3, 224, 224)
+    train(model, device, input_data, labels)
 ```
+
+This refactored code improves readability, maintainability, and follows best practices for Python coding.
