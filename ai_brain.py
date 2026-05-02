@@ -1,14 +1,11 @@
-# auto_1.py
-# Improved version with PEP8 compliance, docstrings, and optimized structure
-
-import os
-import sys
-import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Process raw data by filtering and transforming key fields.
+    Process raw data by filtering and transforming keys to lowercase.
+    
+    Filters out entries without an 'id' field and transforms all dictionary
+    keys to lowercase for consistency.
     
     Args:
         data: List of dictionaries containing raw input data
@@ -18,14 +15,7 @@ def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     processed = []
     for item in data:
-        if not isinstance(item, dict):
-            continue  # Skip invalid entries
-            
-        cleaned_item = {
-            'id': item.get('id'),
-            'value': float(item.get('value', 0)),
-            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
-        }
-        processed.append(cleaned_item)
-    
+        if 'id' in item:
+            processed_item = {key.lower(): value for key, value in item.items()}
+            processed.append(processed_item)
     return processed
