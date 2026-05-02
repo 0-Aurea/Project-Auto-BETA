@@ -20,28 +20,29 @@ def load_training_data(data_path: str) -> List[Dict[str, Any]]:
         data_path: Path to training data file/folder
         
     Returns:
-        List of preprocessed data entries as dictionaries
+        List of processed data entries as dictionaries
         
     Raises:
         FileNotFoundError: If data_path does not exist
         ValueError: If data cannot be loaded or processed
     """
     if not os.path.exists(data_path):
-        raise FileNotFoundError(f"Data path '{data_path}' does not exist")
+        raise FileNotFoundError(f"The data path {data_path} does not exist.")
     
     try:
-        loader = DataLoader(data_path)
-        raw_data = loader.load()
+        raw_data = DataLoader.load(data_path)
     except Exception as e:
         raise ValueError(f"Failed to load data from {data_path}: {str(e)}") from e
-
-    if not isinstance(raw_data, list):
-        raise ValueError(f"Expected list of dictionaries, got {type(raw_data)}")
-        
-    processed_data = process_data(raw_data)
     
-    # Validate processing output
-    if not all(isinstance(item, dict) and 'id' in item for item in processed_data):
-        raise ValueError("Processing resulted in invalid data format")
-        
+    # Convert DataFrame to list of dicts if necessary
+    if isinstance(raw_data, pd.DataFrame):
+        raw_data = raw_data.to_dict('records')
+    elif not isinstance(raw_data, list):
+        raise ValueError("Loaded data must be a list or DataFrame.")
+    
+    try:
+        processed_data = process_data(raw_data)
+    except Exception as e:
+        raise ValueError(f"Data processing failed: {str(e)}") from e
+    
     return processed_data
