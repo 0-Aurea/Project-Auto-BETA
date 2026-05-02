@@ -1,0 +1,7 @@
+"""
+API Directory Placeholder (.gitkeep)
+
+This file ensures the API directory remains tracked in version control systems,
+even when empty. It serves as a structural marker for the project hierarchy and
+prevents accidental deletion of the directory.
+"""
