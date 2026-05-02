@@ -17,11 +17,9 @@ def track_performance(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         start_time = time.perf_counter()
-        try:
-            result = func(*args, **kwargs)
-        finally:
-            end_time = time.perf_counter()
-            elapsed = end_time - start_time
-            logging.info(f"Function '{func.__name__}' executed in {elapsed:.6f} seconds")
+        result = func(*args, **kwargs)
+        end_time = time.perf_counter()
+        elapsed = end_time - start_time
+        logging.info(f"Function '{func.__name__}' executed in {elapsed:.6f} seconds")
         return result
     return wrapper
