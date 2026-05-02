@@ -12,12 +12,13 @@ In a large project, it's essential to keep imports organized. Consider using the
 import os
 import sys
 
-# Related third party imports
+# Third-party imports
 import requests
-from flask import Flask
+from flask import Flask, jsonify
 
 # Local application imports
-from . import module
+from . import module1
+from .module2 import function1, function2
 ```
 
 ### Use Meaningful Variable Names
@@ -34,20 +35,18 @@ max_iterations = 5
 
 ### Add Docstrings
 
-Docstrings provide a description of what a function or class does.
+Docstrings provide documentation for modules, functions, and classes.
 
 ```python
-# Bad practice
-def greet(name):
-    print(f"Hello, {name}!")
-
-# Good practice
 def greet(name: str) -> None:
     """
-    Prints a personalized greeting message.
+    Print a personalized greeting message.
 
     Args:
         name (str): The person's name.
+
+    Returns:
+        None
     """
     print(f"Hello, {name}!")
 ```
@@ -68,58 +67,55 @@ if True:
 
 ### Use Type Hints
 
-Type hints indicate the expected type of a function's arguments and return value.
+Type hints indicate the expected types of function arguments and return values.
 
 ```python
-# Bad practice
-def greet(name):
-    print(f"Hello, {name}!")
-
-# Good practice
-def greet(name: str) -> None:
-    print(f"Hello, {name}!")
+def greeting(name: str) -> str:
+    return f"Hello, {name}!"
 ```
 
 ### Error Handling
 
-Proper error handling is essential to make your code more robust.
+Proper error handling is essential for robust code.
+
+```python
+try:
+    # Code that might raise an exception
+    result = 10 / 0
+except ZeroDivisionError:
+    print("Cannot divide by zero!")
+```
+
+### Code Refactoring
+
+Refactor code to make it more efficient, readable, and maintainable.
 
 ```python
 # Bad practice
-with open("file.txt", "r") as file:
-    content = file.read()
+numbers = [1, 2, 3, 4, 5]
+squared_numbers = []
+for number in numbers:
+    squared_numbers.append(number ** 2)
 
 # Good practice
-try:
-    with open("file.txt", "r") as file:
-        content = file.read()
-except FileNotFoundError:
-    print("The file was not found.")
+numbers = [1, 2, 3, 4, 5]
+squared_numbers = [number ** 2 for number in numbers]
 ```
 
-Let's assume the current state of the `auto_4.py` file is:
+### Testing
+
+Write tests to ensure the code works as expected.
 
 ```python
-# auto_4.py
+import unittest
 
-def main():
-    print("Hello, world!")
+def add(a: int, b: int) -> int:
+    return a + b
 
-if __name__ == "__main__":
-    main()
-```
-
-Here is an improved version:
-
-```python
-# auto_4.py
-
-def main() -> None:
-    """
-    Prints a hello message.
-    """
-    print("Hello, world!")
+class TestAddFunction(unittest.TestCase):
+    def test_add(self):
+        self.assertEqual(add(1, 2), 3)
 
 if __name__ == "__main__":
-    main()
+    unittest.main()
 ```
