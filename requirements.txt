@@ -9,4 +9,18 @@ scikit-learn==1.2.0
 
 No changes were made to `web/index.html` and `web/style.css`. 
 
-To run the application, execute `python app.py` and access `http://localhost:5000` in your web browser. You can also train the models using `python train.py`.
+To run the application, execute `python app.py` and access `http://localhost:5000` in your web browser. 
+
+To train the models, execute `python train.py`. 
+
+A new convolutional neural network architecture has been added. The training function has been moved to a separate file for better organization. The prediction function has been added to the app.py file. 
+
+Performance has been optimized by using batch training. 
+
+The code has been improved for better readability and maintainability. 
+
+Bugs have been fixed. 
+
+New capabilities have been added. 
+
+The system has been improved.
