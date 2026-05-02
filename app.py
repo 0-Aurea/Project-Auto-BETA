@@ -34,12 +34,12 @@ class ConvNet(nn.Module):
         self.fc2 = nn.Linear(50, 10)
 
     def forward(self, x):
-        x = nn.functional.relu(nn.functional.max_pool2d(self.conv1(x), 2))
-        x = nn.functional.relu(nn.functional.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
+        x = torch.relu(torch.max_pool2d(self.conv1(x), 2))
+        x = torch.relu(torch.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
         x = x.view(-1, 320)
-        x = nn.functional.relu(self.fc1(x))
+        x = torch.relu(self.fc1(x))
         x = self.fc2(x)
-        return nn.functional.log_softmax(x, dim=1)
+        return x
 
 class RecurrentNet(nn.Module):
     def __init__(self):
@@ -62,21 +62,22 @@ def index():
 @app.route('/predict', methods=['POST'])
 def predict():
     data = request.form['data']
-    data = np.array([float(x) for x in data.split(',')])
     model_type = request.form['model_type']
 
-    if model_type == 'nn':
+    if model_type == 'simple':
         model = Net()
     elif model_type == 'conv':
         model = ConvNet()
     elif model_type == 'recurrent':
         model = RecurrentNet()
 
-    model.eval()
-    with torch.no_grad():
-        output = model(torch.tensor(data).float())
-        prediction = torch.argmax(output)
-        return jsonify({'prediction': prediction.item()})
+    inputs = np.array([float(x) for x in data.split(',')])
+    inputs = torch.tensor(inputs).float()
+
+    outputs = model(inputs)
+    _, predicted = torch.max(outputs, 1)
+
+    return jsonify({'prediction': predicted.item()})
 
 if __name__ == '__main__':
     app.run(debug=True)
