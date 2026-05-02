@@ -1,6 +1,3 @@
-import os
-import sys
-import time
 from typing import List, Dict, Any
 
 def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -15,7 +12,7 @@ def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         
     Returns:
         List of processed dictionaries with lowercase keys and only entries
-        that contain the 'id' field.
+        that originally contained an 'id' field.
     """
     return [
         {key.lower(): value for key, value in entry.items()}
