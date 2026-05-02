@@ -1,1 +1,17 @@
-
+CONTENT:
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Network App</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <form method="post">
+        <label for="data">Enter 784 comma-separated values:</label>
+        <input type="text" id="data" name="data">
+        <input type="submit" value="Make Prediction">
+    </form>
+</body>
+</html>
