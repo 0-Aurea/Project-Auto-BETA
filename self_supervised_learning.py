@@ -15,59 +15,73 @@ import sys
 # Third-party imports
 import numpy as np
 import torch
+import torch.nn as nn
 
 # Local imports
 from . import utils
-from . import models
+from .models import SelfSupervisedModel
 ```
 
 ### Use Meaningful Variable Names
 
-Variable names should be descriptive and indicate the purpose of the variable. For example, instead of using `x`, use `input_data`.
+Variable names should be descriptive and indicate the purpose of the variable.
 
 ```python
 # Before
 x = torch.randn(1, 3, 224, 224)
 
 # After
-input_data = torch.randn(1, 3, 224, 224)
+input_tensor = torch.randn(1, 3, 224, 224)
 ```
 
 ### Add Docstrings
 
-Docstrings provide a description of what a function or class does. They are essential for readability and usability.
+Docstrings provide a description of what a function or class does.
 
 ```python
-def self_supervised_learning(input_data, model):
+def train(model, device, train_loader, optimizer, epoch):
     """
-    Perform self-supervised learning on the input data using the given model.
+    Train the model on the training set.
 
     Args:
-        input_data (torch.Tensor): The input data.
-        model (nn.Module): The model.
+        model (nn.Module): The model to train.
+        device (torch.device): The device to train on.
+        train_loader (DataLoader): The training data loader.
+        optimizer (nn.Module): The optimizer to use.
+        epoch (int): The current epoch.
 
     Returns:
-        torch.Tensor: The output of the model.
+        None
     """
-    # Code here
+    # ...
 ```
 
 ### Use Type Hints
 
-Type hints indicate the expected type of a variable, function parameter, or return value. They improve code readability and can be used by IDEs and type checkers.
+Type hints indicate the expected types of function arguments and return values.
 
 ```python
-def self_supervised_learning(input_data: torch.Tensor, model: nn.Module) -> torch.Tensor:
-    # Code here
+def train(model: nn.Module, device: torch.device, train_loader: DataLoader, optimizer: nn.Module, epoch: int) -> None:
+    # ...
 ```
 
-### Follow PEP 8
+### Consider Using a Consistent Coding Style
 
-The Python Enhancement Proposal 8 (PEP 8) provides guidelines for coding style. Ensure that your code adheres to these guidelines.
+Use a consistent coding style throughout the file. The PEP 8 style guide is a good reference.
+
+```python
+# Before
+if True:
+  print('hello world')
+
+# After
+if True:
+    print('hello world')
+```
 
 ### Refactored Code
 
-Here is an example of how the refactored code could look:
+Here's an example of how the refactored code could look:
 
 ```python
 import os
@@ -75,39 +89,56 @@ import sys
 import numpy as np
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader
 from . import utils
-from . import models
+from .models import SelfSupervisedModel
 
-def self_supervised_learning(input_data: torch.Tensor, model: nn.Module) -> torch.Tensor:
+def train(model: SelfSupervisedModel, device: torch.device, train_loader: DataLoader, optimizer: nn.Module, epoch: int) -> None:
     """
-    Perform self-supervised learning on the input data using the given model.
+    Train the model on the training set.
 
     Args:
-        input_data (torch.Tensor): The input data.
-        model (nn.Module): The model.
+        model (SelfSupervisedModel): The model to train.
+        device (torch.device): The device to train on.
+        train_loader (DataLoader): The training data loader.
+        optimizer (nn.Module): The optimizer to use.
+        epoch (int): The current epoch.
 
     Returns:
-        torch.Tensor: The output of the model.
+        None
     """
-    # Perform self-supervised learning
-    output = model(input_data)
-    return output
+    model.train()
+    for batch_idx, (data, target) in enumerate(train_loader):
+        data, target = data.to(device), target.to(device)
+        optimizer.zero_grad()
+        output = model(data)
+        loss = nn.MSELoss()(output, target)
+        loss.backward()
+        optimizer.step()
+        if batch_idx % 100 == 0:
+            print(f'Epoch {epoch+1}, Batch {batch_idx+1}, Loss: {loss.item()}')
 
 def main():
     # Set hyperparameters
-    batch_size = 32
-    num_epochs = 10
+    batch_size = 128
+    epochs = 10
+    learning_rate = 0.001
+
+    # Set device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Load data
-    input_data = torch.randn(batch_size, 3, 224, 224)
+    train_dataset = utils.load_dataset('train')
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-    # Initialize model
-    model = models.SelfSupervisedModel()
+    # Initialize model, optimizer, and loss function
+    model = SelfSupervisedModel().to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-    # Perform self-supervised learning
-    for epoch in range(num_epochs):
-        output = self_supervised_learning(input_data, model)
+    # Train model
+    for epoch in range(epochs):
+        train(model, device, train_loader, optimizer, epoch)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
 ```
