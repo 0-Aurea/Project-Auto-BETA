@@ -57,11 +57,11 @@ The Python Enhancement Proposal 8 (PEP 8) provides guidelines for coding style.
 ```python
 # Bad practice
 if True:
-    print( 'hello world' )
+    print('hello world')
 
 # Good practice
 if True:
-    print("hello world")
+    print("Hello, World!")
 ```
 
 ### Use Type Hints
@@ -69,7 +69,7 @@ if True:
 Type hints indicate the expected types of function arguments and return values.
 
 ```python
-def greet(name: str) -> str:
+def greeting(name: str) -> str:
     return f"Hello, {name}!"
 ```
 
@@ -85,33 +85,34 @@ except Exception as e:
     print(f"An error occurred: {e}")
 ```
 
-### Code Organization
+### Refactor Long Functions
 
-Keep related code organized into sections or modules.
+Long functions can be difficult to understand and maintain. Consider breaking them down into smaller functions.
 
 ```python
-# auto_5.py
+def complex_operation() -> None:
+    # Part 1
+    data = fetch_data()
 
-def main() -> None:
-    # Main function
+    # Part 2
+    result = process_data(data)
 
-if __name__ == "__main__":
-    main()
+    # Part 3
+    save_result(result)
 ```
 
-By following these best practices, you can improve the quality and maintainability of the `auto_5.py` file.
-
-Here is an example of a refactored `auto_5.py` file:
+Example of improved `auto_5.py`:
 
 ```python
-# auto_5.py
-
-"""
-Module description.
-"""
-
+# Standard library imports
 import os
 import sys
+
+# Related third party imports
+import requests
+
+# Local application imports
+from . import module
 
 def greet(name: str) -> None:
     """
