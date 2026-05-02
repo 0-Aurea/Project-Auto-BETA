@@ -13,9 +13,8 @@ def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     Returns:
         List of processed dictionaries with cleaned data
     """
-    processed = []
-    for item in data:
-        if 'id' in item:
-            processed_item = {key.lower(): value for key, value in item.items()}
-            processed.append(processed_item)
-    return processed
+    return [
+        {key.lower(): value for key, value in item.items()}
+        for item in data
+        if 'id' in item
+    ]
