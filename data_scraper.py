@@ -12,148 +12,115 @@ In a large project, it's essential to keep imports organized. Consider using the
 import os
 import sys
 
-# Related third party imports
+# Third-party imports
 import requests
 from bs4 import BeautifulSoup
 
-# Local application imports
-from .utils import helper_function
+# Local imports
+from . import utils
 ```
 
 ### Use Meaningful Variable Names
 
-Variable names should be descriptive and indicate the purpose of the variable.
+Variable names should be descriptive and indicate the purpose of the variable. For example:
 
 ```python
-# Bad practice
+# Instead of:
 data = requests.get(url)
 
-# Good practice
-url_to_scrape = "https://example.com"
-response = requests.get(url_to_scrape)
-```
-
-### Handle Exceptions
-
-Handle potential exceptions that may occur during the execution of the script.
-
-```python
-try:
-    response = requests.get(url_to_scrape)
-    response.raise_for_status()  # Raise an exception for bad status codes
-except requests.exceptions.RequestException as err:
-    print(f"Request Exception: {err}")
-```
-
-### Use Functions
-
-Break down the script into smaller functions to improve readability and maintainability.
-
-```python
-def fetch_data(url):
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        return response.text
-    except requests.exceptions.RequestException as err:
-        print(f"Request Exception: {err}")
-        return None
-
-def parse_data(html):
-    soup = BeautifulSoup(html, 'html.parser')
-    # Parse the HTML content
-    return parsed_data
-
-def main():
-    url_to_scrape = "https://example.com"
-    html = fetch_data(url_to_scrape)
-    if html:
-        parsed_data = parse_data(html)
-        # Process the parsed data
-
-if __name__ == "__main__":
-    main()
+# Use:
+response = requests.get(url)
 ```
 
 ### Add Docstrings
 
-Add docstrings to functions to provide a description of what the function does.
+Docstrings provide a description of what a function or class does. They are useful for other developers who may need to understand your code.
 
 ```python
-def fetch_data(url):
+def scrape_data(url: str) -> dict:
     """
-    Fetches data from the given URL.
+    Scrapes data from the provided URL.
 
     Args:
-        url (str): The URL to fetch data from.
+        url (str): The URL to scrape.
 
     Returns:
-        str: The HTML content of the page.
+        dict: The scraped data.
     """
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        return response.text
-    except requests.exceptions.RequestException as err:
-        print(f"Request Exception: {err}")
-        return None
+    # function implementation
 ```
 
-### Follow PEP 8 Guidelines
+### Handle Exceptions
 
-Ensure that the code follows PEP 8 guidelines for coding style, including:
+Exceptions should be handled to prevent your program from crashing unexpectedly.
 
-*   Use 4 spaces for indentation
-*   Limit lines to 79 characters
-*   Use blank lines to separate functions and logical sections of code
+```python
+try:
+    response = requests.get(url)
+    response.raise_for_status()  # Raise an exception for HTTP errors
+except requests.exceptions.RequestException as e:
+    print(f"An error occurred: {e}")
+```
 
-By applying these suggestions, you can improve the readability, maintainability, and reliability of the `data_scraper.py` file. 
+### Use Type Hints
 
-Here is an example of a refactored `data_scraper.py` file:
+Type hints indicate the expected type of a function's arguments and return value.
+
+```python
+def scrape_data(url: str) -> dict:
+    # function implementation
+```
+
+### Keep Functions Short
+
+Functions should be short and do one thing. This makes them easier to understand and test.
+
+```python
+def scrape_data(url: str) -> dict:
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    # ... (rest of the function)
+
+def parse_data(soup: BeautifulSoup) -> dict:
+    # ... (function implementation)
+```
+
+### Improved Code
+
+Here's an improved version of the `data_scraper.py` file:
 
 ```python
 import requests
 from bs4 import BeautifulSoup
 
-def fetch_data(url):
+def scrape_data(url: str) -> dict:
     """
-    Fetches data from the given URL.
+    Scrapes data from the provided URL.
 
     Args:
-        url (str): The URL to fetch data from.
+        url (str): The URL to scrape.
 
     Returns:
-        str: The HTML content of the page.
+        dict: The scraped data.
     """
     try:
         response = requests.get(url)
-        response.raise_for_status()
-        return response.text
-    except requests.exceptions.RequestException as err:
-        print(f"Request Exception: {err}")
-        return None
+        response.raise_for_status()  # Raise an exception for HTTP errors
+    except requests.exceptions.RequestException as e:
+        print(f"An error occurred: {e}")
+        return {}
 
-def parse_data(html):
-    """
-    Parses the given HTML content.
+    soup = BeautifulSoup(response.text, 'html.parser')
+    data = parse_data(soup)
+    return data
 
-    Args:
-        html (str): The HTML content to parse.
-
-    Returns:
-        parsed_data: The parsed data.
-    """
-    soup = BeautifulSoup(html, 'html.parser')
-    # Parse the HTML content
-    return soup
-
-def main():
-    url_to_scrape = "https://example.com"
-    html = fetch_data(url_to_scrape)
-    if html:
-        parsed_data = parse_data(html)
-        # Process the parsed data
+def parse_data(soup: BeautifulSoup) -> dict:
+    # ... (function implementation)
 
 if __name__ == "__main__":
-    main()
+    url = "https://example.com"
+    data = scrape_data(url)
+    print(data)
 ```
+
+This improved version includes organized imports, meaningful variable names, docstrings, exception handling, type hints, and short functions.
