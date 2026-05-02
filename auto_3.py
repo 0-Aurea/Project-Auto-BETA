@@ -15,10 +15,15 @@ def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         List of processed dictionaries with lowercase keys and valid 'id' fields.
     """
     processed = []
-    for item in data:
-        # Check if any key exists that matches 'id' case-insensitively
-        if any(key.lower() == 'id' for key in item):
-            # Create new dict with all keys lowercased
-            transformed = {key.lower(): value for key, value in item.items()}
-            processed.append(transformed)
+    for entry in data:
+        # Check if any key matches 'id' case-insensitively
+        if not any(key.lower() == 'id' for key in entry):
+            continue
+            
+        # Create new dictionary with lowercase keys
+        transformed = {
+            key.lower(): value 
+            for key, value in entry.items()
+        }
+        processed.append(transformed)
     return processed
