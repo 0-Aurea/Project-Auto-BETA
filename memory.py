@@ -14,7 +14,8 @@ def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         data: List of dictionaries containing raw data entries
         
     Returns:
-        List of processed dictionaries with lowercase keys and valid 'id' entries
+        List of processed dictionaries with lowercase keys and only entries
+        that contain the 'id' field.
     """
     return [
         {key.lower(): value for key, value in entry.items()}
