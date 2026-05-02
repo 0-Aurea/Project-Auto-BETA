@@ -1,108 +1,99 @@
-It seems like you provided a list of improvements for various Python files, but not the actual code for the `database.py` file. However, I can still provide general suggestions for improving a `database.py` file based on best practices.
-
-### Improving the `database.py` File
-
-#### Organize Imports
-
-```python
-# Standard library imports
 import os
 import logging
-
-# Third-party imports
 import psycopg2
 from psycopg2 import Error
+from typing import List, Any, Tuple, Optional
 
-# Local application imports
-from .config import DATABASE_HOST, DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD
-```
+from .config import DATABASE_HOST, DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD, DATABASE_PORT
 
-#### Use Meaningful Variable Names
+logging.basicConfig(level=logging.INFO)
 
-```python
-# Instead of using single-letter variable names, use more descriptive names
-def connect_to_database(host: str, database: str, user: str, password: str) -> object:
+
+def get_connection() -> psycopg2.extensions.connection:
+    """Establish and return a database connection using configuration variables."""
     try:
-        # Establish a connection to the database
         connection = psycopg2.connect(
-            dbname=database,
-            user=user,
-            host=host,
-            password=password
+            host=DATABASE_HOST,
+            database=DATABASE_NAME,
+            user=DATABASE_USER,
+            password=DATABASE_PASSWORD,
+            port=DATABASE_PORT,
+            connect_timeout=10
         )
+        connection.autocommit = False
         return connection
     except Error as e:
-        logging.error(f"Failed to connect to database: {e}")
-```
+        logging.critical("Failed to establish database connection: %s", e)
+        raise
 
-#### Error Handling
 
-```python
-try:
-    # Execute SQL queries or other database operations
-    cursor = connection.cursor()
-    cursor.execute("SELECT * FROM table_name")
-    records = cursor.fetchall()
-except Error as e:
-    logging.error(f"Database operation failed: {e}")
-finally:
-    # Close the cursor and connection
-    if (connection):
-        cursor.close()
-        connection.close()
-        print(" PostgreSQL connection is closed")
-```
+def execute_query(query: str, params: Tuple = None) -> List[Tuple]:
+    """Execute a SELECT query and return results.
+    
+    Args:
+        query: SQL query string with optional parameter placeholders
+        params: Tuple of query parameters
+        
+    Returns:
+        List of tuples containing query results
+    """
+    connection = None
+    try:
+        connection = get_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(query, params)
+            result = cursor.fetchall()
+            return result
+    except Error as e:
+        logging.error("Query execution failed: %s", e)
+        raise
+    finally:
+        if connection:
+            connection.close()
 
-#### Encapsulate Database Operations
 
-```python
-class Database:
-    def __init__(self, host: str, database: str, user: str, password: str):
-        self.host = host
-        self.database = database
-        self.user = user
-        self.password = password
-        self.connection = None
+def execute_command(query: str, params: Tuple = None) -> None:
+    """Execute an INSERT/UPDATE/DELETE command and commit changes.
+    
+    Args:
+        query: SQL command string with optional parameter placeholders
+        params: Tuple of query parameters
+    """
+    connection = None
+    try:
+        connection = get_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(query, params)
+            connection.commit()
+    except Error as e:
+        logging.error("Command execution failed: %s", e)
+        if connection:
+            connection.rollback()
+        raise
+    finally:
+        if connection:
+            connection.close()
 
-    def connect(self):
-        # Establish a connection to the database
-        try:
-            self.connection = psycopg2.connect(
-                dbname=self.database,
-                user=self.user,
-                host=self.host,
-                password=self.password
-            )
-        except Error as e:
-            logging.error(f"Failed to connect to database: {e}")
 
-    def execute_query(self, query: str):
-        try:
-            # Execute SQL queries or other database operations
-            cursor = self.connection.cursor()
-            cursor.execute(query)
-            self.connection.commit()
-        except Error as e:
-            logging.error(f"Database operation failed: {e}")
-
-    def close_connection(self):
-        # Close the connection
-        if (self.connection):
-            self.connection.close()
-            print(" PostgreSQL connection is closed")
-```
-
-### Example Use Case
-
-```python
-if __name__ == "__main__":
-    database_host = DATABASE_HOST
-    database_name = DATABASE_NAME
-    database_user = DATABASE_USER
-    database_password = DATABASE_PASSWORD
-
-    db = Database(database_host, database_name, database_user, database_password)
-    db.connect()
-    db.execute_query("SELECT * FROM table_name")
-    db.close_connection()
-```
+def query_builder(table: str, filters: dict = None) -> str:
+    """Construct a parameterized SELECT query with optional filters.
+    
+    Args:
+        table: Database table name
+        filters: Dictionary of column-value pairs for WHERE clause
+        
+    Returns:
+        Tuple of (query string, parameters tuple)
+    """
+    base_query = f"SELECT * FROM {table}"
+    if not filters:
+        return f"{base_query};", None
+    
+    conditions = []
+    params = []
+    for col, val in filters.items():
+        conditions.append(f"{col} = %s")
+        params.append(val)
+    
+    query = f"{base_query} WHERE {' AND '.join(conditions)};"
+    return query, tuple(params)
