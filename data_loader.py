@@ -14,104 +14,77 @@ import logging
 # Third-party imports
 import pandas as pd
 
-# Local imports
+# Local application imports
 from . import utils
+from .config import DATA_DIR
 ```
 
-### Use Descriptive Variable Names
-
-Instead of using single-letter variable names, use more descriptive names to indicate what the variable represents.
+### Use Meaningful Variable Names
 
 ```python
-# Bad practice
+# Instead of this:
 data = pd.read_csv('data.csv')
 
-# Good practice
-data_file_path = 'data.csv'
+# Use this:
+data_file_path = os.path.join(DATA_DIR, 'data.csv')
 data = pd.read_csv(data_file_path)
 ```
 
-### Handle Exceptions
-
-Data loading can be an I/O-bound operation, and exceptions may occur. Make sure to handle them properly.
+### Handle Errors and Exceptions
 
 ```python
 try:
     data = pd.read_csv(data_file_path)
 except FileNotFoundError:
     logging.error(f"File not found: {data_file_path}")
-    # Handle the exception or raise a custom error
+    # Handle the error or raise a custom exception
+except pd.errors.EmptyDataError:
+    logging.error(f"File is empty: {data_file_path}")
+    # Handle the error or raise a custom exception
 ```
 
-### Type Hints and Docstrings
+### Consider Using Type Hints
 
-Add type hints and docstrings to indicate what the functions do and what they return.
+```python
+def load_data(file_path: str) -> pd.DataFrame:
+    return pd.read_csv(file_path)
+```
+
+### Keep Functions Short and Focused
+
+```python
+def load_data(file_path: str) -> pd.DataFrame:
+    """Load data from a CSV file."""
+    return pd.read_csv(file_path)
+
+def load_data_from_dir(dir_path: str) -> list[pd.DataFrame]:
+    """Load data from all CSV files in a directory."""
+    data_list = []
+    for file_name in os.listdir(dir_path):
+        if file_name.endswith('.csv'):
+            file_path = os.path.join(dir_path, file_name)
+            data_list.append(load_data(file_path))
+    return data_list
+```
+
+### Follow Consistent Naming Conventions
+
+Use either camelCase or underscore notation consistently throughout the code.
+
+### Add Docstrings and Comments
 
 ```python
 def load_data(file_path: str) -> pd.DataFrame:
     """
-    Loads data from a CSV file.
+    Load data from a CSV file.
 
     Args:
-        file_path (str): The path to the CSV file.
+        file_path (str): Path to the CSV file.
 
     Returns:
-        pd.DataFrame: The loaded data.
+        pd.DataFrame: Loaded data.
     """
-    try:
-        data = pd.read_csv(file_path)
-        return data
-    except Exception as e:
-        logging.error(f"Error loading data: {e}")
-        # Handle the exception or raise a custom error
-```
-
-### Consider Using a Config File
-
-If the data loader uses many configuration options (e.g., file paths, data formats), consider using a config file to store these settings.
-
-```python
-import configparser
-
-config = configparser.ConfigParser()
-config.read('data_loader_config.ini')
-
-data_file_path = config['data']['file_path']
-```
-
-By following these best practices, you can improve the `data_loader.py` file and make it more maintainable and efficient. 
-
-Here is an example of what the `data_loader.py` file could look like:
-
-```python
-import logging
-import pandas as pd
-
-def load_data(file_path: str) -> pd.DataFrame:
-    """
-    Loads data from a CSV file.
-
-    Args:
-        file_path (str): The path to the CSV file.
-
-    Returns:
-        pd.DataFrame: The loaded data.
-    """
-    try:
-        data = pd.read_csv(file_path)
-        return data
-    except FileNotFoundError:
-        logging.error(f"File not found: {file_path}")
-        # Handle the exception or raise a custom error
-    except Exception as e:
-        logging.error(f"Error loading data: {e}")
-        # Handle the exception or raise a custom error
-
-def main():
-    data_file_path = 'data.csv'
-    data = load_data(data_file_path)
-    # Process the data
-
-if __name__ == "__main__":
-    main()
+    # Load data from the CSV file
+    data = pd.read_csv(file_path)
+    return data
 ```
