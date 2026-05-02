@@ -9,7 +9,6 @@ import pandas as pd
 from tqdm import tqdm
 
 # Local application imports
-from .models import DataCollector
 from .utils import validate_data, format_timestamp
 
 
@@ -19,129 +18,63 @@ class DataCollector:
     def __init__(self, source_paths: List[str], output_dir: str = "./processed_data"):
         """
         Initialize DataCollector with source paths and output directory.
-        
+
         Args:
-            source_paths: List of file paths to collect data from
-            output_dir: Directory to store processed data (default: ./processed_data)
+            source_paths: List of file paths to collect data from.
+            output_dir: Directory to save processed data. Defaults to "./processed_data".
         """
         self.source_paths = source_paths
         self.output_dir = output_dir
-        self._validate_paths()
-        self._create_output_dir()
-        
-    def _validate_paths(self) -> None:
-        """Validate all source paths exist and are readable."""
-        for path in self.source_paths:
-            if not os.path.exists(path):
-                raise FileNotFoundError(f"Source path not found: {path}")
-            if not os.path.isfile(path):
-                raise ValueError(f"Path is not a file: {path}")
-                
-    def _create_output_dir(self) -> None:
-        """Create output directory if it doesn't exist."""
-        os.makedirs(self.output_dir, exist_ok=True)
-        
-    def collect_data(self, batch_size: int = 1000) -> Tuple[pd.DataFrame, List[str]]:
+        os.makedirs(self.output_dir, exist_ok=True)  # Ensure output directory exists
+
+    def process_data(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Collect and process data from all sources.
-        
+        Process raw data by filtering and transforming keys to lowercase.
+
+        Filters out entries without an 'id' field and transforms all dictionary
+        keys to lowercase for consistency.
+
         Args:
-            batch_size: Number of records to process per batch
-            
+            data: List of dictionaries containing raw data.
+
         Returns:
-            Tuple containing processed DataFrame and list of error messages
-        """
-        all_data = []
-        errors = []
-        
-        for path in tqdm(self.source_paths, desc="Processing files"):
-            try:
-                raw_data = self._load_file(path)
-                processed = self._process_batch(raw_data, batch_size)
-                all_data.extend(processed)
-            except Exception as e:
-                errors.append(f"Error processing {path}: {str(e)}")
-                continue
-                
-        return pd.DataFrame(all_data), errors
-        
-    def _load_file(self, file_path: str) -> List[Dict[str, Any]]:
-        """
-        Load raw data from a file.
-        
-        Args:
-            file_path: Path to the file to load
-            
-        Returns:
-            List of raw data entries
-        """
-        _, ext = os.path.splitext(file_path)
-        try:
-            if ext == ".csv":
-                return pd.read_csv(file_path).to_dict("records")
-            elif ext in [".json", ".jsonl"]:
-                return pd.read_json(file_path, lines=(ext == ".jsonl")).to_dict("records")
-            else:
-                raise ValueError(f"Unsupported file format: {ext}")
-        except Exception as e:
-            raise ValueError(f"Failed to load {file_path}: {str(e)}")
-            
-    def _process_batch(self, 
-                      data_batch: List[Dict[str, Any]], 
-                      batch_size: int) -> List[Dict[str, Any]]:
-        """
-        Process a batch of data with validation and transformation.
-        
-        Args:
-            data_batch: Raw data batch to process
-            batch_size: Maximum number of records to process in this batch
-            
-        Returns:
-            List of processed and validated data entries
+            List of processed dictionaries with lowercase keys and valid 'id' fields.
         """
         processed = []
-        for record in data_batch:
-            try:
-                validated = validate_data(record)
-                transformed = self._transform_record(validated)
-                processed.append(transformed)
-                
-                if len(processed) >= batch_size:
-                    self._save_batch(processed)
-                    processed = []
-            except Exception as e:
-                print(f"Error processing record: {str(e)}")
-                continue
-                
-        if processed:
-            self._save_batch(processed)
-            
+        for entry in data:
+            # Convert keys to lowercase
+            lowercased = {key.lower(): value for key, value in entry.items()}
+            # Check for 'id' field
+            if 'id' in lowercased:
+                processed.append(lowercased)
         return processed
-        
-    def _transform_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+
+    def collect_data(self) -> None:
         """
-        Transform a single record into standardized format.
-        
-        Args:
-            record: Validated data record to transform
-            
-        Returns:
-            Transformed record with standardized keys
+        Collect and process data from all source paths, saving to output directory.
+
+        Handles errors during data collection and validation, logging issues to stderr.
         """
-        return {
-            "id": str(record.get("id", "")),
-            "timestamp": format_timestamp(record.get("timestamp", time.time())),
-            "value": float(record.get("value", 0)),
-            "source": os.path.basename(record.get("source_file", "unknown"))
-        }
-        
-    def _save_batch(self, batch: List[Dict[str, Any]]) -> None:
-        """
-        Save a processed batch to output directory.
-        
-        Args:
-            batch: Processed data batch to save
-        """
-        timestamp = format_timestamp(time.time())
-        output_path = os.path.join(self.output_dir, f"data_{timestamp}.parquet")
-        pd.DataFrame(batch).to_parquet(output_path, index=False)
+        for source_path in tqdm(self.source_paths, desc="Collecting data"):
+            try:
+                # Read data from source
+                df = pd.read_csv(source_path)
+                # Convert DataFrame to list of dictionaries
+                raw_data = df.to_dict(orient='records')
+                # Process data
+                processed_data = self.process_data(raw_data)
+                # Validate data
+                if not validate_data(processed_data):
+                    print(f"Validation failed for {source_path}", file=sys.stderr)
+                    continue
+                # Generate output path with timestamp
+                filename = os.path.basename(source_path)
+                timestamp = format_timestamp()
+                output_filename = f"processed_{timestamp}_{filename}"
+                output_path = os.path.join(self.output_dir, output_filename)
+                # Save processed data
+                pd.DataFrame(processed_data).to_csv(output_path, index=False)
+            except FileNotFoundError:
+                print(f"Source file not found: {source_path}", file=sys.stderr)
+            except Exception as e:
+                print(f"Error processing {source_path}: {str(e)}", file=sys.stderr)
