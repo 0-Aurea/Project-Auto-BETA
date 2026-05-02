@@ -1,16 +1,12 @@
-# Standard library imports
-import os
-import sys
 import time
+import random
 from typing import List, Dict, Any, Optional
-
-# Third-party imports
 import requests
 from bs4 import BeautifulSoup
 
 def scrape_website(url: str, max_retries: int = 3, timeout: int = 10) -> Optional[List[Dict[str, Any]]]:
     """
-    Scrape and parse HTML content from a given URL.
+    Scrape and parse HTML content from a given URL with retry logic.
     
     Args:
         url: Target URL to scrape
@@ -18,53 +14,42 @@ def scrape_website(url: str, max_retries: int = 3, timeout: int = 10) -> Optiona
         timeout: Request timeout in seconds (default: 10)
         
     Returns:
-        List of dictionaries containing extracted data, or None if failed
+        List of dictionaries containing scraped data, or None if all retries fail
+        
+    Raises:
+        ValueError: If URL is empty or invalid
     """
+    if not url.strip():
+        raise ValueError("URL cannot be empty")
+        
+    headers = {
+        'User-Agent': 'WebScraper/1.0 (https://example.com/scraper; scraper@example.com)'
+    }
+    
     for attempt in range(max_retries):
         try:
-            response = requests.get(url, timeout=timeout)
+            response = requests.get(url, headers=headers, timeout=timeout)
             response.raise_for_status()
-            
-            # Add delay between requests to be respectful to servers
-            time.sleep(1)
             
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # Example data extraction - modify based on actual target site structure
-            items = []
-            for item in soup.select('.target-class'):
-                items.append({
-                    'title': item.select_one('.title-class').text.strip(),
-                    'price': item.select_one('.price-class').text.strip(),
-                    'url': item.select_one('a')['href']
+            # Example data extraction - replace with actual implementation
+            data = []
+            for item in soup.find_all('div', class_='item'):
+                data.append({
+                    'title': item.find('h2').text.strip() if item.find('h2') else None,
+                    'content': item.find('p').text.strip() if item.find('p') else None
                 })
-                
-            return items
+            
+            return data
             
         except requests.exceptions.RequestException as e:
-            print(f"Request failed (Attempt {attempt + 1}/{max_retries}): {str(e)}")
             if attempt == max_retries - 1:
+                print(f"Request failed after {max_retries} attempts: {str(e)}", file=sys.stderr)
                 return None
-            time.sleep(2 ** attempt)  # Exponential backoff
+                
+            delay = 1 + (attempt * 0.5) + random.random()
+            print(f"Attempt {attempt + 1} failed. Retrying in {delay:.1f} seconds...")
+            time.sleep(delay)
     
     return None
-
-def process_scraped_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    Process and normalize scraped data.
-    
-    Args:
-        data: List of raw data dictionaries from scraping
-        
-    Returns:
-        Processed data with consistent formatting
-    """
-    processed = []
-    for item in data:
-        processed_item = {
-            'title': item.get('title', '').lower().strip(),
-            'price': float(item.get('price', '0').replace('$', '').strip()),
-            'url': item.get('url', '')
-        }
-        processed.append(processed_item)
-    return processed
