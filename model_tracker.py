@@ -12,8 +12,9 @@ In a large project, it's essential to keep imports organized. Consider using the
 import os
 import sys
 
-# Third-party imports
+# Related third party imports
 import pandas as pd
+import numpy as np
 
 # Local application imports
 from . import utils
@@ -25,11 +26,11 @@ from .models import Model
 Variable names should be descriptive and indicate the purpose of the variable.
 
 ```python
-# Bad practice
+# Instead of:
 x = 5
 
-# Good practice
-model_id = 5
+# Use:
+model_version = 5
 ```
 
 ### Add Docstrings
@@ -37,39 +38,50 @@ model_id = 5
 Docstrings provide a description of what a function or class does.
 
 ```python
-def track_model(model):
+def track_model(model, data):
     """
-    Tracks a model and updates the database.
+    Tracks the performance of a model on a given dataset.
 
     Args:
         model (Model): The model to track.
+        data (pd.DataFrame): The dataset to evaluate on.
 
     Returns:
-        None
+        dict: A dictionary containing the model's performance metrics.
     """
     # implementation
 ```
 
 ### Use Type Hints
 
-Type hints indicate the expected type of a function's arguments and return value.
+Type hints indicate the expected types of function arguments and return values.
 
 ```python
-def track_model(model: Model) -> None:
+def track_model(model: Model, data: pd.DataFrame) -> dict:
     # implementation
 ```
 
 ### Keep Functions Short and Focused
 
-Functions should have a single responsibility and be short.
+Functions should have a single responsibility and be concise.
 
 ```python
-def track_model(model: Model) -> None:
+# Instead of:
+def track_model(model, data):
     # implementation
-    update_database(model)
+    # ...
+    # more implementation
 
-def update_database(model: Model) -> None:
+# Break it down into smaller functions:
+def _prepare_data(data):
     # implementation
+
+def _evaluate_model(model, data):
+    # implementation
+
+def track_model(model, data):
+    prepared_data = _prepare_data(data)
+    return _evaluate_model(model, prepared_data)
 ```
 
 ### Use Logging
@@ -79,69 +91,43 @@ Logging helps with debugging and monitoring.
 ```python
 import logging
 
-def track_model(model: Model) -> None:
-    try:
-        # implementation
-        logging.info("Model tracked successfully")
-    except Exception as e:
-        logging.error("Error tracking model: %s", e)
+logging.basicConfig(level=logging.INFO)
+
+def track_model(model, data):
+    logging.info(f"Tracking model {model.name} on dataset {data.shape}")
+    # implementation
 ```
 
-### Follow PEP 8
-
-The Python Enhancement Proposal 8 (PEP 8) provides guidelines for coding style.
-
-```python
-# Bad practice
-if True:
-    print( 'hello world' )
-
-# Good practice
-if True:
-    print("hello world")
-```
-
-Example of improved `model_tracker.py` file:
+Here's an updated version of the `model_tracker.py` file incorporating these suggestions:
 
 ```python
 import logging
-import os
-import sys
-from typing import Optional
-
 import pandas as pd
-
-from . import utils
 from .models import Model
+from . import utils
 
-def track_model(model: Model) -> None:
+logging.basicConfig(level=logging.INFO)
+
+def track_model(model: Model, data: pd.DataFrame) -> dict:
     """
-    Tracks a model and updates the database.
+    Tracks the performance of a model on a given dataset.
 
     Args:
         model (Model): The model to track.
+        data (pd.DataFrame): The dataset to evaluate on.
 
     Returns:
-        None
+        dict: A dictionary containing the model's performance metrics.
     """
-    try:
-        # implementation
-        update_database(model)
-        logging.info("Model tracked successfully")
-    except Exception as e:
-        logging.error("Error tracking model: %s", e)
+    logging.info(f"Tracking model {model.name} on dataset {data.shape}")
+    prepared_data = _prepare_data(data)
+    return _evaluate_model(model, prepared_data)
 
-def update_database(model: Model) -> None:
+def _prepare_data(data: pd.DataFrame) -> pd.DataFrame:
     # implementation
+    pass
 
-def main() -> Optional[str]:
-    if len(sys.argv) > 1:
-        model_id = sys.argv[1]
-        model = Model(model_id)
-        track_model(model)
-    else:
-        print("Please provide a model ID")
-
-if __name__ == "__main__":
-    main()
+def _evaluate_model(model: Model, data: pd.DataFrame) -> dict:
+    # implementation
+    pass
 ```
