@@ -22,88 +22,87 @@ from ai_brain import Brain
 from artificial.fake import FakeData
 ```
 
-### Structure the Code
-
-Consider organizing the code into sections using comments or docstrings. This will make it easier to navigate and understand the code.
-
-```python
-# app.py
-
-"""
-Flask Application
-================
-
-This file contains the main Flask application.
-"""
-
-# ...
-
-def create_app():
-    """
-    Create the Flask application.
-    """
-    app = Flask(__name__)
-    # ...
-
-    return app
-
-if __name__ == "__main__":
-    app = create_app()
-    app.run(debug=True)
-```
-
 ### Use Meaningful Variable Names
 
-Use descriptive variable names to make the code more readable.
+Use descriptive variable names to improve code readability.
 
 ```python
 # Instead of:
-x = 5
+app = Flask(__name__)
 
 # Use:
-user_id = 5
+application = Flask(__name__)
 ```
 
-### Error Handling
+### Structure Application Code
 
-Implement error handling to make the application more robust.
-
-```python
-try:
-    # Code that might raise an exception
-except Exception as e:
-    # Handle the exception
-    print(f"An error occurred: {e}")
-```
-
-### Code Formatting
-
-Use consistent code formatting throughout the file. Consider using a tool like `black` or `flake8` to enforce formatting standards.
+Organize the application code into sections or functions.
 
 ```python
 # app.py
 
-from flask import Flask
+# ...
 
-app = Flask(__name__)
+def create_application():
+    application = Flask(__name__)
+    application.config.from_object('config.Config')
+    return application
 
-@app.route("/")
-def index():
-    return "Hello, World!"
+def register_routes(application):
+    from routes import main as main_blueprint
+    application.register_blueprint(main_blueprint)
+
+def main():
+    application = create_application()
+    register_routes(application)
+    application.run(debug=True)
+
+if __name__ == '__main__':
+    main()
 ```
 
-By following these best practices, you can improve the structure, readability, and maintainability of the `app.py` file.
+### Handle Errors and Exceptions
 
-Here is an example of a refactored `app.py` file:
+Implement error handling to ensure robustness.
+
+```python
+# app.py
+
+# ...
+
+from werkzeug.exceptions import HTTPException
+
+@app.errorhandler(HTTPException)
+def handle_http_exception(e):
+    return jsonify({'error': e.description}), e.code
+```
+
+### Follow Best Practices
+
+Follow best practices for coding style, documentation, and testing.
+
+```python
+# app.py
+
+# ...
+
+"""
+Application entry point.
+"""
+
+# ...
+```
+
+Example Use Case
+---------------
+
+Here's an improved version of the `app.py` file:
 
 ```python
 # app.py
 
 """
-Flask Application
-================
-
-This file contains the main Flask application.
+Application entry point.
 """
 
 import os
@@ -112,31 +111,25 @@ from flask import Flask, jsonify
 from ai_brain import Brain
 from artificial.fake import FakeData
 
-def create_app():
-    """
-    Create the Flask application.
-    """
-    app = Flask(__name__)
+def create_application():
+    application = Flask(__name__)
+    application.config.from_object('config.Config')
+    return application
 
-    # Initialize the AI brain
-    brain = Brain()
+def register_routes(application):
+    from routes import main as main_blueprint
+    application.register_blueprint(main_blueprint)
 
-    # Define routes
-    @app.route("/")
-    def index():
-        return "Hello, World!"
+def main():
+    application = create_application()
+    register_routes(application)
 
-    @app.route("/api/data")
-    def get_data():
-        try:
-            data = FakeData()
-            return jsonify(data.get_data())
-        except Exception as e:
-            return jsonify({"error": str(e)})
+    @application.errorhandler(Exception)
+    def handle_exception(e):
+        return jsonify({'error': str(e)}), 500
 
-    return app
+    application.run(debug=True)
 
-if __name__ == "__main__":
-    app = create_app()
-    app.run(debug=True)
+if __name__ == '__main__':
+    main()
 ```
