@@ -14,7 +14,7 @@ def main():
     optimizer = optim.SGD(model.parameters(), lr=0.01)
     for epoch in range(10):
         loss, accuracy = train_model(model, device, train_loader, criterion, optimizer)
-        print(f'Epoch {epoch+1}, Loss: {loss:.4f}, Accuracy: {accuracy:.4f}')
+        print(f"Epoch {epoch+1}, Loss: {loss:.4f}, Accuracy: {accuracy:.2f}")
 
     # Train a convolutional neural network
     model = ConvNet().to(device)
@@ -22,7 +22,7 @@ def main():
     optimizer = optim.SGD(model.parameters(), lr=0.01)
     for epoch in range(10):
         loss, accuracy = train_model(model, device, train_loader, criterion, optimizer)
-        print(f'Epoch {epoch+1}, Loss: {loss:.4f}, Accuracy: {accuracy:.4f}')
+        print(f"Epoch {epoch+1}, Loss: {loss:.4f}, Accuracy: {accuracy:.2f}")
 
 def train_model(model, device, loader, criterion, optimizer):
     model.train()
@@ -31,6 +31,8 @@ def train_model(model, device, loader, criterion, optimizer):
     total = 0
     for batch_idx, (data, target) in enumerate(loader):
         data, target = data.to(device), target.to(device)
+        if isinstance(model, Net):
+            data = data.view(-1, 784)
         optimizer.zero_grad()
         output = model(data)
         loss = criterion(output, target)
@@ -43,6 +45,6 @@ def train_model(model, device, loader, criterion, optimizer):
     accuracy = correct / total
     return total_loss / len(loader), accuracy
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
 ```
