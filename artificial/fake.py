@@ -14,7 +14,7 @@ def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         List of processed dictionaries with all keys converted to lowercase.
     """
     return [
-        {key.lower(): value for key, value in entry.items()}
+        {k.lower(): v for k, v in entry.items()}
         for entry in data
         if 'id' in entry
     ]
