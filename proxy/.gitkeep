@@ -1,0 +1,8 @@
+"""
+Proxy Directory Placeholder (.gitkeep)
+
+This file ensures the proxy directory remains tracked in version control systems,
+even when empty. It serves as a structural marker for proxy-related code components
+and prevents accidental deletion of the directory. The file name convention (.gitkeep)
+is specifically recognized by Git to maintain empty directories in repositories.
+"""
