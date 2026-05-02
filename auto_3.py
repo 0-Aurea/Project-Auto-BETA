@@ -12,11 +12,13 @@ In a large project, it's essential to keep imports organized. Consider using the
 import os
 import sys
 
-# Related third party imports
+# Third-party imports
 import requests
+from flask import Flask
 
 # Local application imports
-from . import module
+from . import module1
+from .module2 import function1
 ```
 
 ### Use Meaningful Variable Names
@@ -33,12 +35,17 @@ max_iterations = 5
 
 ### Add Docstrings
 
-Docstrings provide documentation for modules, functions, and classes.
+Docstrings provide a description of what a function or class does.
 
 ```python
+# Bad practice
+def greet(name):
+    print(f"Hello, {name}!")
+
+# Good practice
 def greet(name: str) -> None:
     """
-    Prints a personalized greeting.
+    Prints a personalized greeting message.
 
     Args:
         name (str): The person's name.
@@ -53,84 +60,79 @@ The Python Enhancement Proposal 8 (PEP 8) provides guidelines for coding style.
 ```python
 # Bad practice
 if True:
-    print('hello world')
+    print( 'hello world' )
 
 # Good practice
 if True:
-    print("Hello, World!")
+    print("hello world")
 ```
 
 ### Use Type Hints
 
-Type hints indicate the expected types of function arguments and return values.
+Type hints indicate the expected data type of a function's arguments and return value.
 
 ```python
-def add(a: int, b: int) -> int:
-    return a + b
+# Bad practice
+def greet(name):
+    print(f"Hello, {name}!")
+
+# Good practice
+def greet(name: str) -> None:
+    print(f"Hello, {name}!")
 ```
 
 ### Error Handling
 
-Proper error handling is essential for robust code.
+Proper error handling is essential to make your code more robust.
 
 ```python
-try:
-    # Code that might raise an exception
-    with open("file.txt", "r") as file:
-        content = file.read()
-except FileNotFoundError:
-    print("The file was not found.")
-```
+# Bad practice
+def divide(a, b):
+    return a / b
 
-### Refactor Long Functions
-
-Long functions can be difficult to understand and maintain. Consider breaking them down into smaller functions.
-
-```python
-def calculate_area(width: int, height: int) -> int:
-    return width * height
-
-def calculate_perimeter(width: int, height: int) -> int:
-    return 2 * (width + height)
-```
-
-By applying these best practices, you can improve the readability, maintainability, and reliability of the `auto_3.py` file.
-
-Here is an example of how the improved `auto_3.py` file might look:
-
-```python
-# Standard library imports
-import os
-import sys
-
-# Related third party imports
-import requests
-
-# Local application imports
-from . import module
-
-def greet(name: str) -> None:
+# Good practice
+def divide(a: float, b: float) -> float:
     """
-    Prints a personalized greeting.
+    Divides two numbers.
 
     Args:
-        name (str): The person's name.
+        a (float): The dividend.
+        b (float): The divisor.
+
+    Returns:
+        float: The quotient.
+
+    Raises:
+        ZeroDivisionError: If the divisor is zero.
     """
-    print(f"Hello, {name}!")
+    if b == 0:
+        raise ZeroDivisionError("Cannot divide by zero")
+    return a / b
+```
 
-def add(a: int, b: int) -> int:
-    return a + b
+### Refactor Code
 
-try:
-    # Code that might raise an exception
-    with open("file.txt", "r") as file:
-        content = file.read()
-except FileNotFoundError:
-    print("The file was not found.")
+If a function or method is too long or complex, consider breaking it down into smaller, more manageable pieces.
 
-def calculate_area(width: int, height: int) -> int:
-    return width * height
+```python
+# Bad practice
+def complex_function():
+    # 10 lines of code
+    # 10 lines of code
+    # 10 lines of code
 
-def calculate_perimeter(width: int, height: int) -> int:
-    return 2 * (width + height)
+# Good practice
+def complex_function():
+    step1()
+    step2()
+    step3()
+
+def step1():
+    # 3 lines of code
+
+def step2():
+    # 3 lines of code
+
+def step3():
+    # 3 lines of code
 ```
