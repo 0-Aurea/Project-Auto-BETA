@@ -1,1 +1,28 @@
+name: Cache Blob
 
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  cache-blob:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Cache Blob
+        run: |
+          python .github/workflows/cache_blob.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Test
+        run: |
+          python .github/workflows/tester.py
