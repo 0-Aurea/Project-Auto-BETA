@@ -1,4 +1,4 @@
-It seems like you provided a list of code improvement suggestions for various Python files, but not the actual code for the `database.py` file. However, I can still provide general suggestions for improving a `database.py` file based on best practices.
+It seems like you provided a list of improvements for various Python files, but not the actual code for the `database.py` file. However, I can still provide general suggestions for improving a `database.py` file based on best practices.
 
 ### Improving the `database.py` File
 
@@ -14,78 +14,95 @@ import psycopg2
 from psycopg2 import Error
 
 # Local application imports
-from .config import DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
+from .config import DATABASE_HOST, DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD
 ```
 
 #### Use Meaningful Variable Names
 
 ```python
 # Instead of using single-letter variable names, use more descriptive names
-db_host = DB_HOST
-db_name = DB_NAME
-db_user = DB_USER
-db_password = DB_PASSWORD
-```
-
-#### Handle Database Connections and Errors
-
-```python
-def connect_to_database(host, database, user, password):
+def connect_to_database(host: str, database: str, user: str, password: str) -> object:
     try:
+        # Establish a connection to the database
         connection = psycopg2.connect(
-            host=host,
-            database=database,
+            dbname=database,
             user=user,
+            host=host,
             password=password
         )
         return connection
     except Error as e:
-        logging.error(f"Error connecting to database: {e}")
-        return None
-
-def execute_query(connection, query):
-    try:
-        cursor = connection.cursor()
-        cursor.execute(query)
-        connection.commit()
-        return cursor.fetchall()
-    except Error as e:
-        logging.error(f"Error executing query: {e}")
-        return None
+        logging.error(f"Failed to connect to database: {e}")
 ```
 
-#### Use Parameterized Queries
+#### Error Handling
 
 ```python
-def execute_parameterized_query(connection, query, params):
-    try:
-        cursor = connection.cursor()
-        cursor.execute(query, params)
-        connection.commit()
-        return cursor.fetchall()
-    except Error as e:
-        logging.error(f"Error executing query: {e}")
-        return None
-```
-
-#### Close Database Connections
-
-```python
-def close_connection(connection):
-    if connection:
+try:
+    # Execute SQL queries or other database operations
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM table_name")
+    records = cursor.fetchall()
+except Error as e:
+    logging.error(f"Database operation failed: {e}")
+finally:
+    # Close the cursor and connection
+    if (connection):
+        cursor.close()
         connection.close()
+        print(" PostgreSQL connection is closed")
+```
+
+#### Encapsulate Database Operations
+
+```python
+class Database:
+    def __init__(self, host: str, database: str, user: str, password: str):
+        self.host = host
+        self.database = database
+        self.user = user
+        self.password = password
+        self.connection = None
+
+    def connect(self):
+        # Establish a connection to the database
+        try:
+            self.connection = psycopg2.connect(
+                dbname=self.database,
+                user=self.user,
+                host=self.host,
+                password=self.password
+            )
+        except Error as e:
+            logging.error(f"Failed to connect to database: {e}")
+
+    def execute_query(self, query: str):
+        try:
+            # Execute SQL queries or other database operations
+            cursor = self.connection.cursor()
+            cursor.execute(query)
+            self.connection.commit()
+        except Error as e:
+            logging.error(f"Database operation failed: {e}")
+
+    def close_connection(self):
+        # Close the connection
+        if (self.connection):
+            self.connection.close()
+            print(" PostgreSQL connection is closed")
 ```
 
 ### Example Use Case
 
 ```python
 if __name__ == "__main__":
-    connection = connect_to_database(db_host, db_name, db_user, db_password)
-    if connection:
-        query = "SELECT * FROM my_table"
-        results = execute_query(connection, query)
-        print(results)
-        close_connection(connection)
-```
+    database_host = DATABASE_HOST
+    database_name = DATABASE_NAME
+    database_user = DATABASE_USER
+    database_password = DATABASE_PASSWORD
 
-By following these best practices, you can improve the `database.py` file to make it more maintainable, readable, and efficient. Remember to adapt these suggestions to your specific use case and database schema.
+    db = Database(database_host, database_name, database_user, database_password)
+    db.connect()
+    db.execute_query("SELECT * FROM table_name")
+    db.close_connection()
+```
