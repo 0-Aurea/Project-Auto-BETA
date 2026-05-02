@@ -26,79 +26,84 @@ from data_collector import DataCollector
 # Initialize the Flask app
 app = Flask(__name__)
 
-# Initialize the AI brain
-ai_brain = AI_Brain()
-
-# Initialize data loader and collector
-data_loader = DataLoader()
-data_collector = DataCollector()
-```
-
-### Structure the Application
-
-Consider organizing the application into sections:
-
-1.  **Configuration**: Set up logging, configuration, and initialization of the application.
-2.  **Routes**: Define API endpoints.
-3.  **Error Handling**: Implement error handling and logging.
-
-### Implement Logging
-
-Configure logging to track important events:
-
-```python
-# Configure logging
+# Initialize logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Log important events
-logger.info("Application started")
 ```
 
-### Define Routes
+### Structure the Code
 
-Organize API endpoints:
+Consider organizing the code into sections or functions:
 
 ```python
-# Define routes
-@app.route("/api/data", methods=["GET"])
+# app.py
+
+# ... (imports)
+
+def init_app():
+    """Initialize the Flask app."""
+    app.config.from_object('config.Config')
+    return app
+
+def register_routes(app):
+    """Register API routes."""
+    from routes import api
+    app.register_blueprint(api)
+
+def main():
+    """Run the application."""
+    app = init_app()
+    register_routes(app)
+    app.run(debug=True)
+
+if __name__ == '__main__':
+    main()
+```
+
+### Use Blueprints for Routes
+
+For larger applications, consider using Flask blueprints to organize routes:
+
+```python
+# routes.py
+
+from flask import Blueprint, jsonify
+
+api = Blueprint('api', __name__)
+
+@api.route('/api/data', methods=['GET'])
 def get_data():
-    try:
-        data = data_loader.load_data()
-        return jsonify(data)
-    except Exception as e:
-        logger.error(e)
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/api/collect_data", methods=["POST"])
-def collect_data():
-    try:
-        data_collector.collect_data()
-        return jsonify({"message": "Data collected successfully"})
-    except Exception as e:
-        logger.error(e)
-        return jsonify({"error": str(e)}), 500
+    data = DataLoader().load_data()
+    return jsonify(data)
 ```
 
-### Error Handling
+### Implement Error Handling
 
-Implement error handling:
+Make sure to handle potential errors:
 
 ```python
-# Error handling
+# app.py
+
 @app.errorhandler(404)
-def not_found(e):
-    return jsonify({"error": "Not found"}), 404
+def not_found(error):
+    return jsonify({'error': 'Not found'}), 404
 
 @app.errorhandler(500)
-def internal_server_error(e):
-    logger.error(e)
-    return jsonify({"error": "Internal server error"}), 500
+def internal_server_error(error):
+    logging.error(error)
+    return jsonify({'error': 'Internal server error'}), 500
 ```
 
-### Improved `app.py` File
+### Security Considerations
 
-Here's the improved version:
+Don't forget to consider security best practices:
+
+* Use environment variables for sensitive data (e.g., API keys, database credentials).
+* Implement authentication and authorization mechanisms.
+* Validate user input.
+
+By following these suggestions, you can improve the structure, readability, and maintainability of your `app.py` file.
+
+Here's a complete example:
 
 ```python
 # app.py
@@ -119,49 +124,34 @@ from data_collector import DataCollector
 # Initialize the Flask app
 app = Flask(__name__)
 
-# Configure logging
+# Initialize logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-# Initialize the AI brain
-ai_brain = AI_Brain()
+def init_app():
+    """Initialize the Flask app."""
+    app.config.from_object('config.Config')
+    return app
 
-# Initialize data loader and collector
-data_loader = DataLoader()
-data_collector = DataCollector()
+def register_routes(app):
+    """Register API routes."""
+    from routes import api
+    app.register_blueprint(api)
 
-# Log important events
-logger.info("Application started")
-
-# Define routes
-@app.route("/api/data", methods=["GET"])
-def get_data():
-    try:
-        data = data_loader.load_data()
-        return jsonify(data)
-    except Exception as e:
-        logger.error(e)
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/api/collect_data", methods=["POST"])
-def collect_data():
-    try:
-        data_collector.collect_data()
-        return jsonify({"message": "Data collected successfully"})
-    except Exception as e:
-        logger.error(e)
-        return jsonify({"error": str(e)}), 500
-
-# Error handling
 @app.errorhandler(404)
-def not_found(e):
-    return jsonify({"error": "Not found"}), 404
+def not_found(error):
+    return jsonify({'error': 'Not found'}), 404
 
 @app.errorhandler(500)
-def internal_server_error(e):
-    logger.error(e)
-    return jsonify({"error": "Internal server error"}), 500
+def internal_server_error(error):
+    logging.error(error)
+    return jsonify({'error': 'Internal server error'}), 500
 
-if __name__ == "__main__":
+def main():
+    """Run the application."""
+    app = init_app()
+    register_routes(app)
     app.run(debug=True)
+
+if __name__ == '__main__':
+    main()
 ```
