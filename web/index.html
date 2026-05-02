@@ -16,128 +16,198 @@ CONTENT:
             display: flex;
             flex-direction: column;
             line-height: 1.6;
+            padding: 20px; /* Add some padding to body */
         }
 
         /* App Container */
         #app {
             max-width: 1200px;
+            width: 100%; /* Ensure it takes full width up to max-width */
             margin: 0 auto;
-            padding: 20px;
+            padding: 30px; /* More padding inside the app container */
             flex-grow: 1;
+            background: rgba(255, 255, 255, 0.1); /* Slightly transparent white background */
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             display: flex;
             flex-direction: column;
-            gap: 20px; /* Spacing between main sections */
+            gap: 20px; /* Space between main sections */
         }
 
         /* Header */
         header {
-            background: rgba(0,0,0,0.3);
-            border-radius: 15px;
-            padding: 20px 30px; /* Completed padding */
-            margin-bottom: 20px; /* Added margin-bottom */
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            text-align: center;
+            margin-bottom: 20px;
         }
         header h1 {
-            font-size: 2.5em;
-            font-weight: 700;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-            letter-spacing: -0.5px;
+            font-size: 2.8em;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+        header p {
+            font-size: 1.1em;
+            opacity: 0.8;
         }
 
-        /* Main Content Area */
+        /* Main Content Grid */
         main {
+            display: grid;
+            grid-template-columns: 2fr 1fr; /* Input/Output on left, Modules on right */
+            gap: 25px;
             flex-grow: 1;
+        }
+
+        /* Sections within Main */
+        .main-section {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 25px;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
         }
 
-        /* Sections */
-        section {
-            background: rgba(255,255,255,0.1);
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            border: 1px solid rgba(255,255,255,0.2);
-        }
-        section h2 {
+        .main-section h2 {
             font-size: 1.8em;
             margin-bottom: 20px;
-            color: #e0f2f7;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+            color: #a7d9ff; /* Light blue */
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+            padding-bottom: 10px;
         }
 
-        /* Input & Output Groups */
-        .input-group, .output-group {
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            font-size: 1.1em;
-            margin-bottom: 8px;
-            font-weight: 500;
-            color: #c9e0f6;
-        }
-        textarea {
+        /* Input Section */
+        #input-section textarea {
             width: 100%;
+            height: 150px;
             padding: 15px;
-            border-radius: 10px;
-            border: 1px solid rgba(255,255,255,0.3);
-            background: rgba(0,0,0,0.2);
-            color: white;
-            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
-            font-size: 1em;
-            min-height: 150px;
-            resize: vertical;
-            transition: border-color 0.2s ease, background-color 0.2s ease;
-        }
-        textarea:focus {
-            outline: none;
-            border-color: #a78bfa;
-            background: rgba(0,0,0,0.3);
-        }
-        textarea::placeholder {
-            color: rgba(255,255,255,0.5);
-        }
-
-        /* Buttons */
-        button {
-            display: inline-block;
-            padding: 12px 25px;
-            background: linear-gradient(45deg, #a78bfa 0%, #8b5cf6 100%);
-            color: white;
             border: none;
             border-radius: 8px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-size: 1em;
+            resize: vertical;
+            margin-bottom: 15px;
+            font-family: inherit;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+        }
+        #input-section textarea::placeholder {
+            color: #888;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: auto; /* Push buttons to bottom if section grows */
+        }
+
+        button {
+            background: linear-gradient(90deg, #a7d9ff 0%, #764ba2 100%); /* Blue to Purple */
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
             font-size: 1.1em;
-            font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-            margin-top: 10px;
-            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
         }
         button:hover {
-            background: linear-gradient(45deg, #8b5cf6 0%, #6d28d9 100%);
+            opacity: 0.9;
             transform: translateY(-2px);
-            box-shadow: 0 6px 15px rgba(0,0,0,0.3);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
         }
         button:active {
             transform: translateY(0);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Modules Section */
+        #modules-section .module-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex-grow: 1; /* Allow list to take available space */
+            overflow-y: auto; /* Scroll if too many modules */
+            padding-right: 5px; /* For scrollbar */
+        }
+        .module-item {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 12px 15px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: background 0.2s ease, border-color 0.2s ease;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+        .module-item:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+        .module-item.selected {
+            background: rgba(167, 217, 255, 0.3); /* Lighter blue, semi-transparent */
+            border-color: #a7d9ff;
+        }
+        .module-item span {
+            font-weight: bold;
+        }
+        .module-item .status {
+            font-size: 0.9em;
+            opacity: 0.7;
+        }
+
+        /* Output Section */
+        #output-section pre {
+            background: rgba(0, 0, 0, 0.3);
+            color: #e0e0e0;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+            white-space: pre-wrap; /* Wrap long lines */
+            word-break: break-all; /* Break long words */
+            min-height: 100px;
+            flex-grow: 1; /* Allow output to take available space */
+            overflow-y: auto; /* Scroll if content is too long */
+            max-height: 400px; /* Max height for output */
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
         }
 
         /* Footer */
         footer {
             text-align: center;
-            padding: 20px;
             margin-top: 30px;
             font-size: 0.9em;
-            color: rgba(255,255,255,0.7);
-            background: rgba(0,0,0,0.2);
-            border-radius: 10px;
+            opacity: 0.7;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 900px) {
+            main {
+                grid-template-columns: 1fr; /* Stack columns on smaller screens */
+            }
+            #modules-section {
+                order: -1; /* Place modules section above input/output on mobile */
+            }
+            #input-section textarea {
+                height: 120px;
+            }
+        }
+        @media (max-width: 600px) {
+            #app {
+                padding: 20px;
+            }
+            header h1 {
+                font-size: 2em;
+            }
+            .main-section {
+                padding: 20px;
+            }
+            button {
+                width: 100%; /* Full width buttons on very small screens */
+            }
+            .button-group {
+                flex-direction: column;
+            }
         }
     </style>
 </head>
@@ -145,34 +215,67 @@ CONTENT:
     <div id="app">
         <header>
             <h1>AI Builder System</h1>
-            <!-- Future: Add navigation or user status here -->
+            <p>Define your AI's capabilities and build it.</p>
         </header>
 
         <main>
-            <section id="ai-interaction">
-                <h2>AI Interaction</h2>
-                <div class="input-group">
-                    <label for="prompt-input">Enter your prompt:</label>
-                    <textarea id="prompt-input" placeholder="e.g., 'Generate a Python function to reverse a string'"></textarea>
-                </div>
-                <button id="generate-button">Generate Response</button>
-                <div class="output-group">
-                    <label for="ai-output">AI Response:</label>
-                    <textarea id="ai-output" readonly placeholder="AI response will appear here..."></textarea>
-                </div>
-            </section>
+            <div id="left-panel" style="display: flex; flex-direction: column; gap: 25px;">
+                <section id="input-section" class="main-section">
+                    <h2>Define AI Goal</h2>
+                    <textarea id="ai-prompt" placeholder="Describe the AI you want to build (e.g., 'A customer support chatbot that can answer FAQs and escalate to human agents', 'A Python script that analyzes stock market data and predicts trends')."></textarea>
+                    <div class="button-group">
+                        <button id="build-ai-btn">Build AI</button>
+                        <button id="clear-prompt-btn">Clear Prompt</button>
+                    </div>
+                </section>
 
-            <section id="settings">
-                <h2>Settings</h2>
-                <!-- Placeholder for future settings -->
-                <p>Model selection, temperature, max tokens, etc. will go here to fine-tune AI behavior.</p>
-                <p style="opacity: 0.7; font-size: 0.9em; margin-top: 10px;">(Not yet implemented)</p>
+                <section id="output-section" class="main-section" style="flex-grow: 1;">
+                    <h2>AI Output</h2>
+                    <pre id="ai-output">Your AI build results will appear here...</pre>
+                </section>
+            </div>
+
+
+            <section id="modules-section" class="main-section">
+                <h2>Available Modules</h2>
+                <div class="module-list" id="module-list">
+                    <div class="module-item" data-module="nlp">
+                        <span>Natural Language Processing</span>
+                        <span class="status">Core</span>
+                    </div>
+                    <div class="module-item" data-module="data-analysis">
+                        <span>Data Analysis Engine</span>
+                        <span class="status">Core</span>
+                    </div>
+                    <div class="module-item" data-module="web-scraping">
+                        <span>Web Scraping Agent</span>
+                        <span class="status">Tool</span>
+                    </div>
+                    <div class="module-item" data-module="image-recognition">
+                        <span>Image Recognition</span>
+                        <span class="status">Extension</span>
+                    </div>
+                    <div class="module-item" data-module="api-integration">
+                        <span>API Integration</span>
+                        <span class="status">Tool</span>
+                    </div>
+                    <div class="module-item" data-module="database-connector">
+                        <span>Database Connector</span>
+                        <span class="status">Tool</span>
+                    </div>
+                    <div class="module-item" data-module="sentiment-analysis">
+                        <span>Sentiment Analysis</span>
+                        <span class="status">Extension</span>
+                    </div>
+                </div>
             </section>
         </main>
 
         <footer>
-            <p>&copy; 2023 AI Builder. All rights reserved.</p>
+            <p>&copy; 2023 AI Builder System. All rights reserved.</p>
         </footer>
     </div>
+
+    <script src="js/script.js"></script>
 </body>
 </html>
