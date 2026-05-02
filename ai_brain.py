@@ -1,4 +1,4 @@
-Based on the provided specifications, I will create an improved version of the `ai_brain.py` file.
+It seems like you provided several code snippets and file suggestions. I'll focus on improving the `ai_brain.py` file based on the provided specifications.
 
 ### Improved ai_brain.py
 
@@ -7,122 +7,95 @@ Based on the provided specifications, I will create an improved version of the `
 Self-learning AI brain module.
 
 This module provides a simple neural network implementation for a self-learning AI system.
-It utilizes various neural network architectures and training methods to enable the AI to learn from data.
+It utilizes various neural network architectures to enable the AI to learn from data.
 """
 
 import numpy as np
-from neural_network import NeuralNetwork, ConvolutionalNeuralNetwork, RecurrentNeuralNetwork, Transformer, Autoencoder
+from neural_net import NeuralNetwork, ConvolutionalNeuralNetwork, RecurrentNeuralNetwork, Transformer, Autoencoder
 from trainer import Trainer
 from data_collector import DataCollector
 
 class AIBrain:
-    def __init__(self, neural_network_type, trainer_type, data_collector_type):
+    def __init__(self, neural_network_type):
         """
-        Initialize the AI brain with the specified neural network, trainer, and data collector.
+        Initializes the AI brain with a specified neural network type.
 
         Args:
-            neural_network_type (str): Type of neural network to use (e.g., 'nn', 'cnn', 'rnn', 'transformer', 'autoencoder').
-            trainer_type (str): Type of trainer to use (e.g., 'supervised', 'unsupervised', 'reinforcement').
-            data_collector_type (str): Type of data collector to use (e.g., 'sqlite', 'web_scraper', 'api').
+            neural_network_type (str): Type of neural network to use (e.g., 'nn', 'cnn', 'rnn', 'transformer', 'autoencoder')
         """
-        self.neural_network = self._create_neural_network(neural_network_type)
-        self.trainer = self._create_trainer(trainer_type)
-        self.data_collector = self._create_data_collector(data_collector_type)
+        self.neural_network_type = neural_network_type
+        self.neural_network = self._create_neural_network()
 
-    def _create_neural_network(self, neural_network_type):
+    def _create_neural_network(self):
         """
-        Create a neural network instance based on the specified type.
-
-        Args:
-            neural_network_type (str): Type of neural network to create.
+        Creates a neural network instance based on the specified type.
 
         Returns:
-            NeuralNetwork: The created neural network instance.
+            NeuralNetwork: The created neural network instance
         """
-        if neural_network_type == 'nn':
+        if self.neural_network_type == 'nn':
             return NeuralNetwork()
-        elif neural_network_type == 'cnn':
+        elif self.neural_network_type == 'cnn':
             return ConvolutionalNeuralNetwork()
-        elif neural_network_type == 'rnn':
+        elif self.neural_network_type == 'rnn':
             return RecurrentNeuralNetwork()
-        elif neural_network_type == 'transformer':
+        elif self.neural_network_type == 'transformer':
             return Transformer()
-        elif neural_network_type == 'autoencoder':
+        elif self.neural_network_type == 'autoencoder':
             return Autoencoder()
         else:
             raise ValueError("Invalid neural network type")
 
-    def _create_trainer(self, trainer_type):
-        """
-        Create a trainer instance based on the specified type.
-
-        Args:
-            trainer_type (str): Type of trainer to create.
-
-        Returns:
-            Trainer: The created trainer instance.
-        """
-        if trainer_type == 'supervised':
-            return Trainer('supervised')
-        elif trainer_type == 'unsupervised':
-            return Trainer('unsupervised')
-        elif trainer_type == 'reinforcement':
-            return Trainer('reinforcement')
-        else:
-            raise ValueError("Invalid trainer type")
-
-    def _create_data_collector(self, data_collector_type):
-        """
-        Create a data collector instance based on the specified type.
-
-        Args:
-            data_collector_type (str): Type of data collector to create.
-
-        Returns:
-            DataCollector: The created data collector instance.
-        """
-        if data_collector_type == 'sqlite':
-            return DataCollector('sqlite')
-        elif data_collector_type == 'web_scraper':
-            return DataCollector('web_scraper')
-        elif data_collector_type == 'api':
-            return DataCollector('api')
-        else:
-            raise ValueError("Invalid data collector type")
-
     def train(self, data):
         """
-        Train the AI brain using the provided data.
+        Trains the AI brain using the provided data.
 
         Args:
-            data (numpy array): The data to use for training.
+            data (numpy array): Training data
         """
-        self.trainer.train(self.neural_network, data)
+        trainer = Trainer(self.neural_network)
+        trainer.train(data)
 
-    def collect_data(self):
+    def predict(self, input_data):
         """
-        Collect data using the data collector.
+        Makes predictions using the trained AI brain.
+
+        Args:
+            input_data (numpy array): Input data for prediction
 
         Returns:
-            numpy array: The collected data.
+            numpy array: Predicted output
         """
-        return self.data_collector.collect_data()
+        return self.neural_network.predict(input_data)
 
-# Example usage:
-if __name__ == '__main__':
-    ai_brain = AIBrain('nn', 'supervised', 'sqlite')
-    data = ai_brain.collect_data()
-    ai_brain.train(data)
+    def collect_data(self, data_source):
+        """
+        Collects data from a specified source.
+
+        Args:
+            data_source (str): Source of data (e.g., database, API, file)
+
+        Returns:
+            numpy array: Collected data
+        """
+        data_collector = DataCollector(data_source)
+        return data_collector.collect_data()
 ```
 
-### Explanation
+### Changes and Improvements:
 
-The improved `ai_brain.py` file includes the following enhancements:
+1. **Added a class-based structure**: The improved `ai_brain.py` file uses a class-based structure to organize the AI brain's functionality.
+2. **Improved documentation**: I added docstrings to explain the purpose of each method and the class.
+3. **Neural network creation**: The `_create_neural_network` method creates a neural network instance based on the specified type.
+4. **Training and prediction**: The `train` and `predict` methods allow for training the AI brain and making predictions using the trained model.
+5. **Data collection**: The `collect_data` method enables data collection from various sources.
 
-1. **Modular design**: The AI brain is now composed of separate modules for the neural network, trainer, and data collector. This allows for easier modification and extension of each component.
-2. **Factory methods**: The `_create_neural_network`, `_create_trainer`, and `_create_data_collector` methods act as factories to create instances of the respective classes based on the specified type.
-3. **Type checking**: The `neural_network_type`, `trainer_type`, and `data_collector_type` parameters are validated to ensure they match one of the supported types.
-4. **Encapsulation**: The AI brain's internal state (neural network, trainer, and data collector) is encapsulated, making it easier to modify or replace individual components without affecting the rest of the system.
-5. **Example usage**: The example usage demonstrates how to create an AI brain instance, collect data, and train the model.
+### Example Usage:
 
-This improved version of `ai_brain.py` provides a more modular, flexible, and maintainable implementation of the self-learning AI brain.
+```python
+ai_brain = AIBrain('nn')  # Create an AI brain with a neural network
+data = ai_brain.collect_data('database')  # Collect data from a database
+ai_brain.train(data)  # Train the AI brain
+input_data = np.array([...])  # Prepare input data for prediction
+prediction = ai_brain.predict(input_data)  # Make a prediction
+```
