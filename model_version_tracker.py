@@ -17,22 +17,6 @@ def parse_version(version_str: str) -> List[int]:
     """
     try:
         return [int(part) for part in version_str.split('.')]
-    except ValueError as e:
-        raise ValueError(f"Invalid version string: {version_str}") from e
-
-def compare_versions(version1: str, version2: str) -> int:
-    """
-    Compare two version strings.
-    
-    Returns:
-        1 if version1 is greater, -1 if version2 is greater, 0 if equal.
-    """
-    v1 = parse_version(version1)
-    v2 = parse_version(version2)
-    
-    if v1 > v2:
-        return 1
-    elif v1 < v2:
-        return -1
-    else:
-        return 0
+    except ValueError:
+        raise ValueError(f"Invalid version string '{version_str}': "
+                         "All version parts must be integers.") from None
