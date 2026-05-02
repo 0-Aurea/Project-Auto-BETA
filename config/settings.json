@@ -1,0 +1,11 @@
+{
+    "app": {
+        "name": "AI Builder",
+        "version": "1.0.0",
+        "environment": "development"
+    },
+    "ai": {
+        "defaultModel": "neural",
+        "learningRate": 0.01
+    }
+}
