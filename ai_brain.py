@@ -1,7 +1,7 @@
 CONTENT:
 ```python
 import numpy as np
-from neural_net import NeuralNetwork
+from neural_net import NeuralNetwork, ConvolutionalNeuralNetwork
 from trainer import Trainer
 
 def main():
@@ -23,3 +23,15 @@ def main():
     # Evaluate neural network
     accuracy = trainer.evaluate()
     print(f"Accuracy: {accuracy:.2f}")
+
+    # Initialize convolutional neural network
+    convolutional_neural_network = ConvolutionalNeuralNetwork(1, 10, 10)
+
+    # Train convolutional neural network
+    convolutional_trainer = Trainer(convolutional_neural_network, inputs, targets)
+    convolutional_trainer.train(0.1, 10000)
+
+    # Evaluate convolutional neural network
+    convolutional_accuracy = convolutional_trainer.evaluate()
+    print(f"Convolutional Accuracy: {convolutional_accuracy:.2f}")
+```
