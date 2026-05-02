@@ -12,112 +12,146 @@ In a large project, it's essential to keep imports organized. Consider using the
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import logging
-from logging.handlers import RotatingFileHandler
+from flask_sqlalchemy import SQLAlchemy
+
+import os
+import sys
 
 # Local imports
 from ai_brain import AiBrain
 from data_collector import DataCollector
 ```
 
-### Create a Flask Application Instance
+### Structure the Application
 
-Create a Flask application instance and configure it:
+Consider organizing the application into separate sections or functions:
 
 ```python
+# app.py
+
 app = Flask(__name__)
 CORS(app)
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database.db"
+db = SQLAlchemy(app)
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-handler = RotatingFileHandler('app.log', maxBytes=10000, backupCount=1)
-logging.getLogger('').addHandler(handler)
-```
+# Initialize AI Brain and Data Collector
+ai_brain = AiBrain()
+data_collector = DataCollector()
 
-### Define Routes
+# Define routes
+@app.route("/")
+def index():
+    return "Welcome to the AI application!"
 
-Define routes for your application:
+@app.route("/train", methods=["POST"])
+def train():
+    # Call AI Brain to train the model
+    ai_brain.train()
+    return jsonify({"message": "Model trained successfully"})
 
-```python
-@app.route('/api/data', methods=['GET'])
-def get_data():
-    data_collector = DataCollector()
-    data = data_collector.collect_data()
-    return jsonify(data)
-
-@app.route('/api/predict', methods=['POST'])
-def make_prediction():
-    ai_brain = AiBrain()
-    data = request.get_json()
-    prediction = ai_brain.make_prediction(data)
-    return jsonify({'prediction': prediction})
+if __name__ == "__main__":
+    app.run(debug=True)
 ```
 
 ### Error Handling
 
-Implement error handling to catch any exceptions:
+Implement error handling to ensure the application doesn't crash unexpectedly:
 
 ```python
+# app.py
+
 @app.errorhandler(404)
 def not_found(error):
-    return jsonify({'error': 'Not found'}), 404
+    return jsonify({"message": "Not found"}), 404
 
 @app.errorhandler(500)
 def internal_server_error(error):
-    return jsonify({'error': 'Internal server error'}), 500
+    return jsonify({"message": "Internal server error"}), 500
 ```
 
-### Run the Application
+### Logging
 
-Run the Flask application:
+Consider adding logging to track application events:
 
 ```python
-if __name__ == '__main__':
-    app.run(debug=True)
+# app.py
+
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# ...
+
+@app.route("/train", methods=["POST"])
+def train():
+    try:
+        # Call AI Brain to train the model
+        ai_brain.train()
+        logger.info("Model trained successfully")
+        return jsonify({"message": "Model trained successfully"})
+    except Exception as e:
+        logger.error(f"Error training model: {e}")
+        return jsonify({"message": "Error training model"}), 500
 ```
 
-### Complete Code
+Full Code
+---------
 
-Here's the complete improved `app.py` file:
+Here's the improved `app.py` file:
 
 ```python
+# app.py
+
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import logging
-from logging.handlers import RotatingFileHandler
+from flask_sqlalchemy import SQLAlchemy
 
+import os
+import sys
+import logging
+
+# Local imports
 from ai_brain import AiBrain
 from data_collector import DataCollector
 
 app = Flask(__name__)
 CORS(app)
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database.db"
+db = SQLAlchemy(app)
+
+# Initialize AI Brain and Data Collector
+ai_brain = AiBrain()
+data_collector = DataCollector()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
-handler = RotatingFileHandler('app.log', maxBytes=10000, backupCount=1)
-logging.getLogger('').addHandler(handler)
+logger = logging.getLogger(__name__)
 
-@app.route('/api/data', methods=['GET'])
-def get_data():
-    data_collector = DataCollector()
-    data = data_collector.collect_data()
-    return jsonify(data)
+# Define routes
+@app.route("/")
+def index():
+    return "Welcome to the AI application!"
 
-@app.route('/api/predict', methods=['POST'])
-def make_prediction():
-    ai_brain = AiBrain()
-    data = request.get_json()
-    prediction = ai_brain.make_prediction(data)
-    return jsonify({'prediction': prediction})
+@app.route("/train", methods=["POST"])
+def train():
+    try:
+        # Call AI Brain to train the model
+        ai_brain.train()
+        logger.info("Model trained successfully")
+        return jsonify({"message": "Model trained successfully"})
+    except Exception as e:
+        logger.error(f"Error training model: {e}")
+        return jsonify({"message": "Error training model"}), 500
 
 @app.errorhandler(404)
 def not_found(error):
-    return jsonify({'error': 'Not found'}), 404
+    return jsonify({"message": "Not found"}), 404
 
 @app.errorhandler(500)
 def internal_server_error(error):
-    return jsonify({'error': 'Internal server error'}), 500
+    return jsonify({"message": "Internal server error"}), 500
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
 ```
