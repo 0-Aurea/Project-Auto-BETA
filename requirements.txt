@@ -19,8 +19,8 @@ python-dotenv==1.0.0
 sqlalchemy==2.0.21
 
 # API & Web
-flask==2.3.2
 fastapi==0.95.0
+flask==2.3.2
 uvicorn==0.21.1
 
 # Security
