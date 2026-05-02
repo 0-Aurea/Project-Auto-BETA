@@ -12,7 +12,7 @@ In a large project, it's essential to keep imports organized. Consider using the
 import os
 import sys
 
-# Related third party imports
+# Third-party imports
 import requests
 from flask import Flask
 
@@ -22,88 +22,57 @@ from . import module
 
 ### Use Meaningful Variable Names
 
-Variable names should be descriptive and indicate the purpose of the variable.
+Variable names like `x`, `y`, and `z` are not descriptive. Consider using more meaningful names to improve code readability.
 
 ```python
-# Bad practice
+# Before
 x = 5
+y = 10
 
-# Good practice
-number_of_iterations = 5
+# After
+width = 5
+height = 10
 ```
 
 ### Add Docstrings
 
-Docstrings provide documentation for modules, functions, and classes.
+Docstrings provide a description of what a function or module does. Consider adding docstrings to improve code readability and maintainability.
 
 ```python
-# Bad practice
+# Before
 def greet(name):
-  print(f"Hello, {name}!")
+    print(f"Hello, {name}!")
 
-# Good practice
+# After
 def greet(name: str) -> None:
     """
-    Print a personalized greeting message.
+    Prints a personalized greeting message.
 
     Args:
         name (str): The person's name.
-
-    Returns:
-        None
     """
     print(f"Hello, {name}!")
-```
-
-### Follow PEP 8 Guidelines
-
-The Python Enhancement Proposal 8 (PEP 8) provides guidelines for coding style.
-
-```python
-# Bad practice
-if True:
-    print( 'hello world' )
-
-# Good practice
-if True:
-    print("hello world")
 ```
 
 ### Use Type Hints
 
-Type hints indicate the expected types of function arguments and return values.
+Type hints indicate the expected data type of a variable, function parameter, or return type. Consider adding type hints to improve code readability and enable static type checking.
 
 ```python
-# Bad practice
-def greet(name):
-  print(f"Hello, {name}!")
+# Before
+def add(a, b):
+    return a + b
 
-# Good practice
-def greet(name: str) -> None:
-    print(f"Hello, {name}!")
+# After
+def add(a: int, b: int) -> int:
+    return a + b
 ```
 
-### Consider Using a Linter
+### Follow PEP 8 Guidelines
 
-A linter can help catch errors and enforce coding standards.
+The Python Enhancement Proposal 8 (PEP 8) provides guidelines for coding style, documentation, and best practices. Consider following PEP 8 guidelines to improve code readability and consistency.
 
-Example of using the `pylint` linter:
-
-```bash
-pylint auto_0.py
-```
-
-### Consider Using a Formatter
-
-A formatter can help maintain a consistent coding style.
-
-Example of using the `black` formatter:
-
-```bash
-black auto_0.py
-```
-
-By following these suggestions, you can improve the quality and readability of the `auto_0.py` file. 
+By applying these suggestions, you can improve the overall quality and maintainability of the `auto_0.py` file.
 
 Here is an example of how the improved `auto_0.py` file could look:
 
@@ -112,7 +81,7 @@ Here is an example of how the improved `auto_0.py` file could look:
 import os
 import sys
 
-# Related third party imports
+# Third-party imports
 import requests
 from flask import Flask
 
@@ -121,21 +90,28 @@ from . import module
 
 def greet(name: str) -> None:
     """
-    Print a personalized greeting message.
+    Prints a personalized greeting message.
 
     Args:
         name (str): The person's name.
-
-    Returns:
-        None
     """
     print(f"Hello, {name}!")
 
-def main() -> None:
-    number_of_iterations = 5
-    for _ in range(number_of_iterations):
-        greet("World")
+def add(a: int, b: int) -> int:
+    """
+    Returns the sum of two integers.
+
+    Args:
+        a (int): The first integer.
+        b (int): The second integer.
+
+    Returns:
+        int: The sum of a and b.
+    """
+    return a + b
 
 if __name__ == "__main__":
-    main()
+    width = 5
+    height = 10
+    print(f"Width: {width}, Height: {height}")
 ```
