@@ -21,96 +21,83 @@ from . import another_module
 
 ### Use Meaningful Variable Names
 
-Use descriptive variable names to improve code readability.
+Variable names should be descriptive and indicate the purpose of the variable.
 
 ```python
-# Before
-x = 5
-y = 10
+# Bad practice
+data = [1, 2, 3]
 
-# After
-memory_size = 5
-cache_size = 10
+# Good practice
+memory_usage = [1, 2, 3]
 ```
 
 ### Add Docstrings
 
-Include docstrings to provide a description of the module, functions, and classes.
+Docstrings provide a description of what a function or module does.
 
 ```python
-"""
-Memory Management Module
-
-This module provides functions for managing memory.
-"""
-
-def allocate_memory(size):
+def calculate_memory_usage():
     """
-    Allocate memory of a given size.
-
-    Args:
-        size (int): The size of memory to allocate.
+    Calculate the memory usage of the system.
 
     Returns:
-        int: The allocated memory address.
+        int: The memory usage in bytes.
     """
+    # implementation
     pass
 ```
 
 ### Follow PEP 8 Guidelines
 
-Ensure that the code adheres to PEP 8 guidelines, including:
+The Python Enhancement Proposal 8 (PEP 8) provides guidelines for coding style, documentation, and best practices.
 
-* Using 4 spaces for indentation
-* Keeping lines under 80 characters
-* Using blank lines to separate logical sections of code
+```python
+# Bad practice
+if True:
+    print( 'hello world' )
+
+# Good practice
+if True:
+    print("hello world")
+```
+
+### Use Type Hints
+
+Type hints indicate the expected type of a function's arguments and return value.
+
+```python
+def greet(name: str) -> None:
+    print(f"Hello, {name}!")
+```
 
 ### Example of Improved Code
 
-Here's an example of improved code:
+Here's an example of how the `memory.py` file could be improved:
 
 ```python
-"""
-Memory Management Module
-
-This module provides functions for managing memory.
-"""
-
+# Standard library imports
 import os
+import sys
 
-def allocate_memory(size):
+# Third-party imports
+import psutil
+
+def get_memory_usage() -> int:
     """
-    Allocate memory of a given size.
-
-    Args:
-        size (int): The size of memory to allocate.
+    Get the current memory usage of the system.
 
     Returns:
-        int: The allocated memory address.
+        int: The memory usage in bytes.
     """
-    if size < 0:
-        raise ValueError("Memory size cannot be negative")
+    memory_usage = psutil.virtual_memory().used
+    return memory_usage
 
-    # Allocate memory using a simple example
-    memory_address = id(bytearray(size))
-    return memory_address
+def main() -> None:
+    memory_usage = get_memory_usage()
+    print(f"Memory usage: {memory_usage} bytes")
 
-def deallocate_memory(memory_address):
-    """
-    Deallocate memory at a given address.
-
-    Args:
-        memory_address (int): The address of memory to deallocate.
-    """
-    # Deallocate memory using a simple example
-    del bytearray(memory_address)
-
-# Usage example
-memory_size = 1024
-memory_address = allocate_memory(memory_size)
-print(f"Allocated memory at address {memory_address}")
-
-deallocate_memory(memory_address)
+if __name__ == "__main__":
+    main()
 ```
 
-By following these suggestions, you can improve the `memory.py` file to make it more readable, maintainable, and efficient.
+By following these best practices, the `memory.py` file can be improved to be more readable, maintainable, and efficient.
