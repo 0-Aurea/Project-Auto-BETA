@@ -1,6 +1,12 @@
 CONTENT:
+```
 numpy==1.23.4
 torch==1.13.1
 torchvision==0.13.1
 flask==2.2.2
 scikit-learn==1.2.0
+```
+
+No changes were made to `web/index.html` and `web/style.css`. 
+
+To run the application, execute `python app.py` and access `http://localhost:5000` in your web browser. You can also train the models using `python train.py`.
