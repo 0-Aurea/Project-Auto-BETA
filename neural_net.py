@@ -16,68 +16,80 @@ class NeuralNetwork:
         self.bias1 = np.zeros((1, hidden_size))
         self.bias2 = np.zeros((1, output_size))
 
-    def sigmoid(self, x):
-        return 1 / (1 + np.exp(-x))
-
     def train(self, inputs, targets, learning_rate):
         for _ in range(1000):
-            hidden_layer = self.sigmoid(np.dot(inputs, self.weights1) + self.bias1)
-            output_layer = self.sigmoid(np.dot(hidden_layer, self.weights2) + self.bias2)
+            hidden_layer = np.tanh(np.dot(inputs, self.weights1) + self.bias1)
+            outputs = np.tanh(np.dot(hidden_layer, self.weights2) + self.bias2)
 
-            output_error = targets - output_layer
-            output_delta = output_error * output_layer * (1 - output_layer)
+            output_error = targets - outputs
+            hidden_error = output_error.dot(self.weights2.T)
 
-            hidden_error = output_delta.dot(self.weights2.T)
-            hidden_delta = hidden_error * hidden_layer * (1 - hidden_layer)
+            self.weights2 += learning_rate * hidden_layer.T.dot(output_error)
+            self.bias2 += learning_rate * np.sum(output_error, axis=0, keepdims=True)
 
-            self.weights2 += learning_rate * hidden_layer.T.dot(output_delta)
-            self.bias2 += learning_rate * np.sum(output_delta, axis=0, keepdims=True)
+            self.weights1 += learning_rate * inputs.T.dot(hidden_error)
+            self.bias1 += learning_rate * np.sum(hidden_error, axis=0, keepdims=True)
 
-            self.weights1 += learning_rate * inputs.T.dot(hidden_delta)
-            self.bias1 += learning_rate * np.sum(hidden_delta, axis=0, keepdims=True)
+class ConvolutionalNeuralNetwork(nn.Module):
+    def __init__(self):
+        super(ConvolutionalNeuralNetwork, self).__init__()
+        self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
+        self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
+        self.conv2_drop = nn.Dropout2d()
+        self.fc1 = nn.Linear(320, 50)
+        self.fc2 = nn.Linear(50, 10)
 
-class ConvolutionalNeuralNetwork:
-    def __init__(self, input_size, hidden_size, output_size):
-        self.conv_net = ConvNet()
+    def forward(self, x):
+        x = torch.relu(torch.max_pool2d(self.conv1(x), 2))
+        x = torch.relu(torch.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
+        x = x.view(-1, 320)
+        x = torch.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
 
-    def train(self, inputs, targets, learning_rate):
-        criterion = nn.CrossEntropyLoss()
-        optimizer = optim.SGD(self.conv_net.parameters(), lr=learning_rate)
+class RecurrentNeuralNetwork(nn.Module):
+    def __init__(self):
+        super(RecurrentNeuralNetwork, self).__init__()
+        self.rnn = nn.LSTM(1, 10, num_layers=1, batch_first=True)
+        self.fc = nn.Linear(10, 1)
 
-        for epoch in range(1000):
-            optimizer.zero_grad()
-            outputs = self.conv_net(inputs)
-            loss = criterion(outputs, targets)
-            loss.backward()
-            optimizer.step()
+    def forward(self, x):
+        h0 = torch.zeros(1, x.size(0), 10).to(x.device)
+        c0 = torch.zeros(1, x.size(0), 10).to(x.device)
 
-class RecurrentNeuralNetwork:
-    def __init__(self, input_size, hidden_size, output_size):
-        self.recurrent_net = RecurrentNet()
+        out, _ = self.rnn(x, (h0, c0))
+        out = self.fc(out[:, -1, :])
+        return out
 
-    def train(self, inputs, targets, learning_rate):
-        criterion = nn.MSELoss()
-        optimizer = optim.SGD(self.recurrent_net.parameters(), lr=learning_rate)
+class Transformer(nn.Module):
+    def __init__(self):
+        super(Transformer, self).__init__()
+        self.encoder_layer = nn.TransformerEncoderLayer(d_model=512, nhead=8, dim_feedforward=2048, dropout=0.1)
+        self.encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=6)
 
-        for epoch in range(1000):
-            optimizer.zero_grad()
-            outputs = self.recurrent_net(inputs)
-            loss = criterion(outputs, targets)
-            loss.backward()
-            optimizer.step()
+    def forward(self, x):
+        return self.encoder(x)
 
-class Transformer:
-    def __init__(self, input_size, hidden_size, output_size):
-        self.transformer = nn.TransformerEncoderLayer(d_model=input_size, nhead=10, dim_feedforward=hidden_size)
+class Autoencoder(nn.Module):
+    def __init__(self):
+        super(Autoencoder, self).__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(784, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32)
+        )
+        self.decoder = nn.Sequential(
+            nn.Linear(32, 64),
+            nn.ReLU(),
+            nn.Linear(64, 128),
+            nn.ReLU(),
+            nn.Linear(128, 784)
+        )
 
-    def train(self, inputs, targets, learning_rate):
-        criterion = nn.MSELoss()
-        optimizer = optim.SGD(self.transformer.parameters(), lr=learning_rate)
-
-        for epoch in range(1000):
-            optimizer.zero_grad()
-            outputs = self.transformer(inputs)
-            loss = criterion(outputs, targets)
-            loss.backward()
-            optimizer.step()
+    def forward(self, x):
+        encoded = self.encoder(x)
+        decoded = self.decoder(encoded)
+        return decoded
 ```
