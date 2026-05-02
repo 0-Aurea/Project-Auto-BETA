@@ -19,23 +19,18 @@ def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Process raw data by filtering and transforming keys to lowercase.
     
-    Filters out entries without an 'id' field and transforms all dictionary
-    keys to lowercase for consistency.
+    Filters out entries without an 'id' field (case-insensitive check) and 
+    transforms all dictionary keys to lowercase for consistency.
     
     Args:
-        data: List of dictionaries containing raw data entries
+        data: List of dictionaries with potentially mixed-case keys
         
     Returns:
-        List of processed dictionaries with lowercase keys and valid IDs
+        List of processed dictionaries with lowercase keys and valid 'id' fields
     """
-    try:
-        # Filter entries with 'id' field and transform keys
-        return [
-            _transform_keys(item)
-            for item in data
-            if 'id' in item
-        ]
-    except (TypeError, AttributeError) as e:
-        # Handle cases where input isn't properly structured
-        print(f"Data processing error: {e}", file=sys.stderr)
-        return []
+    processed = []
+    for item in data:
+        transformed = _transform_keys(item)
+        if "id" in transformed:
+            processed.append(transformed)
+    return processed
