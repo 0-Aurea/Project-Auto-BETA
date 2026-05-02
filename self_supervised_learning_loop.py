@@ -13,57 +13,50 @@ def train_self_supervised_model(
     model: nn.Module,
     data_loader: DataLoader,
     optimizer: optim.Optimizer,
+    loss_criterion: nn.Module,
     num_epochs: int = 10,
     device: Optional[torch.device] = None
 ) -> Tuple[nn.Module, Dict[int, float]]:
     """
-    Train a self-supervised learning model using the provided data loader and optimizer.
+    Train a self-supervised learning model using the provided data and optimizer.
 
     Args:
         model: Neural network model to train.
-        data_loader: DataLoader providing training data.
-        optimizer: Optimizer for updating model parameters.
+        data_loader: DataLoader providing training batches.
+        optimizer: Optimizer for parameter updates.
+        loss_criterion: Loss function to optimize.
         num_epochs: Number of training epochs (default: 10).
-        device: Target device (e.g., 'cuda', 'cpu'). If None, uses GPU if available.
+        device: Computation device (CPU/GPU). If None, uses CUDA if available.
 
     Returns:
         Tuple containing:
         - Trained model
-        - Dictionary mapping epoch number to average loss
+        - Dictionary mapping epoch numbers to average loss values
     """
-    # Set device
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
+    epoch_loss_dict: Dict[int, float] = {}
 
-    # Initialize loss tracking
-    epoch_losses = {}
-    criterion = nn.CrossEntropyLoss()  # Assuming classification task
-
-    # Training loop
-    model.train()
     for epoch in range(num_epochs):
+        model.train()
         total_loss = 0.0
+        batch_count = 0
+
         for batch in data_loader:
-            # Move data to device
-            inputs, targets = batch
-            inputs, targets = inputs.to(device), targets.to(device)
+            batch_count += 1
+            # Handle batch format (assume [inputs, targets] or similar)
+            inputs, targets = batch[0].to(device), batch[1].to(device)
 
-            # Forward pass
-            outputs = model(inputs)
-            loss = criterion(outputs, targets)
-
-            # Backward pass and optimize
             optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = loss_criterion(outputs, targets)
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)  # Gradient clipping
             optimizer.step()
 
             total_loss += loss.item() * inputs.size(0)
 
-        # Calculate epoch loss
-        avg_loss = total_loss / len(data_loader.dataset)
-        epoch_losses[epoch] = avg_loss
-        logging.info(f"Epoch {epoch + 1}/{num_epochs}, Loss: {avg_loss:.4f}")
+        avg_epoch_loss = total_loss / len(data_loader.dataset)
+        epoch_loss_dict[epoch] = avg_epoch_loss
+        logging.info(f"Epoch {epoch} - Average Loss: {avg_epoch_loss:.4f}")
 
-    return model, epoch_losses
+    return model, epoch_loss_dict
