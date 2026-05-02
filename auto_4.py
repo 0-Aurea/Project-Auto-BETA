@@ -12,7 +12,7 @@ In a large project, it's essential to keep imports organized. Consider using the
 import os
 import sys
 
-# Related third party imports
+# Third-party imports
 import requests
 from flask import Flask
 
@@ -29,25 +29,30 @@ Variable names should be descriptive and indicate the purpose of the variable.
 x = 5
 
 # Good practice
-timeout_in_seconds = 5
+max_iterations = 5
 ```
 
 ### Add Docstrings
 
-Docstrings provide documentation for modules, functions, and classes.
+Docstrings provide a description of what a function or class does.
 
 ```python
-def greet(name: str) -> None:
+# Bad practice
+def calculate_area(radius):
+    return 3.14 * radius ** 2
+
+# Good practice
+def calculate_area(radius):
     """
-    Prints a personalized greeting message.
+    Calculate the area of a circle.
 
     Args:
-        name (str): The person's name.
+        radius (float): The radius of the circle.
 
     Returns:
-        None
+        float: The area of the circle.
     """
-    print(f"Hello, {name}!")
+    return 3.14 * radius ** 2
 ```
 
 ### Follow PEP 8 Guidelines
@@ -57,104 +62,80 @@ The Python Enhancement Proposal 8 (PEP 8) provides guidelines for coding style.
 ```python
 # Bad practice
 if True:
-  print('hello world')
+    print( 'hello world' )
 
 # Good practice
 if True:
-    print("hello world")
+    print("Hello, World!")
 ```
 
 ### Use Type Hints
 
-Type hints indicate the expected types of function arguments and return values.
+Type hints indicate the expected type of a function's arguments and return value.
 
 ```python
+# Bad practice
+def greet(name):
+    return "Hello, " + name
+
+# Good practice
 def greet(name: str) -> str:
-    return f"Hello, {name}!"
+    return "Hello, " + name
 ```
 
 ### Error Handling
 
-Proper error handling is essential for robust code.
+Proper error handling is essential to make your code more robust.
 
 ```python
-try:
-    # Code that might raise an exception
-except ValueException as e:
-    # Handle the exception
-    print(f"An error occurred: {e}")
+# Bad practice
+def divide(a, b):
+    return a / b
+
+# Good practice
+def divide(a: float, b: float) -> float:
+    if b == 0:
+        raise ZeroDivisionError("Cannot divide by zero")
+    return a / b
 ```
 
 ### Code Refactoring
 
-Refactor the code to make it more efficient, readable, and maintainable.
+Refactor your code to make it more efficient, readable, and maintainable.
+
+Let's assume the `auto_4.py` file has the following content:
 
 ```python
-# Bad practice
-if condition:
-    # code
-else:
-    # code
+import random
 
-# Good practice
-if condition:
-    # code
-    # simplified code
+def generate_random_number():
+    return random.randint(1, 100)
+
+print(generate_random_number())
 ```
 
-### Testing
-
-Write tests to ensure the code works as expected.
-
-```python
-import unittest
-
-class TestGreetFunction(unittest.TestCase):
-    def test_greet(self):
-        self.assertEqual(greet("John"), "Hello, John!")
-```
-
-Here is a sample improved version of `auto_4.py`:
+Here's an improved version of the `auto_4.py` file:
 
 ```python
 """
-Module description.
-
-Provides functions for automation.
+Generate a random number between 1 and 100.
 """
 
-import os
-import sys
-from typing import List
+import random
 
-def process_data(data: List[str]) -> None:
+def generate_random_number(min_value: int = 1, max_value: int = 100) -> int:
     """
-    Process the provided data.
+    Generate a random number within a specified range.
 
     Args:
-        data (List[str]): A list of strings.
+        min_value (int): The minimum value (inclusive). Defaults to 1.
+        max_value (int): The maximum value (inclusive). Defaults to 100.
 
     Returns:
-        None
+        int: A random number between min_value and max_value.
     """
-    try:
-        # Process the data
-        for item in data:
-            print(item)
-    except Exception as e:
-        # Handle the exception
-        print(f"An error occurred: {e}")
-
-def main() -> None:
-    """
-    The main function.
-
-    Returns:
-        None
-    """
-    data = ["Item 1", "Item 2", "Item 3"]
-    process_data(data)
+    return random.randint(min_value, max_value)
 
 if __name__ == "__main__":
-    main()
+    print(generate_random_number())
 ```
