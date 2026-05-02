@@ -1,7 +1,4 @@
-import os
-import sys
-import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
@@ -12,11 +9,10 @@ def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     while ensuring predictable key access.
     
     Args:
-        data: List of dictionaries containing raw data entries.
+        data: List of dictionaries containing raw data entries
         
     Returns:
-        List of processed dictionaries with all keys in lowercase and
-        entries that have an 'id' field.
+        List of processed dictionaries with lowercase keys and filtered entries
     """
     return [
         {key.lower(): value for key, value in entry.items()}
