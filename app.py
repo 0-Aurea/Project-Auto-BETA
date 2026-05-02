@@ -14,144 +14,137 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 
-import os
-import sys
+import config
 
-# Local imports
-from ai_brain import AiBrain
-from data_collector import DataCollector
+db = SQLAlchemy()
+cors = CORS()
+
+def create_app():
+    app = Flask(__name__)
+    app.config.from_object(config.Config)
+    db.init_app(app)
+    cors.init_app(app)
+
+    from . import routes
+    app.register_blueprint(routes.bp)
+
+    return app
 ```
 
 ### Structure the Application
 
-Consider organizing the application into separate sections or functions:
+Consider organizing the application into separate modules:
+
+*   `routes.py`: Define routes and API endpoints.
+*   `models.py`: Define database models.
+*   `services.py`: Define business logic and interactions with models.
+
+### Use Blueprints
+
+Use Flask blueprints to organize routes:
 
 ```python
-# app.py
+# routes.py
 
-app = Flask(__name__)
-CORS(app)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database.db"
-db = SQLAlchemy(app)
+from flask import Blueprint, jsonify
+from . import services
 
-# Initialize AI Brain and Data Collector
-ai_brain = AiBrain()
-data_collector = DataCollector()
+bp = Blueprint('main', __name__)
 
-# Define routes
-@app.route("/")
-def index():
-    return "Welcome to the AI application!"
-
-@app.route("/train", methods=["POST"])
-def train():
-    # Call AI Brain to train the model
-    ai_brain.train()
-    return jsonify({"message": "Model trained successfully"})
-
-if __name__ == "__main__":
-    app.run(debug=True)
+@bp.route('/api/data', methods=['GET'])
+def get_data():
+    data = services.get_data()
+    return jsonify(data)
 ```
 
 ### Error Handling
 
-Implement error handling to ensure the application doesn't crash unexpectedly:
+Implement error handling to ensure robustness:
 
 ```python
 # app.py
 
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({"message": "Not found"}), 404
+from flask import jsonify
 
-@app.errorhandler(500)
-def internal_server_error(error):
-    return jsonify({"message": "Internal server error"}), 500
+def create_app():
+    # ...
+
+    @app.errorhandler(404)
+    def not_found(error):
+        return jsonify({'error': 'Not found'}), 404
+
+    @app.errorhandler(500)
+    def internal_server_error(error):
+        return jsonify({'error': 'Internal server error'}), 500
+
+    return app
 ```
 
 ### Logging
 
-Consider adding logging to track application events:
+Configure logging to monitor the application:
 
 ```python
 # app.py
 
 import logging
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+def create_app():
+    # ...
 
-# ...
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
 
-@app.route("/train", methods=["POST"])
-def train():
-    try:
-        # Call AI Brain to train the model
-        ai_brain.train()
-        logger.info("Model trained successfully")
-        return jsonify({"message": "Model trained successfully"})
-    except Exception as e:
-        logger.error(f"Error training model: {e}")
-        return jsonify({"message": "Error training model"}), 500
+    return app
 ```
 
-Full Code
----------
+### Security
 
-Here's the improved `app.py` file:
+Consider implementing security measures:
+
+*   Authentication and authorization.
+*   Input validation and sanitization.
+
+### Updated `app.py` File
+
+Here's an updated version of the `app.py` file incorporating these suggestions:
 
 ```python
 # app.py
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 
-import os
-import sys
+import config
 import logging
 
-# Local imports
-from ai_brain import AiBrain
-from data_collector import DataCollector
+db = SQLAlchemy()
+cors = CORS()
 
-app = Flask(__name__)
-CORS(app)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database.db"
-db = SQLAlchemy(app)
+def create_app():
+    app = Flask(__name__)
+    app.config.from_object(config.Config)
+    db.init_app(app)
+    cors.init_app(app)
 
-# Initialize AI Brain and Data Collector
-ai_brain = AiBrain()
-data_collector = DataCollector()
+    from . import routes
+    app.register_blueprint(routes.bp)
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+    @app.errorhandler(404)
+    def not_found(error):
+        return jsonify({'error': 'Not found'}), 404
 
-# Define routes
-@app.route("/")
-def index():
-    return "Welcome to the AI application!"
+    @app.errorhandler(500)
+    def internal_server_error(error):
+        return jsonify({'error': 'Internal server error'}), 500
 
-@app.route("/train", methods=["POST"])
-def train():
-    try:
-        # Call AI Brain to train the model
-        ai_brain.train()
-        logger.info("Model trained successfully")
-        return jsonify({"message": "Model trained successfully"})
-    except Exception as e:
-        logger.error(f"Error training model: {e}")
-        return jsonify({"message": "Error training model"}), 500
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
 
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({"message": "Not found"}), 404
+    return app
 
-@app.errorhandler(500)
-def internal_server_error(error):
-    return jsonify({"message": "Internal server error"}), 500
-
-if __name__ == "__main__":
+if __name__ == '__main__':
+    app = create_app()
     app.run(debug=True)
 ```
