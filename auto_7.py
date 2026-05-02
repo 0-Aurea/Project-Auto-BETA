@@ -11,12 +11,12 @@ def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     Transforms all keys in the remaining entries to lowercase for consistency.
     
     Args:
-        data: A list of dictionaries representing raw data entries. Each entry is a dict
-              with string keys and arbitrary values.
+        data: A list of dictionaries representing raw data entries. Each dictionary
+            should have an 'id' key with a string value to be considered valid.
     
     Returns:
-        A list of dictionaries with the same entries as input, but filtered to include only
-        those with valid 'id' strings, and with all keys converted to lowercase.
+        A list of dictionaries with all keys converted to lowercase and only valid
+        entries (those with a string 'id') included.
     """
     return [
         {k.lower(): v for k, v in entry.items()}
