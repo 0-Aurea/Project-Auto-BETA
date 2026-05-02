@@ -11,7 +11,10 @@ def main() -> None:
     Returns:
         None
     """
-    print("Running the script")
+    try:
+        print("Running the script")
+    except Exception as e:
+        print(f"An error occurred: {e}", file=sys.stderr)
 
 if __name__ == "__main__":
     main()
