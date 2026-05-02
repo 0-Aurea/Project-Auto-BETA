@@ -12,54 +12,44 @@ class Evaluator:
         logger (logging.Logger): Configured logger for the class.
     """
 
-    def __init__(self, proxy_handler=None):
-        """Initialize Evaluator with optional proxy handler.
+    def __init__(self, proxy_handler: ProxyHandler):
+        """Initialize Evaluator with a ProxyHandler instance.
 
         Args:
-            proxy_handler (ProxyHandler, optional): Proxy handler instance.
-                If None, creates a new ProxyHandler.
-
-        Raises:
-            TypeError: If proxy_handler is not None or a ProxyHandler instance.
+            proxy_handler (ProxyHandler): Instance managing proxy configuration.
         """
-        if proxy_handler is not None and not isinstance(proxy_handler, ProxyHandler):
-            raise TypeError("proxy_handler must be a ProxyHandler instance or None")
-        
-        self.proxy_handler = proxy_handler if proxy_handler else ProxyHandler()
+        self.proxy_handler = proxy_handler
         self.logger = logging.getLogger(__name__)
-        logging.basicConfig(level=logging.INFO)
 
-    def evaluate_proxy(self, proxy, test_url='https://httpbin.org/ip', timeout=10):
-        """Evaluate a single proxy's performance by making an HTTP request.
+    def evaluate_proxy(self, proxy_url: str) -> dict:
+        """Evaluate the performance of a proxy by making an HTTP request.
 
         Args:
-            proxy (dict): Proxy configuration in requests-compatible format.
-            test_url (str, optional): URL to test against. Defaults to 'https://httpbin.org/ip'.
-            timeout (int, optional): Request timeout in seconds. Defaults to 10.
+            proxy_url (str): The URL of the proxy to evaluate.
 
         Returns:
-            dict: Evaluation results containing:
-                - proxy: The tested proxy configuration
-                - response_time: Response time in seconds (None if failed)
-                - success: Boolean indicating request success
-                - error: Error message if request failed
+            dict: A dictionary containing evaluation results with keys:
+                - success (bool): Whether the request was successful.
+                - response_time (float | None): Time taken in seconds, or None if failed.
+                - error (str | None): Error message if failed, else None.
         """
+        session = self.proxy_handler.get_session(proxy_url)
+        start_time = time.time()
         try:
-            start_time = time.time()
-            response = requests.get(test_url, proxies=proxy, timeout=timeout)
+            response = session.get('http://httpbin.org/ip', timeout=10)
             response.raise_for_status()
             response_time = time.time() - start_time
-            self.logger.info(f"Proxy {proxy} successful. Response time: {response_time:.2f}s")
+            self.logger.info(f"Proxy {proxy_url} succeeded in {response_time:.2f}s")
             return {
-                'proxy': proxy,
+                'success': True,
                 'response_time': response_time,
-                'success': True
+                'error': None
             }
         except requests.exceptions.RequestException as e:
-            self.logger.error(f"Proxy {proxy} failed: {str(e)}")
+            error_msg = str(e)
+            self.logger.error(f"Proxy {proxy_url} failed: {error_msg}")
             return {
-                'proxy': proxy,
-                'response_time': None,
                 'success': False,
-                'error': str(e)
+                'response_time': None,
+                'error': error_msg
             }
