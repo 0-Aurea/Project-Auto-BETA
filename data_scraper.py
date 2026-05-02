@@ -19,40 +19,43 @@ logger = logging.getLogger(__name__)
 
 def scrape_data(url: str, headers: Optional[Dict[str, str]] = None, 
                 params: Optional[Dict[str, Any]] = None, 
-                timeout: int = 10, max_retries: int = 3) -> Optional[str]:
+                timeout: int = 10) -> List[Dict[str, Any]]:
     """
-    Fetch raw HTML content from a given URL with error handling and retries.
+    Scrape data from a target URL using HTTP GET request and BeautifulSoup parsing.
     
     Args:
-        url (str): The URL to fetch.
-        headers (Optional[Dict[str, str]]): HTTP headers to include in the request.
-        params (Optional[Dict[str, Any]]): URL parameters to append to the URL.
-        timeout (int): Request timeout in seconds. Defaults to 10.
-        max_retries (int): Maximum number of retry attempts. Defaults to 3.
-    
+        url (str): Target URL to scrape
+        headers (Optional[Dict[str, str]]): Request headers for the HTTP request
+        params (Optional[Dict[str, Any]]): Query parameters for the request
+        timeout (int): Request timeout in seconds (default: 10)
+        
     Returns:
-        Optional[str]: The raw HTML content if successful, None otherwise.
+        List[Dict[str, Any]]: Parsed data in dictionary format, ready for processing
     """
-    # Set default headers if none provided
-    if headers is None:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (compatible; DataScraper/1.0; +https://example.com/)'
-        }
-    
-    for retry in range(max_retries):
-        try:
-            response = requests.get(
-                url, 
-                headers=headers, 
-                params=params, 
-                timeout=timeout
-            )
-            response.raise_for_status()
-            return response.text
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request failed: {e} (Retry {retry + 1}/{max_retries})")
-            if retry < max_retries - 1:
-                time.sleep(2 ** retry)  # Exponential backoff
-            else:
-                logger.error(f"Max retries ({max_retries}) exceeded for {url}")
-    return None
+    try:
+        logger.info(f"Initiating request to {url}")
+        response = requests.get(
+            url,
+            headers=headers or {},
+            params=params or {},
+            timeout=timeout
+        )
+        response.raise_for_status()
+        
+    except requests.RequestException as e:
+        logger.error(f"Request failed: {str(e)}")
+        return []
+        
+    try:
+        soup = BeautifulSoup(response.text, 'html.parser')
+        raw_data = helper_function(soup)
+        
+        # Convert to consistent data structure
+        if isinstance(raw_data, list):
+            return [dict(item) for item in raw_data]
+            
+        return []
+        
+    except Exception as e:
+        logger.error(f"Data parsing failed: {str(e)}")
+        return []
