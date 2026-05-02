@@ -1,6 +1,6 @@
 from typing import List, Dict, Any
 
-def process_data(data: List[Dict[str, Any]]) -> List[Dict[Str, Any]]:
+def process_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Process raw data by filtering and transforming keys to lowercase.
     
@@ -13,13 +13,8 @@ def process_data(data: List[Dict[str, Any]]) -> List[Dict[Str, Any]]:
     Returns:
         List of processed dictionaries with keys in lowercase.
     """
-    # Filter entries with 'id' field first to avoid unnecessary processing
-    filtered_data = [entry for entry in data if 'id' in entry]
-    
-    # Transform keys to lowercase using dictionary comprehension
-    processed_data = [
+    return [
         {key.lower(): value for key, value in entry.items()}
-        for entry in filtered_data
+        for entry in data
+        if 'id' in entry
     ]
-    
-    return processed_data
