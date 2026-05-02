@@ -1,138 +1,103 @@
-It seems like you provided a list of improvements for various Python files, but not the actual content of the `model_evaluator.py` file. However, I can still provide general suggestions for improving a Python file named `model_evaluator.py`, which is presumably used for evaluating machine learning models.
-
-### Improving the `model_evaluator.py` File
-
-#### 1. Organize Imports
-
-At the top of the file, ensure imports are organized in a standard way. This typically involves:
-
-- Standard library imports
-- Related third-party imports
-- Local application imports
-
-```python
-# Standard library imports
 import os
-import logging
-
-# Related third-party imports
+import json
+import time
 import numpy as np
-from sklearn.metrics import accuracy_score
+import pandas as pd
+from typing import Dict, Any, List, Tuple, Optional
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# Local application imports
-from .model import Model
-```
-
-#### 2. Use Meaningful Variable Names
-
-Ensure that variable names are descriptive and follow Python's naming conventions (PEP 8).
-
-```python
-# Instead of this:
-scores = [0.8, 0.9, 0.7]
-
-# Do this:
-model_accuracy_scores = [0.8, 0.9, 0.7]
-```
-
-#### 3. Docstrings
-
-Add docstrings to functions and classes to describe their purpose, parameters, and return values.
-
-```python
-def evaluate_model(model: Model, test_data, test_labels) -> dict:
+def calculate_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
     """
-    Evaluates a model on test data.
-
+    Calculate evaluation metrics between true and predicted labels.
+    
     Args:
-        model (Model): The model to evaluate.
-        test_data: The test data to use for evaluation.
-        test_labels: The labels for the test data.
-
+        y_true: Array of true labels.
+        y_pred: Array of predicted labels.
+        
     Returns:
-        dict: A dictionary containing evaluation metrics.
+        Dictionary containing accuracy, precision, recall, and F1 score.
     """
-    # Function implementation
-    pass
-```
+    accuracy = accuracy_score(y_true, y_pred)
+    precision, recall, f1, _ = precision_recall_fscore_support(y_true, y_pred, average='weighted')
+    return {
+        'accuracy': float(round(accuracy, 4)),
+        'precision': float(round(precision, 4)),
+        'recall': float(round(recall, 4)),
+        'f1_score': float(round(f1, 4))
+    }
 
-#### 4. Type Hints
+def plot_confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, output_path: str) -> None:
+    """
+    Generate and save a confusion matrix plot.
+    
+    Args:
+        y_true: True labels.
+        y_pred: Predicted labels.
+        output_path: File path to save the plot.
+    """
+    cm = confusion_matrix(y_true, y_pred)
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    plt.title('Confusion Matrix')
+    plt.tight_layout()
+    plt.savefig(output_path)
+    plt.close()
 
-Use type hints for function parameters and return types to improve readability and enable static type checking.
-
-```python
-from typing import List
-
-def load_data(file_path: str) -> tuple:
-    # Function implementation
-    pass
-```
-
-#### 5. Error Handling
-
-Implement appropriate error handling to manage potential exceptions.
-
-```python
-try:
-    model_accuracy = accuracy_score(true_labels, predicted_labels)
-except Exception as e:
-    logging.error(f"Failed to calculate accuracy: {e}")
-    # Handle the exception appropriately
-```
-
-#### 6. Consistent Formatting
-
-Maintain consistent code formatting throughout the file, adhering to PEP 8 guidelines.
-
-#### 7. Testing
-
-Include tests for functions and methods to ensure the model evaluator works as expected.
-
-```python
-import unittest
-
-class TestModelEvaluator(unittest.TestCase):
-    def test_evaluate_model(self):
-        # Test implementation
-        pass
+def evaluate_model(model: Any, X_test: np.ndarray, y_test: np.ndarray, output_dir: str) -> Dict[str, Any]:
+    """
+    Evaluate a trained model on test data and save results.
+    
+    Args:
+        model: Trained machine learning model.
+        X_test: Test features.
+        y_test: True test labels.
+        output_dir: Directory to save evaluation files.
+        
+    Returns:
+        Dictionary of evaluation metrics and file paths.
+    """
+    start_time = time.time()
+    
+    # Ensure output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Generate predictions
+    y_pred = model.predict(X_test)
+    
+    # Calculate metrics
+    metrics = calculate_metrics(y_test, y_pred)
+    metrics['inference_time'] = round(time.time() - start_time, 4)
+    
+    # Save metrics
+    metrics_path = os.path.join(output_dir, 'model_metrics.json')
+    with open(metrics_path, 'w') as f:
+        json.dump(metrics, f, indent=4)
+    
+    # Generate and save confusion matrix
+    cm_path = os.path.join(output_dir, 'confusion_matrix.png')
+    plot_confusion_matrix(y_test, y_pred, cm_path)
+    
+    return {
+        'metrics': metrics,
+        'metrics_file': metrics_path,
+        'confusion_matrix': cm_path
+    }
 
 if __name__ == '__main__':
-    unittest.main()
-```
-
-### Example of Improved `model_evaluator.py`
-
-```python
-import logging
-from sklearn.metrics import accuracy_score, classification_report
-from .model import Model
-
-def evaluate_model(model: Model, test_data, test_labels) -> dict:
-    """
-    Evaluates a model on test data.
-
-    Args:
-        model (Model): The model to evaluate.
-        test_data: The test data to use for evaluation.
-        test_labels: The labels for the test data.
-
-    Returns:
-        dict: A dictionary containing evaluation metrics.
-    """
-    try:
-        predictions = model.predict(test_data)
-        accuracy = accuracy_score(test_labels, predictions)
-        report = classification_report(test_labels, predictions)
-        return {"accuracy": accuracy, "report": report}
-    except Exception as e:
-        logging.error(f"Evaluation failed: {e}")
-        return None
-
-if __name__ == "__main__":
-    # Example usage
-    model = Model()  # Assume Model is defined elsewhere
-    test_data = []  # Load test data
-    test_labels = []  # Load test labels
-    result = evaluate_model(model, test_data, test_labels)
-    print(result)
-```
+    # Example usage for testing
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.datasets import make_classification
+    
+    X, y = make_classification(n_samples=1000, n_features=20, random_state=42)
+    X_train, X_test = X[:800], X[800:]
+    y_train, y_test = y[:800], y[800:]
+    
+    model = LogisticRegression(max_iter=1000)
+    model.fit(X_train, y_train)
+    
+    results = evaluate_model(model, X_test, y_test, output_dir='./evaluation_results')
+    print("Evaluation completed. Metrics saved to:", results['metrics_file'])
