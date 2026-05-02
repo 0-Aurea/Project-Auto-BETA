@@ -5,39 +5,29 @@ from AI.hyperparameter_tuner import HyperparameterTuner
 from AI.inference_engine import InferenceEngine
 import torch
 
+
 class Brain:
+    """Central class managing data preprocessing, model tuning, evaluation, and inference.
+
+    Attributes:
+        data_path (str): Path to input data.
+        model_path (str): Path to model file (optional).
+        preprocessor (DataPreprocessor): Handles data preprocessing.
+        tuner (HyperparameterTuner): Manages hyperparameter tuning.
+        evaluator (Evaluator): Evaluates model performance.
+        inference_engine (InferenceEngine): Handles model inference.
+    """
+
     def __init__(self, data_path, model_path=None):
+        """Initializes the Brain with data and model paths.
+
+        Args:
+            data_path (str): Path to the dataset.
+            model_path (str, optional): Path to pre-trained model. Defaults to None.
+        """
         self.data_path = data_path
         self.model_path = model_path
         self.preprocessor = DataPreprocessor()
         self.tuner = HyperparameterTuner()
         self.evaluator = Evaluator()
-        self.inference_engine = InferenceEngine(model_path)
-
-    def preprocess_data(self):
-        self.X_train, self.X_test, self.y_train, self.y_test = self.preprocessor.load_and_preprocess(self.data_path)
-
-    def tune_hyperparameters(self):
-        self.best_model = self.tuner.tune(self.X_train, self.y_train)
-
-    def train_model(self):
-        self.best_model.fit(self.X_train, self.y_train)
-
-    def evaluate_model(self):
-        score = self.evaluator.evaluate(self.best_model, self.X_test, self.y_test)
-        logging.info(f"Model evaluation score: {score}")
-
-    def save_model(self):
-        torch.save(self.best_model.state_dict(), self.model_path)
-        self.inference_engine = InferenceEngine(self.model_path)
-
-    def run(self):
-        self.preprocess_data()
-        self.tune_hyperparameters()
-        self.train_model()
-        self.evaluate_model()
-        self.save_model()
-
-if __name__ == "__main__":
-    brain = Brain(data_path="data.csv", model_path="model.pth")
-    brain.run()
+        self.inference_engine = InferenceEngine(model_path=model_path)
