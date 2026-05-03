@@ -66,7 +66,7 @@ class ProxyEngine {
   }
 
   async handleRequest(req, res) {
-    const url = new URL(req.url, 'http://example.com');
+    const url = new URL(req.url, 'http://example.com'); //non dynamic = bad
     const path = url.pathname;
     const encodedPath = this.encodePath(path, this.salt);
 
@@ -127,7 +127,7 @@ class ProxyEngine {
   }
 
   handleWebSocket(req, socket) {
-    const url = new URL(req.url, 'http://example.com');
+    const url = new URL(req.url, 'http://example.com'); // non dynamic = bad
     const path = url.pathname;
 
     const targetHost = url.host;
