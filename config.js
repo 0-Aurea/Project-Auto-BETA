@@ -50,6 +50,7 @@ const BROTLI_COMPRESSION_THRESHOLD = 1024; // bytes
 const GZIP_COMPRESSION_THRESHOLD = 1024; // bytes
 const COMPRESSION_MIN_SIZE = 100; // bytes
 const COMPRESSION_MAX_SIZE = 10 * 1024 * 1024; // 10MB
+const COMPRESSION_QUALITY = 6; // 0-11
 
 const CONNECTION_TIMEOUT = 10 * 1000; // 10 seconds
 const SOCKET_TIMEOUT = 30 * 1000; // 30 seconds
@@ -74,33 +75,20 @@ const UI_FONT_FAMILY = process.env.UI_FONT_FAMILY || 'Arial, sans-serif';
 
 // QUIC protocol and HTTP/3 configuration
 const QUIC_ENABLED = process.env.QUIC_ENABLED || false;
-const QUIC_PORT = process.env.QUIC_PORT || 4433;
-const HTTP3_ENABLED = process.env.HTTP3_ENABLED || false;
+const QUIC_PORT = process.env.QUIC_PORT || 443;
+const QUIC_PROTOCOL_VERSION = process.env.QUIC_PROTOCOL_VERSION || 'draft-29';
 
-// Service Worker configuration
-const SERVICE_WORKER_SCOPE = '/';
-const SERVICE_WORKER_FILE = 'sw.js';
+const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+const LOG_FILE = process.env.LOG_FILE || 'nexus.log';
 
-// TLS configuration
-const TLS_CIPHER_SUITES = [
-  'TLS_AES_128_GCM_SHA256',
-  'TLS_AES_256_GCM_SHA384',
-  'TLS_CHACHA20_POLY1305_SHA256',
-  'TLS_AES_128_CCM_SHA256',
-  'TLS_AES_128_CCM_8_SHA256',
-];
+const METRICS_ENABLED = true;
+const METRICS_PORT = process.env.METRICS_PORT || 9090;
 
-// WebRTC configuration
-const WEBRTC_ICE_SERVERS = [
-  {
-    urls: 'stun:stun.l.google.com:19302',
-  },
-];
+const HEALTH_CHECK_INTERVAL = 60 * 1000; // 1 minute
+const HEALTH_CHECK_TIMEOUT = 10 * 1000; // 10 seconds
 
-const WEBRTC_PEER_CONNECTION_CONFIG = {
-  iceServers: WEBRTC_ICE_SERVERS,
-  iceCandidatePoolSize: 10,
-};
+const CACHE_CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hour
+const CACHE_CLEANUP_THRESHOLD = 80; // percentage of cache size
 
 module.exports = {
   CACHE_NAME,
@@ -138,6 +126,7 @@ module.exports = {
   GZIP_COMPRESSION_THRESHOLD,
   COMPRESSION_MIN_SIZE,
   COMPRESSION_MAX_SIZE,
+  COMPRESSION_QUALITY,
   CONNECTION_TIMEOUT,
   SOCKET_TIMEOUT,
   TAB_BAR_ENABLED,
@@ -155,10 +144,13 @@ module.exports = {
   UI_FONT_FAMILY,
   QUIC_ENABLED,
   QUIC_PORT,
-  HTTP3_ENABLED,
-  SERVICE_WORKER_SCOPE,
-  SERVICE_WORKER_FILE,
-  TLS_CIPHER_SUITES,
-  WEBRTC_ICE_SERVERS,
-  WEBRTC_PEER_CONNECTION_CONFIG,
+  QUIC_PROTOCOL_VERSION,
+  LOG_LEVEL,
+  LOG_FILE,
+  METRICS_ENABLED,
+  METRICS_PORT,
+  HEALTH_CHECK_INTERVAL,
+  HEALTH_CHECK_TIMEOUT,
+  CACHE_CLEANUP_INTERVAL,
+  CACHE_CLEANUP_THRESHOLD,
 };
