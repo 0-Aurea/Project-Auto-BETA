@@ -9,14 +9,16 @@ const cookieParser = require('cookie-parser');
 const { encodeUrl, decodeUrl: decodeUrlUtil } = require('./utils/encoding');
 const zlib = require('zlib');
 const brotli = require('iltorb');
+const config = require('./lib/config');
 
 const app = express();
-const port = 8080;
+const serverConfig = config.server;
+const port = serverConfig.port;
 
 const options = {
-  key: fs.readFileSync('server.key'),
-  cert: fs.readFileSync('server.crt'),
-  allowHTTP2: true,
+  key: fs.readFileSync(serverConfig.https.key),
+  cert: fs.readFileSync(serverConfig.https.cert),
+  allowHTTP2: serverConfig.https.allowHTTP2,
 };
 
 const httpsServer = https.createServer(options, app);
@@ -119,71 +121,51 @@ function compressBody(req, res, next) {
       }
     });
   } else {
-    res.send(req.body);
+    next();
   }
 }
 
-function handleWebSocketUpgrade(req, res, next) {
-  const websocketUrl = req.url;
-  const websocketReq = {
-    ...req,
-    url: websocketUrl,
-  };
-
-  wss.on('connection', (ws) => {
-    const websocketRes = {
-      ...res,
-      socket: ws,
-    };
-
-    ws.on('message', (message) => {
-      const decodedMessage = decodeUrlUtil(message.toString(), rotatingSalt);
-      ws.send(encodeUrl(decodedMessage, rotatingSalt));
-    });
-
-    ws.on('close', () => {
-      websocketRes.socket.destroy();
-    });
-
-    ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
-    });
-  });
-
-  next();
-}
-
-app.use(handleEncodedUrl);
 app.use(rewriteHeaders);
 app.use(cookieScope);
-app.use(decompressBody);
+
+app.use((req, res, next) => {
+  handleEncodedUrl(req, res, () => {
+    decompressBody(req, res, next);
+  });
+});
 
 const proxy = createProxyMiddleware({
   target: 'http://localhost:8081',
   changeOrigin: true,
   onProxyReq: (proxyReq, req, res) => {
-    proxyReq.headers['content-length'] = req.body.length;
+    proxyReq.headers['Content-Type'] = req.headers['content-type'];
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    proxyRes.headers['Content-Type'] = req.headers['content-type'];
   },
 });
 
 app.use(proxy);
 
-app.use(compressBody);
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).send('Internal Server Error');
+});
 
 httpsServer.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
 
-wss.on('connection', (ws, req) => {
-  handleWebSocketUpgrade(req, null, () => {});
-});
+wss.on('connection', (ws) => {
+  ws.on('message', (message) => {
+    console.log(`Received message: ${message}`);
+  });
 
-process.on('SIGINT', () => {
-  httpsServer.close();
-  process.exit(0);
-});
+  ws.on('close', () => {
+    console.log('Client disconnected');
+  });
 
-process.on('SIGTERM', () => {
-  httpsServer.close();
-  process.exit(0);
+  ws.on('error', (error) => {
+    console.error('Error occurred', error);
+  });
 });
