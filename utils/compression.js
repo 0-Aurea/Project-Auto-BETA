@@ -1,94 +1,64 @@
 const zlib = require('zlib');
-const { Buffer } = require('buffer');
+const brotli = require('iltorb');
 
 /**
- * Compression utility class for managing Brotli/gzip decompression and re-compression.
+ * Compression utility class for handling Brotli/gzip decompression and re-compression.
  */
 class CompressionUtils {
   /**
-   * Supported compression algorithms.
+   * Decompresses a Buffer using gzip or Brotli.
+   * @param {Buffer} buffer - The compressed Buffer.
+   * @param {string} encoding - The encoding type ('gzip' or 'br').
+   * @returns {Promise<Buffer>} The decompressed Buffer.
    */
-  static COMPRESSION_ALGORITHMS = {
-    'br': 'brotli',
-    'gzip': 'gzip',
-  };
-
-  /**
-   * Decompress a buffer using the specified algorithm.
-   * @param {Buffer} buffer - The buffer to decompress.
-   * @param {string} algorithm - The compression algorithm (br or gzip).
-   * @returns {Promise<Buffer>} The decompressed buffer.
-   */
-  static async decompress(buffer, algorithm) {
-    switch (algorithm) {
-      case 'br':
-        return new Promise((resolve, reject) => {
-          zlib.brotliDecompress(buffer, (err, data) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(data);
-            }
-          });
-        });
+  static async decompress(buffer, encoding) {
+    switch (encoding) {
       case 'gzip':
         return new Promise((resolve, reject) => {
-          zlib.gunzip(buffer, (err, data) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(data);
-            }
+          zlib.gunzip(buffer, (err, result) => {
+            if (err) reject(err);
+            else resolve(result);
           });
         });
+      case 'br':
+        return brotli.decompress(buffer);
       default:
-        throw new Error(`Unsupported compression algorithm: ${algorithm}`);
+        throw new Error(`Unsupported encoding: ${encoding}`);
     }
   }
 
   /**
-   * Compress a buffer using the specified algorithm.
-   * @param {Buffer} buffer - The buffer to compress.
-   * @param {string} algorithm - The compression algorithm (br or gzip).
-   * @returns {Promise<Buffer>} The compressed buffer.
+   * Compresses a Buffer using gzip or Brotli.
+   * @param {Buffer} buffer - The Buffer to compress.
+   * @param {string} encoding - The encoding type ('gzip' or 'br').
+   * @returns {Promise<Buffer>} The compressed Buffer.
    */
-  static async compress(buffer, algorithm) {
-    switch (algorithm) {
-      case 'br':
-        return new Promise((resolve, reject) => {
-          zlib.brotliCompress(buffer, (err, data) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(data);
-            }
-          });
-        });
+  static async compress(buffer, encoding) {
+    switch (encoding) {
       case 'gzip':
         return new Promise((resolve, reject) => {
-          zlib.gzip(buffer, (err, data) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(data);
-            }
+          zlib.gzip(buffer, (err, result) => {
+            if (err) reject(err);
+            else resolve(result);
           });
         });
+      case 'br':
+        return brotli.compress(buffer);
       default:
-        throw new Error(`Unsupported compression algorithm: ${algorithm}`);
+        throw new Error(`Unsupported encoding: ${encoding}`);
     }
   }
 
   /**
-   * Decompress and re-compress a buffer using the specified algorithms.
-   * @param {Buffer} buffer - The buffer to decompress and re-compress.
-   * @param {string} decompressAlgorithm - The decompression algorithm (br or gzip).
-   * @param {string} compressAlgorithm - The compression algorithm (br or gzip).
-   * @returns {Promise<Buffer>} The re-compressed buffer.
+   * Re-compresses a Buffer from one encoding to another.
+   * @param {Buffer} buffer - The Buffer to re-compress.
+   * @param {string} fromEncoding - The original encoding type ('gzip' or 'br').
+   * @param {string} toEncoding - The target encoding type ('gzip' or 'br').
+   * @returns {Promise<Buffer>} The re-compressed Buffer.
    */
-  static async decompressAndCompress(buffer, decompressAlgorithm, compressAlgorithm) {
-    const decompressedBuffer = await CompressionUtils.decompress(buffer, decompressAlgorithm);
-    return CompressionUtils.compress(decompressedBuffer, compressAlgorithm);
+  static async reCompress(buffer, fromEncoding, toEncoding) {
+    const decompressed = await CompressionUtils.decompress(buffer, fromEncoding);
+    return CompressionUtils.compress(decompressed, toEncoding);
   }
 }
 
