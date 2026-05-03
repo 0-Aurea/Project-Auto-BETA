@@ -6,6 +6,7 @@ const url = require('url');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
+const { encodeUrl, decodeUrl: decodeUrlUtil } = require('./utils/encoding');
 
 const app = express();
 const port = 8080;
@@ -20,19 +21,6 @@ const httpsServer = https.createServer(options, app);
 const wss = new WebSocket.Server({ server: httpsServer });
 
 let rotatingSalt = Math.random().toString(36).substr(2, 10);
-
-function generateEncodedUrl(url) {
-  const encodedUrl = Buffer.from(url).toString('base64');
-  return `${rotatingSalt}/${encodedUrl}`;
-}
-
-function decodeUrl(encodedUrl) {
-  const [salt, encoded] = encodedUrl.split('/');
-  if (salt !== rotatingSalt) {
-    throw new Error('Invalid salt');
-  }
-  return Buffer.from(encoded, 'base64').toString();
-}
 
 function rewriteHeaders(req, res, next) {
   res.header('Access-Control-Allow-Origin', '*');
@@ -56,10 +44,29 @@ function cookieScope(req, res, next) {
   next();
 }
 
+function handleEncodedUrl(req, res, next) {
+  const encodedUrl = req.path.substring(1);
+  try {
+    const decodedUrl = decodeUrlUtil(encodedUrl, rotatingSalt);
+    req.url = decodedUrl;
+    next();
+  } catch (error) {
+    res.status(400).send('Invalid encoded URL');
+  }
+}
+
 app.use(helmet());
 app.use(cookieParser());
 app.use(rewriteHeaders);
 app.use(cookieScope);
+
+app.use((req, res, next) => {
+  if (req.path.startsWith('/proxy/')) {
+    handleEncodedUrl(req, res, next);
+  } else {
+    next();
+  }
+});
 
 app.use('/proxy', createProxyMiddleware({
   target: 'https://example.com',
@@ -86,56 +93,36 @@ wss.on('connection', (ws, req) => {
   const { hostname, pathname } = url.parse(req.url, true);
   const target = `https://${hostname}${pathname}`;
 
-  const wsTarget = new WebSocket(target);
+  const encodedUrl = req.path.substring(1);
+  try {
+    const decodedUrl = decodeUrlUtil(encodedUrl, rotatingSalt);
+    const { hostname: targetHostname, pathname: targetPathname } = url.parse(decodedUrl, true);
+    const wsTarget = new WebSocket(`wss://${targetHostname}${targetPathname}`);
 
-  ws.on('message', (message) => {
-    wsTarget.send(message);
-  });
+    ws.on('message', (message) => {
+      wsTarget.send(message);
+    });
 
-  wsTarget.on('message', (message) => {
-    ws.send(message);
-  });
+    wsTarget.on('message', (message) => {
+      ws.send(message);
+    });
 
-  ws.on('close', () => {
-    wsTarget.close();
-  });
+    ws.on('close', () => {
+      wsTarget.close();
+    });
 
-  wsTarget.on('close', () => {
+    wsTarget.on('close', () => {
+      ws.close();
+    });
+
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
+    });
+  } catch (error) {
     ws.close();
-  });
-
-  ws.on('error', (error) => {
-    console.error('WebSocket error:', error);
-  });
-
-  wsTarget.on('error', (error) => {
-    console.error('WebSocket target error:', error);
-  });
-
-  wsTarget.on('open', () => {
-    wsTarget.send(JSON.stringify({ type: 'init', data: req.url }));
-  });
+  }
 });
 
 httpsServer.listen(port, () => {
   console.log(`Server listening on port ${port}`);
-});
-
-setInterval(() => {
-  rotatingSalt = Math.random().toString(36).substr(2, 10);
-}, 60000);
-
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send('Something broke!');
-});
-
-process.on('SIGINT', () => {
-  httpsServer.close();
-  process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-  httpsServer.close();
-  process.exit(0);
 });
