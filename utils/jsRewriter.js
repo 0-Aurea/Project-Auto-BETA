@@ -146,19 +146,17 @@ class JsRewriterUtils {
   static rewriteHistoryPushState(js, rewriter) {
     return js.replace(JsRewriterUtils.HISTORY_PUSH_STATE_REGEX, (match, p1) => {
       const rewrittenUrl = rewriter(p1);
-      return `history.pushState(${JSON.stringify(rewrittenUrl)})`;
+      return `${match.replace(p1, JSON.stringify(rewrittenUrl))}`;
     });
   }
 
   /**
-   * Rewrites JS code to handle eval(), Function(), dynamic import(),
-   * new Worker(), importScripts(), document.domain mutations,
-   * window.location, window.open, and history.pushState/replaceState.
+   * Rewrites the given JS string using the provided rewriter function.
    * @param {string} js - The JS string to rewrite.
    * @param {function} rewriter - The rewriter function.
    * @returns {string} The rewritten JS string.
    */
-  static rewriteJs(js, rewriter) {
+  static rewrite(js, rewriter) {
     js = JsRewriterUtils.rewriteEval(js, rewriter);
     js = JsRewriterUtils.rewriteImport(js, rewriter);
     js = JsRewriterUtils.rewriteWorker(js, rewriter);
@@ -171,4 +169,4 @@ class JsRewriterUtils {
   }
 }
 
-module.exports = JsRewriterUtils;
+module.exports = { JsRewriterUtils };
