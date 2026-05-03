@@ -11,6 +11,10 @@ class ProxyEngine {
     this.encodedSalt = this.base64Encode(this.salt);
     this.app = express();
     this.wss = new WebSocket.Server({ noServer: true });
+    this.httpsServer = https.createServer({
+      key: fs.readFileSync('path/to/ssl/key'),
+      cert: fs.readFileSync('path/to/ssl/cert'),
+    }, this.app);
 
     setInterval(() => {
       this.rotateSalt();
@@ -66,7 +70,7 @@ class ProxyEngine {
   }
 
   async handleRequest(req, res) {
-    const url = new URL(req.url, 'http://example.com'); //non dynamic = bad
+    const url = new URL(req.url, 'http://example.com');
     const path = url.pathname;
     const encodedPath = this.encodePath(path, this.salt);
 
@@ -79,8 +83,11 @@ class ProxyEngine {
       url: `https://${targetHost}${path}`,
     };
 
-    const targetRes = await this.forwardRequest(targetReq, req.body);
+    if (req.body) {
+      targetReq.body = req.body;
+    }
 
+    const targetRes = await this.forwardRequest(targetReq);
     const responseHeaders = {
       ...targetRes.headers,
       'content-security-policy': '',
@@ -92,7 +99,7 @@ class ProxyEngine {
     res.end(targetRes.body);
   }
 
-  async forwardRequest(req, body) {
+  async forwardRequest(req) {
     return new Promise((resolve, reject) => {
       const options = {
         method: req.method,
@@ -117,56 +124,53 @@ class ProxyEngine {
         });
       });
 
+      if (req.body) {
+        targetReq.write(req.body);
+      }
+
+      targetReq.end();
+
       targetReq.on('error', (err) => {
         reject(err);
       });
-
-      targetReq.write(body);
-      targetReq.end();
     });
   }
 
-  handleWebSocket(req, socket) {
-    const url = new URL(req.url, 'http://example.com'); // non dynamic = bad
-    const path = url.pathname;
-
+  handleWebSocket(req, ws) {
+    const url = new URL(req.url, 'http://example.com');
     const targetHost = url.host;
-    const targetReq = {
-      method: req.method,
-      headers: req.headers,
-      url: `wss://${targetHost}${path}`,
-    };
+    const targetPath = url.pathname;
 
-    const wss = new WebSocket(`wss://${targetHost}${path}`, {
-      headers: targetReq.headers,
+    const targetWs = new WebSocket(`wss://${targetHost}${targetPath}`);
+
+    ws.on('message', (message) => {
+      targetWs.send(message);
     });
 
-    wss.on('open', () => {
-      socket.on('message', (message) => {
-        wss.send(message);
-      });
-
-      wss.on('message', (message) => {
-        socket.send(message);
-      });
-
-      wss.on('close', () => {
-        socket.close();
-      });
-
-      wss.on('error', (err) => {
-        socket.emit('error', err);
-      });
+    targetWs.on('message', (message) => {
+      ws.send(message);
     });
 
-    socket.on('close', () => {
-      wss.close();
+    targetWs.on('error', (err) => {
+      console.error(err);
     });
 
-    socket.on('error', (err) => {
-      wss.emit('error', err);
+    ws.on('error', (err) => {
+      console.error(err);
+    });
+
+    ws.on('close', () => {
+      targetWs.close();
+    });
+
+    targetWs.on('close', () => {
+      ws.close();
     });
   }
 }
 
-module.exports = ProxyEngine;
+const proxyEngine = new ProxyEngine();
+proxyEngine.httpsServer.listen(443, () => {
+  console.log('Proxy server listening on port 443');
+});
+const fs = require('fs');
