@@ -109,76 +109,121 @@ class JSRewriter {
       return `window.open('${this.rewriteURL(p1)}')`;
     });
 
-    js = js.replace(this.historyPushStateRegex, (match) => {
-      return `history.pushState(${this.rewriteHistory(match)})`;
+    js = js.replace(this.historyPushStateRegex, () => {
+      return `history.pushState(${this.rewriteHistoryPushState()})`;
     });
 
-    js = js.replace(this.historyReplaceStateRegex, (match) => {
-      return `history.replaceState(${this.rewriteHistory(match)})`;
+    js = js.replace(this.historyReplaceStateRegex, () => {
+      return `history.replaceState(${this.rewriteHistoryReplaceState()})`;
     });
 
     return js;
   }
 
-  rewriteEval(evalString) {
-    try {
-      const evalFunc = new Function(`return ${evalString}`);
-      const result = evalFunc();
-      return JSON.stringify(result);
-    } catch (e) {
-      return evalString;
-    }
+  rewriteEval(match) {
+    const code = match.slice(5, -1);
+    return this.rewriteJS(code);
   }
 
-  rewriteFunction(functionString) {
-    try {
-      const func = new Function(`return ${functionString}`);
-      const result = func();
-      return JSON.stringify(result);
-    } catch (e) {
-      return functionString;
-    }
+  rewriteFunction(match) {
+    const args = match.slice(9, -1);
+    const code = args.split('),').pop();
+    return `${args}, ${this.rewriteJS(code)}`;
   }
 
-  rewriteDynamicImport(importString) {
-    return this.rewriteURL(importString);
+  rewriteDynamicImport(match) {
+    return this.rewriteURL(match.slice(7, -1));
   }
 
-  rewriteRequire(requireString) {
-    return this.rewriteURL(requireString);
+  rewriteRequire(match) {
+    return this.rewriteURL(match.slice(8, -1));
   }
 
   rewriteURL(url) {
-    if (url.startsWith('http')) {
-      return url;
-    }
-    return xorBase64Encode(url, generateSalt());
+    const salt = rotatingSalt[rotatingSalt.length - 1];
+    return xorBase64Encode(url, salt);
   }
 
-  rewriteHistory(historyString) {
-    const historyRegex = /\(([^)]+)\)/;
-    const match = historyString.match(historyRegex);
-    if (match) {
-      const historyArgs = match[1].split(',');
-      const rewrittenArgs = historyArgs.map((arg) => {
-        if (arg.trim().startsWith("'") && arg.trim().endsWith("'")) {
-          return `'${this.rewriteURL(arg.trim().slice(1, -1))}'`;
-        }
-        return arg;
-      });
-      return `(${rewrittenArgs.join(',')})`;
-    }
-    return historyString;
+  rewriteHistoryPushState() {
+    return `null, null, '${this.rewriteURL(window.location.href)}'`;
   }
+
+  rewriteHistoryReplaceState() {
+    return `null, null, '${this.rewriteURL(window.location.href)}'`;
+  }
+}
+
+class WebSocketRewriter {
+  constructor() {
+    this.websocketRegex = /wss?:\/\/[^)]+/g;
+  }
+
+  rewriteWebSocket(ws) {
+    return ws.replace(this.websocketRegex, (match) => {
+      const salt = rotatingSalt[rotatingSalt.length - 1];
+      return xorBase64Encode(match, salt);
+    });
+  }
+}
+
+addEventListener('fetch', async (event) => {
+  event.respondWith(handleRequest(event.request));
+});
+
+async function handleRequest(request) {
+  const url = new URL(request.url);
+  const salt = rotatingSalt[rotatingSalt.length - 1];
+
+  if (request.method === 'GET') {
+    const response = await getResponse(request);
+    if (response) {
+      return response;
+    }
+  }
+
+  const response = await fetch(request);
+  const contentType = response.headers.get('content-type');
+
+  if (contentType && contentType.includes('application/javascript')) {
+    const jsRewriter = new JSRewriter();
+    const js = await response.text();
+    const rewrittenJs = jsRewriter.rewriteJS(js);
+    return new Response(rewrittenJs, {
+      headers: {
+        'content-type': 'application/javascript',
+      },
+    });
+  }
+
+  if (contentType && contentType.includes('text/html')) {
+    const htmlRewriter = new HTMLRewriter();
+    const html = await response.text();
+    const rewrittenHtml = htmlRewriter.rewriteHTML(html);
+    return new Response(rewrittenHtml, {
+      headers: {
+        'content-type': 'text/html',
+      },
+    });
+  }
+
+  if (request.method === 'WebSocket') {
+    const wsRewriter = new WebSocketRewriter();
+    const ws = await response.body;
+    const rewrittenWs = wsRewriter.rewriteWebSocket(ws);
+    return new Response(rewrittenWs, {
+      headers: {
+        'content-type': 'application/websocket',
+      },
+    });
+  }
+
+  return response;
 }
 
 class HTMLRewriter {
   constructor() {
-    this.srcRegex = /\ssrc=['"]([^'"]+)['"]/g;
-    this.hrefRegex = /\shref=['"]([^'"]+)['"]/g;
-    this.actionRegex = /\saction=['"]([^'"]+)['"]/g;
-    this.srcsetRegex = /\ssrcset=['"]([^'"]+)['"]/g;
-    this.dataRegex = /\sdata=['"]([^'"]+)['"]/g;
+    this.srcRegex = /src=['"]([^'"]+)['"]/g;
+    this.hrefRegex = /href=['"]([^'"]+)['"]/g;
   }
 
   rewriteHTML(html) {
@@ -190,111 +235,11 @@ class HTMLRewriter {
       return `href='${this.rewriteURL(p1)}'`;
     });
 
-    html = html.replace(this.actionRegex, (match, p1) => {
-      return `action='${this.rewriteURL(p1)}'`;
-    });
-
-    html = html.replace(this.srcsetRegex, (match, p1) => {
-      return `srcset='${this.rewriteURL(p1)}'`;
-    });
-
-    html = html.replace(this.dataRegex, (match, p1) => {
-      return `data='${this.rewriteURL(p1)}'`;
-    });
-
     return html;
   }
 
   rewriteURL(url) {
-    if (url.startsWith('http')) {
-      return url;
-    }
-    return xorBase64Encode(url, generateSalt());
+    const salt = rotatingSalt[rotatingSalt.length - 1];
+    return xorBase64Encode(url, salt);
   }
 }
-
-class CSSRewriter {
-  constructor() {
-    this.urlRegex = /url\(['"]([^'"]+)['"]\)/g;
-    this.importRegex = /@import\s+['"]([^'"]+)['"]/g;
-    this.contentRegex = /content:\s*url\(['"]([^'"]+)['"]\)/g;
-  }
-
-  rewriteCSS(css) {
-    css = css.replace(this.urlRegex, (match, p1) => {
-      return `url('${this.rewriteURL(p1)}')`;
-    });
-
-    css = css.replace(this.importRegex, (match, p1) => {
-      return `@import '${this.rewriteURL(p1)}'`;
-    });
-
-    css = css.replace(this.contentRegex, (match, p1) => {
-      return `content: url('${this.rewriteURL(p1)}')`;
-    });
-
-    return css;
-  }
-
-  rewriteURL(url) {
-    if (url.startsWith('http')) {
-      return url;
-    }
-    return xorBase64Encode(url, generateSalt());
-  }
-}
-
-addEventListener('fetch', async (event) => {
-  event.respondWith(handleRequest(event.request));
-});
-
-async function handleRequest(request) {
-  const url = new URL(request.url);
-  const salt = generateSalt();
-  const encodedUrl = xorBase64Encode(url.href, salt);
-
-  if (request.method === 'GET') {
-    const cache = await getCache();
-    const cachedResponse = await cache.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-
-    const response = await fetch(encodedUrl);
-    const rewrittenResponse = new Response(response.body, response);
-    rewrittenResponse.headers.set('Content-Type', response.headers.get('Content-Type'));
-    rewrittenResponse.headers.set('Cache-Control', 'max-age=3600');
-
-    const cacheResponse = await putResponse(request, rewrittenResponse);
-    return rewrittenResponse;
-  } else if (request.method === 'POST') {
-    const response = await fetch(encodedUrl, {
-      method: 'POST',
-      body: request.body,
-      headers: request.headers,
-    });
-    return response;
-  } else {
-    return new Response('Method not allowed', {
-      status: 405,
-      headers: {
-        'Content-Type': 'text/plain',
-      },
-    });
-  }
-}
-
-addEventListener('activate', async (event) => {
-  event.waitUntil(getCache().then((cache) => cache.keys().then((keys) => {
-    return Promise.all(keys.map((key) => cache.delete(key)));
-  })));
-});
-
-addEventListener('message', async (event) => {
-  if (event.data.type === 'config') {
-    // Handle config message
-  }
-});
-self.addEventListener('install', async (event) => {
-  event.waitUntil(getCache());
-});
