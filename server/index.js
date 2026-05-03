@@ -117,7 +117,7 @@ function compressBody(req, res, next) {
       }
     });
   } else {
-    res.send(req.body);
+    next();
   }
 }
 
@@ -132,61 +132,55 @@ function handleWebSocketUpgrade(req, res, next) {
     });
     const websocket = new WebSocket(req.socket, req.headers['sec-websocket-protocol']);
     websocket.on('message', (message) => {
-      console.log(`Received message: ${message}`);
+      console.log(`Received WebSocket message: ${message}`);
     });
     websocket.on('close', () => {
       console.log('WebSocket connection closed');
     });
-    websocket.on('error', (error) => {
-      console.log(`WebSocket error: ${error}`);
+    req.socket.on('close', () => {
+      websocket.terminate();
     });
   } else {
     next();
   }
 }
 
-function scrubWebRTCICECandidates(req, res, next) {
+function scrubWebRTCIceCandidates(req, res, next) {
   if (req.headers['content-type'] === 'application/json') {
-    try {
-      const payload = JSON.parse(req.body);
-      if (payload.type === 'icecandidate') {
-        const candidate = payload.candidate;
-        if (candidate) {
-          const scrubbedCandidate = candidate.replace(/a=ssrc:(\d+)/g, 'a=ssrc:0');
-          payload.candidate = scrubbedCandidate;
-          req.body = JSON.stringify(payload);
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk;
+    });
+    req.on('end', () => {
+      try {
+        const jsonData = JSON.parse(body);
+        if (jsonData.type === 'icecandidate') {
+          jsonData.candidate = '';
+          req.body = JSON.stringify(jsonData);
         }
+      } catch (error) {
+        console.error(error);
       }
-    } catch (error) {
-      console.log(`Error parsing JSON: ${error}`);
-    }
-  }
-  next();
-}
-
-app.use(rewriteHeaders);
-app.use(cookieScope);
-app.use(handleEncodedUrl);
-app.use(decompressBody);
-app.use(scrubWebRTCICECandidates);
-
-app.use((req, res, next) => {
-  if (req.url.startsWith('/websocket')) {
-    handleWebSocketUpgrade(req, res, next);
+      next();
+    });
   } else {
     next();
   }
-});
+}
+
+app.use(handleEncodedUrl);
+app.use(rewriteHeaders);
+app.use(cookieScope);
+app.use(decompressBody);
+app.use(scrubWebRTCIceCandidates);
+app.use(handleWebSocketUpgrade);
 
 app.use(createProxyMiddleware({
-  target: 'https://example.com',
+  target: 'http://localhost:8081',
   changeOrigin: true,
   pathRewrite: { '^/': '' },
   onProxyReq: (proxyReq, req, res) => {
     proxyReq.headers['content-length'] = req.body.length;
-  },
-  onProxyRes: (proxyRes, req, res) => {
-    res.set("Content-Length", proxyRes.headers['content-length']);
   }
 }));
 
@@ -197,12 +191,9 @@ httpsServer.listen(port, () => {
 wss.on('connection', (ws) => {
   console.log('WebSocket connection established');
   ws.on('message', (message) => {
-    console.log(`Received message: ${message}`);
+    console.log(`Received WebSocket message: ${message}`);
   });
   ws.on('close', () => {
     console.log('WebSocket connection closed');
-  });
-  ws.on('error', (error) => {
-    console.log(`WebSocket error: ${error}`);
   });
 });
