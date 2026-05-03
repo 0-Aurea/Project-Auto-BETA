@@ -98,58 +98,59 @@ class CacheUtils {
   }
 
   /**
-   * Re-compress a response body using a specified algorithm.
-   * @param {Buffer} body - The response body to re-compress.
-   * @param {string} algorithm - The compression algorithm to use (e.g., 'gzip', 'brotli').
-   * @returns {Promise<Buffer>} The re-compressed response body.
+   * Re-compress a buffer using the specified algorithm.
+   * @param {Buffer} buffer - The buffer to re-compress.
+   * @param {string} algorithm - The compression algorithm (gzip).
+   * @returns {Promise<Buffer>} The re-compressed buffer.
    */
-  static async recompressBody(body, algorithm) {
-    const encoder = new CompressionCodec(algorithm);
-    const reCompressedBody = await encoder.compress(body);
-    return reCompressedBody;
+  static async recompressBody(buffer, algorithm) {
+    return new Promise((resolve, reject) => {
+      const zlib = require('zlib');
+      zlib.gzip(buffer, (err, result) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(result);
+        }
+      });
+    });
   }
 
   /**
-   * Check the cache size and evict oldest entries if necessary.
+   * Check cache size and evict oldest entries if necessary.
    * @returns {Promise<void>}
    */
   static async checkCacheSize() {
-    const cacheKeys = await CacheUtils.cache.keys();
-    const cacheSize = Array.from(cacheKeys).reduce((size, key) => size + key.size, 0);
+    const cache = await CacheUtils.cache.keys();
+    const cacheSize = await CacheUtils.getCacheSize();
 
     if (cacheSize > CacheUtils.MAX_CACHE_SIZE) {
-      // Evict oldest entries until cache size is within limit
-      while (cacheSize > CacheUtils.MAX_CACHE_SIZE) {
-        const oldestKey = await CacheUtils.cache.keys().next().value;
-        await CacheUtils.cache.delete(oldestKey);
-      }
-    }
-  }
-
-  /**
-   * Handle prefetch hints by caching linked resources.
-   * @param {Request} request - The request to handle.
-   * @param {Response} response - The response to handle.
-   * @returns {Promise<void>}
-   */
-  static async handlePrefetch(request, response) {
-    const linkHeader = response.headers.get('link');
-    if (linkHeader) {
-      const linkedResources = linkHeader.split(',').map((link) => link.trim());
-      for (const linkedResource of linkedResources) {
-        if (linkedResource.startsWith('<') && linkedResource.endsWith('>')) {
-          const linkedResourceUrl = linkedResource.substring(1, linkedResource.length - 1);
-          const prefetchRequest = new Request(linkedResourceUrl, {
-            method: 'GET',
-            headers: {
-              'Accept': '*/*',
-            },
-          });
-          await CacheUtils.cacheResponse(prefetchRequest, await fetch(prefetchRequest), 3600);
+      // Evict oldest entries
+      for (const entry of cache) {
+        await CacheUtils.cache.delete(entry);
+        const newCacheSize = await CacheUtils.getCacheSize();
+        if (newCacheSize <= CacheUtils.MAX_CACHE_SIZE) {
+          break;
         }
       }
     }
   }
+
+  /**
+   * Get the current cache size in bytes.
+   * @returns {Promise<number>} The cache size in bytes.
+   */
+  static async getCacheSize() {
+    const cache = await CacheUtils.cache.keys();
+    let cacheSize = 0;
+
+    for (const entry of cache) {
+      const response = await CacheUtils.cache.match(entry);
+      cacheSize += response.body.byteLength;
+    }
+
+    return cacheSize;
+  }
 }
 
-module.exports = CacheUtils;
+module.exports = { CacheUtils };
