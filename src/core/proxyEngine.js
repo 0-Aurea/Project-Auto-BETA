@@ -109,12 +109,6 @@ class ProxyEngine {
       responseBody = await this.rewriteCss(responseBody, targetHost);
     }
 
-    if (targetRes.headers['content-encoding'] && targetRes.headers['content-encoding'].includes('gzip')) {
-      responseBody = zlib.gunzipSync(responseBody);
-    } else if (targetRes.headers['content-encoding'] && targetRes.headers['content-encoding'].includes('br')) {
-      responseBody = brotli.decompressSync(responseBody);
-    }
-
     res.writeHead(targetRes.statusCode, responseHeaders);
     res.end(responseBody);
   }
@@ -154,27 +148,32 @@ class ProxyEngine {
     const document = dom.window.document;
 
     // Handle HTML elements
+    const elements = document.querySelectorAll('script, link, iframe, img, embed, object, param, source, track, audio, video');
+    elements.forEach((element) => {
+      if (element.src) {
+        element.src = this.rewriteUrl(element.src, targetHost);
+      }
+      if (element.href) {
+        element.href = this.rewriteUrl(element.href, targetHost);
+      }
+      if (element.action) {
+        element.action = this.rewriteUrl(element.action, targetHost);
+      }
+    });
+
+    // Handle inline scripts
     const scripts = document.querySelectorAll('script');
     scripts.forEach((script) => {
-      if (script.src) {
-        script.src = this.rewriteUrl(script.src, targetHost);
-      }
-      if (script.innerHTML) {
-        script.innerHTML = this.rewriteJs(script.innerHTML, targetHost);
+      if (script.textContent) {
+        script.textContent = this.rewriteJs(script.textContent, targetHost);
       }
     });
 
-    const links = document.querySelectorAll('link');
-    links.forEach((link) => {
-      if (link.href) {
-        link.href = this.rewriteUrl(link.href, targetHost);
-      }
-    });
-
-    const images = document.querySelectorAll('img');
-    images.forEach((image) => {
-      if (image.src) {
-        image.src = this.rewriteUrl(image.src, targetHost);
+    // Handle inline styles
+    const styles = document.querySelectorAll('style');
+    styles.forEach((style) => {
+      if (style.textContent) {
+        style.textContent = this.rewriteCss(style.textContent, targetHost);
       }
     });
 
@@ -182,31 +181,26 @@ class ProxyEngine {
   }
 
   async rewriteJs(js, targetHost) {
-    // Smarter JS rewriter: handle eval(), Function(), dynamic import(),
-    // new Worker(), importScripts(), document.domain mutations,
-    // window.location, window.open, history.pushState/replaceState
-
-    // For simplicity, this example just rewrites URLs
-    return js.replace(/https?:\/\/[^)]+/g, (match) => {
-      return this.rewriteUrl(match, targetHost);
-    });
+    // Implement JS rewriting logic here
+    return js;
   }
 
   async rewriteCss(css, targetHost) {
-    // Handle CSS url(), @import, content: url(...)
-    return css.replace(/url\(([^)]+)\)/g, (match, url) => {
-      return `url(${this.rewriteUrl(url, targetHost)})`;
-    });
+    // Implement CSS rewriting logic here
+    return css;
   }
 
   rewriteUrl(url, targetHost) {
-    const absoluteUrl = new URL(url, `https://${targetHost}`);
-    return absoluteUrl.href;
+    const parsedUrl = new URL(url);
+    if (parsedUrl.host) {
+      return url;
+    }
+    return `https://${targetHost}${url}`;
   }
 
   handleWebSocket(req, ws) {
     const targetHost = req.headers['host'];
-    const targetWs = new WebSocket(`wss://${targetHost}`);
+    const targetWs = new WebSocket(`wss://${targetHost}${req.url}`);
 
     ws.on('message', (message) => {
       targetWs.send(message);
@@ -216,14 +210,33 @@ class ProxyEngine {
       ws.send(message);
     });
 
-    ws.on('close', () => {
-      targetWs.close();
+    targetWs.on('error', (err) => {
+      console.error(err);
+    });
+
+    ws.on('error', (err) => {
+      console.error(err);
     });
 
     targetWs.on('close', () => {
       ws.close();
     });
+
+    ws.on('close', () => {
+      targetWs.close();
+    });
+  }
+
+  scrubWebRTCIceCandidates(candidate) {
+    // Implement WebRTC ICE candidate scrubbing logic here
+    return candidate;
   }
 }
 
-module.exports = ProxyEngine;
+const proxyEngine = new ProxyEngine();
+proxyEngine.httpsServer.listen(8080, () => {
+  console.log('Proxy server listening on port 8080');
+});
+proxyEngine.wss.on('error', (err) => {
+  console.error(err);
+});
