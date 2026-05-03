@@ -22,11 +22,6 @@
                 <button id="search-button">Go</button>
             </div>
             <div class="tab-bar" id="tab-bar">
-                <div class="tab" id="tab-0">
-                    <iframe src="about:blank" frameborder="0" id="tab-0-iframe"></iframe>
-                    <span id="tab-0-title">New Tab</span>
-                    <button id="tab-0-close">X</button>
-                </div>
             </div>
             <div class="settings-panel" id="settings-panel">
                 <h2>Settings</h2>
@@ -56,6 +51,14 @@
             </div>
         </main>
     </div>
+
+    <template id="tab-template">
+        <div class="tab" id="tab-{id}">
+            <iframe src="about:blank" frameborder="0" id="tab-{id}-iframe"></iframe>
+            <span id="tab-{id}-title">New Tab</span>
+            <button id="tab-{id}-close">X</button>
+        </div>
+    </template>
 
     <script src="script.js"></script>
 </body>
