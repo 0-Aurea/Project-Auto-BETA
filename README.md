@@ -31,6 +31,50 @@ Nexus is a self-hosted web proxy designed to be objectively better than Titanium
   * Bookmarks system
   * About:blank cloaking + custom tab title/icon
 
+## Comparison with Ultraviolet
+
+| Feature | Ultraviolet | Nexus |
+| --- | --- | --- |
+| **URL Encoding** | Simple "/" prefix | XOR + base64 with rotating salt |
+| **HTTPS Tunnel** | Separate bare-server process | Integrated HTTPS tunnel |
+| **Header Rewriting** | Limited | Full request/response header rewriting |
+| **Cookie Scoping** | No | Isolate cookies per proxied origin |
+| **WebSocket Proxying** | No | WebSocket upgrade proxying |
+| **WebRTC Leak Protection** | No | WebRTC ICE candidate scrubbing |
+| **JS Rewriting** | Basic | Smarter JS rewriter (eval(), dynamic imports, etc.) |
+| **CSS Rewriting** | Limited | Handle url(), @import, content: url(...) |
+| **HTML Rewriting** | Basic | Handle all src/href/action/srcset/data attributes, etc. |
+| **Caching** | No | Service Worker Cache API with TTL headers |
+| **Frontend** | Basic | Sleek dark-mode UI, tab bar, proxy history, etc. |
+
+## Architecture Diagram
+
+```
+          +---------------+
+          |  Client   |
+          +---------------+
+                  |
+                  |
+                  v
+          +---------------+
+          |  Service Worker  |
+          |  (Cache API)     |
+          +---------------+
+                  |
+                  |
+                  v
+          +---------------+
+          |  Express Server  |
+          |  (HTTPS Tunnel)  |
+          +---------------+
+                  |
+                  |
+                  v
+          +---------------+
+          |  Proxied Origin  |
+          +---------------+
+```
+
 ## Setup Instructions
 
 ### Prerequisites
@@ -89,88 +133,15 @@ Nexus is a self-hosted web proxy designed to be objectively better than Titanium
   }
 }
 ```
-* **Gzip Compression**: Enable or disable gzip compression (default: enabled). Configure in `config.json`:
-```json
-{
-  "performance": {
-    "gzip": true
-  }
-}
-```
-* **Prefetch Hints**: Enable or disable prefetch hints (default: enabled). Configure in `config.json`:
-```json
-{
-  "performance": {
-    "prefetch": true
-  }
-}
-```
-
-### Frontend
-
-* **Dark Mode**: Enable or disable dark mode (default: enabled). Configure in `config.json`:
-```json
-{
-  "frontend": {
-    "darkMode": true
-  }
-}
-```
-* **Ad Blocker**: Enable or disable built-in ad blocking (default: enabled). Configure in `config.json`:
-```json
-{
-  "frontend": {
-    "adBlocker": true
-  }
-}
-```
-
-## Architecture Diagram
-
-```
-          +---------------+
-          |  Client  |
-          +---------------+
-                  |
-                  |
-                  v
-          +---------------+
-          |  Service Worker  |
-          |  (Cache API)     |
-          +---------------+
-                  |
-                  |
-                  v
-          +---------------+
-          |  Nexus Proxy    |
-          |  (Express, Node.js) |
-          +---------------+
-                  |
-                  |
-                  v
-          +---------------+
-          |  Target Server  |
-          +---------------+
-```
-
-## Comparison Table
-
-| Feature | Ultraviolet | Nexus Proxy |
-| --- | --- | --- |
-| Core Proxy Engine | Basic | Advanced |
-| JS / HTML / CSS Rewriting | Limited | Comprehensive |
-| Caching & Performance | Basic | Advanced |
-| Frontend | Bare-bones | Sleek & Feature-rich |
-| Ad Blocker | No | Built-in |
 
 ## Contributing
 
-Contributions to the Nexus Proxy project are welcome. Please submit pull requests or issues on the GitHub repository.
+Contributions are welcome! Please submit pull requests to the main branch. Ensure that all tests pass and code is formatted according to the project's ESLint and Prettier configurations.
 
 ## License
 
-Nexus Proxy is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+Nexus Proxy is licensed under the MIT License. See LICENSE for details.
 
 ## Acknowledgements
 
-Special thanks to the developers of Ultraviolet for their work on the original proxy technology. Nexus Proxy aims to build upon and improve their efforts.
+Special thanks to the developers of Ultraviolet for their work on the original proxy technology. Nexus aims to build upon and improve these concepts to provide a more secure and feature-rich proxy solution.
