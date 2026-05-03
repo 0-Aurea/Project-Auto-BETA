@@ -68,7 +68,12 @@ class EncodingUtils {
    * @returns {Buffer} The decoded buffer.
    */
   static base64UrlDecode(encodedStr) {
-    return Buffer.from(encodedStr.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+    encodedStr = encodedStr.replace(/-/g, '+').replace(/_/g, '/');
+    // Handle padding
+    while (encodedStr.length % 4 !== 0) {
+      encodedStr += '=';
+    }
+    return Buffer.from(encodedStr, 'base64');
   }
 
   /**
