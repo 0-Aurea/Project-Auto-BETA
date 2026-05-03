@@ -45,15 +45,84 @@ Nexus is a self-hosted web proxy designed to be objectively better than Titanium
 
 ### Caching
 
-* **Cache TTL**: Set the time-to-live (TTL) for cached responses in hours (default: 1 hour)
-* **Cache Size**: Set the maximum size of the cache in megabytes (default: 100 MB)
-* **Cache Enabled**: Enable or disable caching (default: enabled)
+* **Cache TTL**: Set the time-to-live (TTL) for cached responses in hours (default: 1 hour). Configure in `config.json`:
+```json
+{
+  "cache": {
+    "ttl": 1
+  }
+}
+```
+* **Cache Size**: Set the maximum size of the cache in megabytes (default: 100 MB). Configure in `config.json`:
+```json
+{
+  "cache": {
+    "size": 100
+  }
+}
+```
+* **Cache Enabled**: Enable or disable caching (default: enabled). Configure in `config.json`:
+```json
+{
+  "cache": {
+    "enabled": true
+  }
+}
+```
 
 ### Performance
 
-* **Brotli Compression**: Enable or disable Brotli compression (default: enabled)
-* **Gzip Compression**: Enable or disable gzip compression (default: enabled)
-* **Prefetch Hints**: Enable or disable prefetch hints (default: enabled)
+* **Brotli Compression**: Enable or disable Brotli compression (default: enabled). Configure in `config.json`:
+```json
+{
+  "performance": {
+    "brotli": true
+  }
+}
+```
+* **Gzip Compression**: Enable or disable gzip compression (default: enabled). Configure in `config.json`:
+```json
+{
+  "performance": {
+    "gzip": true
+  }
+}
+```
+* **Prefetch Hints**: Enable or disable prefetch hints (default: enabled). Configure in `config.json`:
+```json
+{
+  "performance": {
+    "prefetch": true
+  }
+}
+```
+
+### Frontend
+
+* **Dark Mode**: Enable or disable dark mode (default: enabled). Configure in `config.json`:
+```json
+{
+  "frontend": {
+    "darkMode": true
+  }
+}
+```
+* **Ad Block**: Enable or disable built-in ad blocking (default: enabled). Configure in `config.json`:
+```json
+{
+  "frontend": {
+    "adBlock": true
+  }
+}
+```
+* **Bookmarks**: Enable or disable bookmarks system (default: enabled). Configure in `config.json`:
+```json
+{
+  "frontend": {
+    "bookmarks": true
+  }
+}
+```
 
 ## Architecture Diagram
 
@@ -83,32 +152,21 @@ Nexus is a self-hosted web proxy designed to be objectively better than Titanium
           +---------------+
 ```
 
-## Comparison Table
+## Development
 
-| Feature | Ultraviolet | Nexus |
-| --- | --- | --- |
-| Core Proxy Engine | Basic | Advanced |
-| JS / HTML / CSS Rewriting | Limited | Comprehensive |
-| Caching & Performance | Basic | Advanced |
-| Frontend | Bare-bones | Sleek & Feature-rich |
+To contribute to the Nexus proxy, follow these guidelines:
 
-## Contributing
-
-Contributions to this project are welcome. Please submit a pull request with your changes and a brief description of what you've added or fixed.
+* Fork the repository and create a new branch for your changes.
+* Run `npm install` to install dependencies.
+* Run `npm start` to start the proxy.
+* Make changes and commit them with a descriptive message.
+* Create a pull request to merge your changes into the main branch.
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+Nexus Proxy is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## Acknowledgements
 
-Special thanks to the developers of Ultraviolet for inspiring this project.
-
-## Known Issues
-
-* None reported yet.
-
-## Future Plans
-
-* Implement additional features, such as support for WebAssembly and PGP encryption.
-* Improve performance and security.
+* Titanium Network's Ultraviolet proxy, which inspired the creation of Nexus.
+* Node.js, Express, and vanilla JavaScript, which make up the core technologies of Nexus.
