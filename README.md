@@ -3,12 +3,21 @@
 
 ## Introduction
 
-Nexus is a self-hosted web proxy designed to be objectively better than Titanium Network's Ultraviolet proxy in every measurable way. This repository contains the source code for the Nexus proxy, which is built using Node.js, Express, and vanilla JavaScript.
+Nexus is a self-hosted web proxy designed to be objectively better than Titanium Network's Ultraviolet proxy in every measurable way. This repository contains the source code for the Nexus proxy, which is built using Node.js, Express, and vanilla JavaScript. Nexus aims to provide a secure, fast, and feature-rich proxy solution for users who require enhanced online anonymity and flexibility.
 
 ## Features
 
-* **Core Proxy Engine**: XOR + base64 URL encoding with a rotating salt, integrated HTTPS tunnel, full request/response header rewriting, cookie scoping, WebSocket upgrade proxying, and WebRTC ICE candidate scrubbing.
-* **JS / HTML / CSS Rewriting**: Smarter JS rewriter, CSS rewriter, and HTML rewriter to handle dynamic JS imports, eval(), WebSockets, blob URLs, inline event handlers, source maps, CSS @imports, and WebRTC leaks.
+* **Core Proxy Engine**: 
+  * XOR + base64 URL encoding with a rotating salt for enhanced obfuscation
+  * Integrated HTTPS tunnel for secure connections
+  * Full request/response header rewriting for optimal anonymity
+  * Cookie scoping to isolate cookies per proxied origin
+  * WebSocket upgrade proxying for real-time communication
+  * WebRTC ICE candidate scrubbing to prevent IP leaks
+* **JS / HTML / CSS Rewriting**: 
+  * Smarter JS rewriter to handle dynamic JS imports, eval(), WebSockets, blob URLs, inline event handlers, source maps, CSS @imports, and WebRTC leaks
+  * CSS rewriter to handle url(), @import, and content: url(...)
+  * HTML rewriter to handle all src/href/action/srcset/data attributes, <base> tag injection, <meta http-equiv="refresh"> rewrites, inline <script> and <style> blocks, and nonce stripping
 * **Caching & Performance**: 
   * Service Worker Cache API for caching proxied responses with TTL headers
   * Brotli/gzip decompression + re-compression pipeline for efficient content encoding
@@ -107,19 +116,11 @@ Nexus is a self-hosted web proxy designed to be objectively better than Titanium
   }
 }
 ```
-* **Ad Block**: Enable or disable built-in ad blocking (default: enabled). Configure in `config.json`:
+* **Ad Blocker**: Enable or disable built-in ad blocking (default: enabled). Configure in `config.json`:
 ```json
 {
   "frontend": {
-    "adBlock": true
-  }
-}
-```
-* **Bookmarks**: Enable or disable bookmarks system (default: enabled). Configure in `config.json`:
-```json
-{
-  "frontend": {
-    "bookmarks": true
+    "adBlocker": true
   }
 }
 ```
@@ -141,26 +142,30 @@ Nexus is a self-hosted web proxy designed to be objectively better than Titanium
                   |
                   v
           +---------------+
-          |  Express Server  |
-          |  (HTTPS Tunnel)   |
+          |  Nexus Proxy    |
+          |  (Express, Node.js) |
           +---------------+
                   |
                   |
                   v
           +---------------+
-          |  Proxied Origin  |
+          |  Target Server  |
           +---------------+
 ```
 
-## Development
+## Comparison Table
 
-To contribute to the Nexus proxy, follow these guidelines:
+| Feature | Ultraviolet | Nexus Proxy |
+| --- | --- | --- |
+| Core Proxy Engine | Basic | Advanced |
+| JS / HTML / CSS Rewriting | Limited | Comprehensive |
+| Caching & Performance | Basic | Advanced |
+| Frontend | Bare-bones | Sleek & Feature-rich |
+| Ad Blocker | No | Built-in |
 
-* Fork the repository and create a new branch for your changes.
-* Run `npm install` to install dependencies.
-* Run `npm start` to start the proxy.
-* Make changes and commit them with a descriptive message.
-* Create a pull request to merge your changes into the main branch.
+## Contributing
+
+Contributions to the Nexus Proxy project are welcome. Please submit pull requests or issues on the GitHub repository.
 
 ## License
 
@@ -168,5 +173,4 @@ Nexus Proxy is licensed under the MIT License. See [LICENSE](LICENSE) for detail
 
 ## Acknowledgements
 
-* Titanium Network's Ultraviolet proxy, which inspired the creation of Nexus.
-* Node.js, Express, and vanilla JavaScript, which make up the core technologies of Nexus.
+Special thanks to the developers of Ultraviolet for their work on the original proxy technology. Nexus Proxy aims to build upon and improve their efforts.
