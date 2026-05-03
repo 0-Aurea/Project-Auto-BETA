@@ -109,243 +109,157 @@ class JSRewriter {
       return `window.open('${this.rewriteURL(p1)}')`;
     });
 
-    js = js.replace(this.historyPushStateRegex, () => {
-      return `history.pushState(${this.rewriteHistoryPushState()})`;
+    js = js.replace(this.historyPushStateRegex, (match) => {
+      return `history.pushState(${this.rewriteHistoryState(match)})`;
     });
 
-    js = js.replace(this.historyReplaceStateRegex, () => {
-      return `history.replaceState(${this.rewriteHistoryReplaceState()})`;
+    js = js.replace(this.historyReplaceStateRegex, (match) => {
+      return `history.replaceState(${this.rewriteHistoryState(match)})`;
     });
 
     return js;
   }
 
-  rewriteEval(evalString) {
-    try {
-      const evalFunc = new Function(`return ${evalString}`);
-      const result = evalFunc();
-      return result;
-    } catch (e) {
-      return evalString;
-    }
+  rewriteEval(match) {
+    return match.slice(5, -1);
   }
 
-  rewriteFunction(functionString) {
-    try {
-      const func = new Function(`return ${functionString}`);
-      const result = func();
-      return result;
-    } catch (e) {
-      return functionString;
-    }
+  rewriteFunction(match) {
+    return match.slice(9, -1);
   }
 
-  rewriteDynamicImport(importString) {
-    return this.rewriteURL(importString);
+  rewriteDynamicImport(match) {
+    return match.slice(7, -1);
   }
 
-  rewriteRequire(requireString) {
-    return this.rewriteURL(requireString);
+  rewriteRequire(match) {
+    return match.slice(8, -1);
   }
 
   rewriteURL(url) {
-    if (url.startsWith('http')) {
-      return url;
-    } else {
-      return xorBase64Encode(url, generateSalt());
-    }
+    return url;
   }
 
-  rewriteHistoryPushState() {
-    return `null, null, '${this.rewriteURL(window.location.href)}'`;
-  }
-
-  rewriteHistoryReplaceState() {
-    return `null, null, '${this.rewriteURL(window.location.href)}'`;
+  rewriteHistoryState(match) {
+    return match;
   }
 }
 
-class HTMLRewriter {
+class WebSocketProxy {
   constructor() {
-    this.srcRegex = /src=['"]([^'"]+)['"]/g;
-    this.hrefRegex = /href=['"]([^'"]+)['"]/g;
-    this.actionRegex = /action=['"]([^'"]+)['"]/g;
-    this.srcsetRegex = /srcset=['"]([^'"]+)['"]/g;
-    this.dataRegex = /data-([a-zA-Z0-9-]+)=['"]([^'"]+)['"]/g;
+    this.websockets = new Map();
   }
 
-  rewriteHTML(html) {
-    html = html.replace(this.srcRegex, (match, p1) => {
-      return `src='${this.rewriteURL(p1)}'`;
+  handleWebSocket(request) {
+    const url = new URL(request.url);
+    const websocketUrl = url.protocol === 'wss:' ? 'wss' : 'ws';
+    const targetUrl = `${websocketUrl}://${url.host}${url.pathname}`;
+
+    const websocket = new WebSocket(targetUrl);
+
+    this.websockets.set(request, websocket);
+
+    websocket.onmessage = (event) => {
+      request.respondWith(new Response(event.data));
+    };
+
+    websocket.onclose = () => {
+      this.websockets.delete(request);
+    };
+
+    websocket.onerror = (event) => {
+      console.error('WebSocket error:', event);
+    };
+
+    return new Promise((resolve) => {
+      websocket.onopen = () => {
+        resolve();
+      };
     });
-
-    html = html.replace(this.hrefRegex, (match, p1) => {
-      return `href='${this.rewriteURL(p1)}'`;
-    });
-
-    html = html.replace(this.actionRegex, (match, p1) => {
-      return `action='${this.rewriteURL(p1)}'`;
-    });
-
-    html = html.replace(this.srcsetRegex, (match, p1) => {
-      return `srcset='${this.rewriteURL(p1)}'`;
-    });
-
-    html = html.replace(this.dataRegex, (match, p1, p2) => {
-      return `data-${p1}='${this.rewriteURL(p2)}'`;
-    });
-
-    return html;
-  }
-
-  rewriteURL(url) {
-    if (url.startsWith('http')) {
-      return url;
-    } else {
-      return xorBase64Encode(url, generateSalt());
-    }
   }
 }
 
-class CSSRewriter {
+class WebRTCProxy {
   constructor() {
-    this.urlRegex = /url\(['"]([^'"]+)['"]\)/g;
-    this.importRegex = /@import\s+['"]([^'"]+)['"]/g;
-    this.contentRegex = /content:\s*url\(['"]([^'"]+)['"]\)/g;
+    this.rtcPeerConnections = new Map();
   }
 
-  rewriteCSS(css) {
-    css = css.replace(this.urlRegex, (match, p1) => {
-      return `url('${this.rewriteURL(p1)}')`;
+  handleWebRTC(request) {
+    const rtcPeerConnection = new RTCPeerConnection();
+
+    this.rtcPeerConnections.set(request, rtcPeerConnection);
+
+    rtcPeerConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        const candidate = event.candidate;
+        candidate.sdpMLN = '';
+        candidate.sdpMid = '';
+        request.respondWith(new Response(JSON.stringify(candidate)));
+      }
+    };
+
+    rtcPeerConnection.onaddstream = (event) => {
+      console.log('WebRTC stream added:', event.stream);
+    };
+
+    rtcPeerConnection.onremovestream = (event) => {
+      console.log('WebRTC stream removed:', event.stream);
+    };
+
+    return new Promise((resolve) => {
+      rtcPeerConnection.oncreateoffer = (offer) => {
+        resolve(offer);
+      };
     });
-
-    css = css.replace(this.importRegex, (match, p1) => {
-      return `@import '${this.rewriteURL(p1)}'`;
-    });
-
-    css = css.replace(this.contentRegex, (match, p1) => {
-      return `content: url('${this.rewriteURL(p1)}')`;
-    });
-
-    return css;
-  }
-
-  rewriteURL(url) {
-    if (url.startsWith('http')) {
-      return url;
-    } else {
-      return xorBase64Encode(url, generateSalt());
-    }
   }
 }
 
-async function handleFetch(event) {
+const webSocketProxy = new WebSocketProxy();
+const webRTCProxy = new WebRTCProxy();
+
+self.addEventListener('fetch', async (event) => {
   const request = event.request;
   const url = new URL(request.url);
 
-  if (request.method === 'GET') {
-    const response = await getResponse(request);
-    if (response) {
-      event.respondWith(response);
-      return;
-    }
+  if (request.method === 'GET' && url.pathname === '/') {
+    event.respondWith(handleRequest(request));
+  } else if (request.method === 'GET' && url.pathname === '/ws') {
+    event.respondWith(webSocketProxy.handleWebSocket(request));
+  } else if (request.method === 'GET' && url.pathname === '/webrtc') {
+    event.respondWith(webRTCProxy.handleWebRTC(request));
+  } else {
+    event.respondWith(handleRequest(request));
   }
+});
 
-  const newRequest = new Request(request);
-  newRequest.headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.3');
-
-  fetch(newRequest)
-    .then(response => {
-      if (response.ok) {
-        const newResponse = new Response(response.body, response);
-        newResponse.headers.set('Cache-Control', 'max-age=3600');
-        putResponse(request, newResponse);
-        event.respondWith(newResponse);
-      } else {
-        event.respondWith(response);
-      }
-    })
-    .catch(error => {
-      event.respondWith(new Response('Error: ' + error, { status: 500 }));
-    });
-}
-
-async function handleCache(event) {
-  const request = event.request;
+async function handleRequest(request) {
   const cache = await getCache();
   const response = await cache.match(request);
+
   if (response) {
-    event.respondWith(response);
-  }
-}
-
-self.addEventListener('fetch', handleFetch);
-self.addEventListener('cache', handleCache);
-
-self.addEventListener('activate', async event => {
-  event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheName !== cacheName) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
-  );
-});
-
-self.addEventListener('install', async event => {
-  event.waitUntil(
-    getCache().then(cache => {
-      return cache.addAll([]);
-    })
-  );
-});
-
-function decompressGzip(data) {
-  const decompressedData = [];
-  const gzipHeader = data.slice(0, 10);
-  const compressedData = data.slice(10);
-  const inflater = new zlib.Inflate(compressedData);
-  const decompressedArray = inflater.decompress();
-  return String.fromCharCode(...decompressedArray);
-}
-
-function decompressBrotli(data) {
-  const decompressedData = [];
-  const brotliDecoder = new brotli.Decoder();
-  const decompressedArray = brotliDecoder.decode(data);
-  return String.fromCharCode(...decompressedArray);
-}
-
-function compressGzip(data) {
-  const compressedData = [];
-  const gzipHeader = [0x1f, 0x8b];
-  const deflater = new zlib.Deflate();
-  const compressedArray = deflater.compress(data);
-  return new Uint8Array([...gzipHeader, ...compressedArray]);
-}
-
-function compressBrotli(data) {
-  const compressedData = [];
-  const brotliEncoder = new brotli.Encoder();
-  const compressedArray = brotliEncoder.encode(data);
-  return new Uint8Array(compressedArray);
-}
-
-async function handleResponse(response) {
-  const contentEncoding = response.headers.get('content-encoding');
-  if (contentEncoding === 'gzip') {
-    const decompressedData = decompressGzip(await response.arrayBuffer());
-    const newResponse = new Response(decompressedData, response);
-    return newResponse;
-  } else if (contentEncoding === 'br') {
-    const decompressedData = decompressBrotli(await response.arrayBuffer());
-    const newResponse = new Response(decompressedData, response);
-    return newResponse;
-  } else {
     return response;
   }
+
+  try {
+    const newResponse = await fetch(request);
+    await putResponse(request, newResponse.clone());
+    return newResponse;
+  } catch (error) {
+    console.error('Error handling request:', error);
+    return new Response('Error handling request', { status: 500 });
+  }
 }
+
+self.addEventListener('message', async (event) => {
+  if (event.data.type === 'ping') {
+    event.ports[0].postMessage('pong');
+  }
+});
+
+self.addEventListener('activate', async (event) => {
+  event.waitUntil(getCache());
+});
+
+self.addEventListener('install', async (event) => {
+  event.waitUntil(getCache());
+});
