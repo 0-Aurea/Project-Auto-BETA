@@ -101,29 +101,6 @@ class ProxyUtils {
       ws.on('pong', () => {
         // No-op
       });
-
-      // Set up connection timeout
-      let timeoutId = setTimeout(() => {
-        ws.terminate();
-        proxiedWs.close();
-      }, 60000); // 1 minute
-
-      // Handle WebRTC ICE candidate scrubbing
-      proxiedWs.on('message', (message) => {
-        try {
-          const messageData = JSON.parse(message);
-          if (messageData.type === 'iceCandidate') {
-            const scrubbedMessage = WebRTCUtils.scrubIceCandidate(messageData);
-            proxiedWs.send(JSON.stringify(scrubbedMessage));
-          } else {
-            proxiedWs.send(message);
-          }
-        } catch (error) {
-          console.error('Error handling WebRTC ICE candidate:', error);
-          ws.terminate();
-          proxiedWs.close();
-        }
-      });
     });
   }
 
@@ -145,7 +122,7 @@ class ProxyUtils {
    */
   static rewriteHeaders(headers) {
     // Implement full request/response header rewriting
-    // Strip CSP, HSTS, X-Frame-Options, and other restrictive headers
+    // Strip CSP, HSTS, X-Frame-Options, and other security headers
     const rewrittenHeaders = { ...headers };
     delete rewrittenHeaders['content-security-policy'];
     delete rewrittenHeaders['strict-transport-security'];
@@ -154,91 +131,57 @@ class ProxyUtils {
   }
 
   /**
-   * Handle a proxied request.
-   * @param {IncomingMessage} req - The proxied request.
-   * @param {ServerResponse} res - The response to send back to the client.
+   * Handle WebRTC ICE candidate scrubbing to prevent IP leaks.
+   * @param {object} rtcPeerConnection - The RTCPeerConnection instance.
    */
-  static handleProxiedRequest(req, res) {
-    // Implement request/response caching with TTL headers
-    const cacheKey = req.url;
-    const cachedResponse = CacheUtils.get(cacheKey);
-    if (cachedResponse) {
-      res.writeHead(cachedResponse.status, cachedResponse.headers);
-      res.end(cachedResponse.body);
-    } else {
-      // Forward the request to the proxied server
-      const proxiedReq = EncodingUtils.getProxiedRequest(req);
-      const proxiedRes = EncodingUtils.getProxiedResponse(res);
-
-      // Handle dynamic JS imports, eval(), and WebSocket upgrades
-      if (proxiedReq.headers['upgrade'] === 'websocket') {
-        // Handle WebSocket upgrade request
-        ProxyUtils.handleWebSocketUpgrade(proxiedReq, proxiedRes);
-      } else {
-        // Handle HTTP request
-        const response = EncodingUtils.forwardRequest(proxiedReq);
-        response.then((response) => {
-          // Rewrite the response headers and body
-          const rewrittenResponse = ProxyUtils.rewriteResponse(response);
-          res.writeHead(rewrittenResponse.status, rewrittenResponse.headers);
-          res.end(rewrittenResponse.body);
-
-          // Cache the response
-          CacheUtils.set(cacheKey, rewrittenResponse);
-        }).catch((error) => {
-          console.error('Error handling proxied request:', error);
-          res.writeHead(500);
-          res.end('Internal Server Error');
-        });
+  static handleWebRTCIceCandidateScrubbing(rtcPeerConnection) {
+    // Implement WebRTC ICE candidate scrubbing
+    rtcPeerConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        // Scrub the IP address from the ICE candidate
+        const scrubbedCandidate = WebRTCUtils.scrubIceCandidate(event.candidate);
+        rtcPeerConnection.addIceCandidate(scrubbedCandidate);
       }
-    }
+    };
   }
 
   /**
-   * Rewrite a response.
-   * @param {ServerResponse} response - The response to rewrite.
-   * @returns {ServerResponse} The rewritten response.
-   */
-  static rewriteResponse(response) {
-    // Implement response rewriting
-    // Handle HTML, JS, and CSS rewriting
-    const rewrittenResponse = { ...response };
-    rewrittenResponse.headers['content-type'] = 'text/html; charset=UTF-8';
-
-    // Handle HTML rewriting
-    if (response.headers['content-type'] === 'text/html') {
-      const htmlRewriter = new HTMLRewriterUtils();
-      rewrittenResponse.body = htmlRewriter.rewrite(response.body);
-    }
-
-    // Handle JS rewriting
-    if (response.headers['content-type'] === 'application/javascript') {
-      const jsRewriter = new JSRewriterUtils();
-      rewrittenResponse.body = jsRewriter.rewrite(response.body);
-    }
-
-    // Handle CSS rewriting
-    if (response.headers['content-type'] === 'text/css') {
-      const cssRewriter = new CssRewriterUtils();
-      rewrittenResponse.body = cssRewriter.rewrite(response.body);
-    }
-
-    return rewrittenResponse;
-  }
-
-  /**
-   * Handle a WebSocket upgrade request.
-   * @param {IncomingMessage} req - The WebSocket upgrade request.
-   * @param {ServerResponse} res - The response to send back to the client.
+   * Handle WebSocket upgrade proxying with header rewriting.
+   * @param {IncomingMessage} req - The incoming request.
+   * @param {ServerResponse} res - The server response.
    */
   static handleWebSocketUpgrade(req, res) {
-    // Implement WebSocket upgrade proxying
-    const ws = new WebSocket(req.url);
-    req.on('data', (data) => {
-      ws.send(data);
+    // Implement WebSocket upgrade proxying with header rewriting
+    const { headers, url } = req;
+    const proxiedUrl = ProxyUtils.getProxiedUrl(url);
+    const destination = new URL(proxiedUrl);
+    const destinationHeaders = ProxyUtils.rewriteHeaders(headers);
+
+    // Establish connection to the proxied WebSocket server
+    const proxiedWs = new WebSocket(destination.href, {
+      headers: destinationHeaders,
+      perMessageDeflate: false,
     });
-    ws.on('data', (data) => {
-      res.write(data);
+
+    // Handle WebSocket messages
+    proxiedWs.on('message', (message) => {
+      try {
+        res.write(message);
+      } catch (error) {
+        console.error('Error sending message to WebSocket client:', error);
+        proxiedWs.close();
+      }
+    });
+
+    // Handle WebSocket errors
+    proxiedWs.on('error', (error) => {
+      console.error('WebSocket proxied server error:', error);
+      proxiedWs.close();
+    });
+
+    // Handle WebSocket close event
+    proxiedWs.on('close', () => {
+      res.end();
     });
   }
 }
