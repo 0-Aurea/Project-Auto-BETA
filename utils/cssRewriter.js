@@ -1,78 +1,75 @@
 const { URL } = require('url');
 
 /**
- * CSS rewriter utility class for handling CSS rewriting, including handling url(), @import, and content: url(...).
+ * CSS rewriter utility class for handling url(), @import, and content: url(...) cases.
  */
-class CSSRewriterUtils {
+class CssRewriterUtils {
   /**
-   * Regular expression to match CSS url() functions.
+   * Regular expression to match CSS url() calls.
    */
-  static URL_REGEX = /url\(([^)]+)\)/gi;
+  static URL_REGEX = /url\(\s*['"](.*?)['"]\s*\)/g;
 
   /**
-   * Regular expression to match CSS @import rules.
+   * Regular expression to match CSS @import statements.
    */
-  static IMPORT_REGEX = /@import\s+["'](.*?)["']/gi;
+  static IMPORT_REGEX = /@import\s+['"](.*?)['"]/g;
 
   /**
-   * Regular expression to match CSS content: url() functions.
+   * Regular expression to match CSS content: url(...) statements.
    */
-  static CONTENT_URL_REGEX = /content:\s*url\(([^)]+)\)/gi;
+  static CONTENT_URL_REGEX = /content:\s*url\(\s*['"](.*?)['"]\s*\)/g;
 
   /**
-   * Rewrites CSS url() functions to use the proxy URL.
+   * Rewriter function for CSS url() calls.
    * @param {string} css - The CSS string to rewrite.
-   * @param {string} proxyUrl - The proxy URL to use.
+   * @param {function} rewriter - The rewriter function for URLs.
    * @returns {string} The rewritten CSS string.
    */
-  static rewriteUrls(css, proxyUrl) {
-    return css.replace(CSSRewriterUtils.URL_REGEX, (match, url) => {
-      const absoluteUrl = new URL(url, proxyUrl).href;
-      return `url(${proxyUrl}/proxy?url=${encodeURIComponent(absoluteUrl)})`;
+  static rewriteUrl(css, rewriter) {
+    return css.replace(CssRewriterUtils.URL_REGEX, (match, url) => {
+      const rewrittenUrl = rewriter(url);
+      return `url(${rewrittenUrl})`;
     });
   }
 
   /**
-   * Rewrites CSS @import rules to use the proxy URL.
+   * Rewriter function for CSS @import statements.
    * @param {string} css - The CSS string to rewrite.
-   * @param {string} proxyUrl - The proxy URL to use.
+   * @param {function} rewriter - The rewriter function for URLs.
    * @returns {string} The rewritten CSS string.
    */
-  static rewriteImports(css, proxyUrl) {
-    return css.replace(CSSRewriterUtils.IMPORT_REGEX, (match, importUrl) => {
-      const absoluteUrl = new URL(importUrl, proxyUrl).href;
-      return `@import "${proxyUrl}/proxy?url=${encodeURIComponent(absoluteUrl)}"`;
+  static rewriteImport(css, rewriter) {
+    return css.replace(CssRewriterUtils.IMPORT_REGEX, (match, url) => {
+      const rewrittenUrl = rewriter(url);
+      return `@import "${rewrittenUrl}"`;
     });
   }
 
   /**
-   * Rewrites CSS content: url() functions to use the proxy URL.
+   * Rewriter function for CSS content: url(...) statements.
    * @param {string} css - The CSS string to rewrite.
-   * @param {string} proxyUrl - The proxy URL to use.
+   * @param {function} rewriter - The rewriter function for URLs.
    * @returns {string} The rewritten CSS string.
    */
-  static rewriteContentUrls(css, proxyUrl) {
-    return css.replace(CSSRewriterUtils.CONTENT_URL_REGEX, (match, url) => {
-      const absoluteUrl = new URL(url, proxyUrl).href;
-      return `content: url(${proxyUrl}/proxy?url=${encodeURIComponent(absoluteUrl)})`;
+  static rewriteContentUrl(css, rewriter) {
+    return css.replace(CssRewriterUtils.CONTENT_URL_REGEX, (match, url) => {
+      const rewrittenUrl = rewriter(url);
+      return `content: url(${rewrittenUrl})`;
     });
   }
 
   /**
-   * Rewrites CSS to use the proxy URL for all url() functions, @import rules, and content: url() functions.
+   * Rewrite CSS url(), @import, and content: url(...) statements.
    * @param {string} css - The CSS string to rewrite.
-   * @param {string} proxyUrl - The proxy URL to use.
+   * @param {function} rewriter - The rewriter function for URLs.
    * @returns {string} The rewritten CSS string.
    */
-  static rewriteCss(css, proxyUrl) {
-    return CSSRewriterUtils.rewriteContentUrls(
-      CSSRewriterUtils.rewriteImports(
-        CSSRewriterUtils.rewriteUrls(css, proxyUrl),
-        proxyUrl
-      ),
-      proxyUrl
-    );
+  static rewrite(css, rewriter) {
+    css = CssRewriterUtils.rewriteUrl(css, rewriter);
+    css = CssRewriterUtils.rewriteImport(css, rewriter);
+    css = CssRewriterUtils.rewriteContentUrl(css, rewriter);
+    return css;
   }
 }
 
-module.exports = CSSRewriterUtils;
+module.exports = CssRewriterUtils;
