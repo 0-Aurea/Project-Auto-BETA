@@ -110,156 +110,191 @@ class JSRewriter {
     });
 
     js = js.replace(this.historyPushStateRegex, (match) => {
-      return `history.pushState(${this.rewriteHistoryState(match)})`;
+      return `history.pushState(${this.rewriteHistory(match)})`;
     });
 
     js = js.replace(this.historyReplaceStateRegex, (match) => {
-      return `history.replaceState(${this.rewriteHistoryState(match)})`;
+      return `history.replaceState(${this.rewriteHistory(match)})`;
     });
 
     return js;
   }
 
-  rewriteEval(match) {
-    return match.slice(5, -1);
+  rewriteEval(evalString) {
+    try {
+      const evalFunc = new Function(`return ${evalString}`);
+      const result = evalFunc();
+      return JSON.stringify(result);
+    } catch (e) {
+      return evalString;
+    }
   }
 
-  rewriteFunction(match) {
-    return match.slice(9, -1);
+  rewriteFunction(functionString) {
+    try {
+      const func = new Function(`return ${functionString}`);
+      const result = func();
+      return JSON.stringify(result);
+    } catch (e) {
+      return functionString;
+    }
   }
 
-  rewriteDynamicImport(match) {
-    return match.slice(7, -1);
+  rewriteDynamicImport(importString) {
+    return this.rewriteURL(importString);
   }
 
-  rewriteRequire(match) {
-    return match.slice(8, -1);
+  rewriteRequire(requireString) {
+    return this.rewriteURL(requireString);
   }
 
   rewriteURL(url) {
-    return url;
+    if (url.startsWith('http')) {
+      return url;
+    }
+    return xorBase64Encode(url, generateSalt());
   }
 
-  rewriteHistoryState(match) {
-    return match;
+  rewriteHistory(historyString) {
+    const historyRegex = /\(([^)]+)\)/;
+    const match = historyString.match(historyRegex);
+    if (match) {
+      const historyArgs = match[1].split(',');
+      const rewrittenArgs = historyArgs.map((arg) => {
+        if (arg.trim().startsWith("'") && arg.trim().endsWith("'")) {
+          return `'${this.rewriteURL(arg.trim().slice(1, -1))}'`;
+        }
+        return arg;
+      });
+      return `(${rewrittenArgs.join(',')})`;
+    }
+    return historyString;
   }
 }
 
-class WebSocketProxy {
+class HTMLRewriter {
   constructor() {
-    this.websockets = new Map();
+    this.srcRegex = /\ssrc=['"]([^'"]+)['"]/g;
+    this.hrefRegex = /\shref=['"]([^'"]+)['"]/g;
+    this.actionRegex = /\saction=['"]([^'"]+)['"]/g;
+    this.srcsetRegex = /\ssrcset=['"]([^'"]+)['"]/g;
+    this.dataRegex = /\sdata=['"]([^'"]+)['"]/g;
   }
 
-  handleWebSocket(request) {
-    const url = new URL(request.url);
-    const websocketUrl = url.protocol === 'wss:' ? 'wss' : 'ws';
-    const targetUrl = `${websocketUrl}://${url.host}${url.pathname}`;
-
-    const websocket = new WebSocket(targetUrl);
-
-    this.websockets.set(request, websocket);
-
-    websocket.onmessage = (event) => {
-      request.respondWith(new Response(event.data));
-    };
-
-    websocket.onclose = () => {
-      this.websockets.delete(request);
-    };
-
-    websocket.onerror = (event) => {
-      console.error('WebSocket error:', event);
-    };
-
-    return new Promise((resolve) => {
-      websocket.onopen = () => {
-        resolve();
-      };
+  rewriteHTML(html) {
+    html = html.replace(this.srcRegex, (match, p1) => {
+      return `src='${this.rewriteURL(p1)}'`;
     });
+
+    html = html.replace(this.hrefRegex, (match, p1) => {
+      return `href='${this.rewriteURL(p1)}'`;
+    });
+
+    html = html.replace(this.actionRegex, (match, p1) => {
+      return `action='${this.rewriteURL(p1)}'`;
+    });
+
+    html = html.replace(this.srcsetRegex, (match, p1) => {
+      return `srcset='${this.rewriteURL(p1)}'`;
+    });
+
+    html = html.replace(this.dataRegex, (match, p1) => {
+      return `data='${this.rewriteURL(p1)}'`;
+    });
+
+    return html;
+  }
+
+  rewriteURL(url) {
+    if (url.startsWith('http')) {
+      return url;
+    }
+    return xorBase64Encode(url, generateSalt());
   }
 }
 
-class WebRTCProxy {
+class CSSRewriter {
   constructor() {
-    this.rtcPeerConnections = new Map();
+    this.urlRegex = /url\(['"]([^'"]+)['"]\)/g;
+    this.importRegex = /@import\s+['"]([^'"]+)['"]/g;
+    this.contentRegex = /content:\s*url\(['"]([^'"]+)['"]\)/g;
   }
 
-  handleWebRTC(request) {
-    const rtcPeerConnection = new RTCPeerConnection();
-
-    this.rtcPeerConnections.set(request, rtcPeerConnection);
-
-    rtcPeerConnection.onicecandidate = (event) => {
-      if (event.candidate) {
-        const candidate = event.candidate;
-        candidate.sdpMLN = '';
-        candidate.sdpMid = '';
-        request.respondWith(new Response(JSON.stringify(candidate)));
-      }
-    };
-
-    rtcPeerConnection.onaddstream = (event) => {
-      console.log('WebRTC stream added:', event.stream);
-    };
-
-    rtcPeerConnection.onremovestream = (event) => {
-      console.log('WebRTC stream removed:', event.stream);
-    };
-
-    return new Promise((resolve) => {
-      rtcPeerConnection.oncreateoffer = (offer) => {
-        resolve(offer);
-      };
+  rewriteCSS(css) {
+    css = css.replace(this.urlRegex, (match, p1) => {
+      return `url('${this.rewriteURL(p1)}')`;
     });
+
+    css = css.replace(this.importRegex, (match, p1) => {
+      return `@import '${this.rewriteURL(p1)}'`;
+    });
+
+    css = css.replace(this.contentRegex, (match, p1) => {
+      return `content: url('${this.rewriteURL(p1)}')`;
+    });
+
+    return css;
+  }
+
+  rewriteURL(url) {
+    if (url.startsWith('http')) {
+      return url;
+    }
+    return xorBase64Encode(url, generateSalt());
   }
 }
 
-const webSocketProxy = new WebSocketProxy();
-const webRTCProxy = new WebRTCProxy();
-
-self.addEventListener('fetch', async (event) => {
-  const request = event.request;
-  const url = new URL(request.url);
-
-  if (request.method === 'GET' && url.pathname === '/') {
-    event.respondWith(handleRequest(request));
-  } else if (request.method === 'GET' && url.pathname === '/ws') {
-    event.respondWith(webSocketProxy.handleWebSocket(request));
-  } else if (request.method === 'GET' && url.pathname === '/webrtc') {
-    event.respondWith(webRTCProxy.handleWebRTC(request));
-  } else {
-    event.respondWith(handleRequest(request));
-  }
+addEventListener('fetch', async (event) => {
+  event.respondWith(handleRequest(event.request));
 });
 
 async function handleRequest(request) {
-  const cache = await getCache();
-  const response = await cache.match(request);
+  const url = new URL(request.url);
+  const salt = generateSalt();
+  const encodedUrl = xorBase64Encode(url.href, salt);
 
-  if (response) {
+  if (request.method === 'GET') {
+    const cache = await getCache();
+    const cachedResponse = await cache.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+
+    const response = await fetch(encodedUrl);
+    const rewrittenResponse = new Response(response.body, response);
+    rewrittenResponse.headers.set('Content-Type', response.headers.get('Content-Type'));
+    rewrittenResponse.headers.set('Cache-Control', 'max-age=3600');
+
+    const cacheResponse = await putResponse(request, rewrittenResponse);
+    return rewrittenResponse;
+  } else if (request.method === 'POST') {
+    const response = await fetch(encodedUrl, {
+      method: 'POST',
+      body: request.body,
+      headers: request.headers,
+    });
     return response;
-  }
-
-  try {
-    const newResponse = await fetch(request);
-    await putResponse(request, newResponse.clone());
-    return newResponse;
-  } catch (error) {
-    console.error('Error handling request:', error);
-    return new Response('Error handling request', { status: 500 });
+  } else {
+    return new Response('Method not allowed', {
+      status: 405,
+      headers: {
+        'Content-Type': 'text/plain',
+      },
+    });
   }
 }
 
-self.addEventListener('message', async (event) => {
-  if (event.data.type === 'ping') {
-    event.ports[0].postMessage('pong');
+addEventListener('activate', async (event) => {
+  event.waitUntil(getCache().then((cache) => cache.keys().then((keys) => {
+    return Promise.all(keys.map((key) => cache.delete(key)));
+  })));
+});
+
+addEventListener('message', async (event) => {
+  if (event.data.type === 'config') {
+    // Handle config message
   }
 });
-
-self.addEventListener('activate', async (event) => {
-  event.waitUntil(getCache());
-});
-
 self.addEventListener('install', async (event) => {
   event.waitUntil(getCache());
 });
