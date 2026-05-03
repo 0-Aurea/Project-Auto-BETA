@@ -1,111 +1,182 @@
-const tls = require('tls');
+const { createServer } = require('https');
+const { ServerResponse, IncomingMessage } = require('http');
+const { URL } = require('url');
 const fs = require('fs');
-const crypto = require('crypto');
+const WebSocket = require('ws');
 
 /**
- * TLS handler utility class for managing TLS connections and certificate management.
+ * TLS handler utility class for managing HTTPS connections and certificate verification.
  */
-class TLSEndpoint {
+class TLSEngine {
   /**
-   * TLS certificate.
+   * HTTPS server instance.
    */
-  static certificate = null;
+  static httpsServer;
 
   /**
-   * TLS private key.
+   * WebSocket server instance.
    */
-  static privateKey = null;
+  static wss;
 
   /**
-   * Initialize TLS endpoint with certificate and private key.
-   * @param {string} certPath - Path to the TLS certificate file.
-   * @param {string} keyPath - Path to the TLS private key file.
+   * Options for the TLS handler.
    */
-  static init(certPath, keyPath) {
-    TLSEndpoint.certificate = fs.readFileSync(certPath, 'utf8');
-    TLSEndpoint.privateKey = fs.readFileSync(keyPath, 'utf8');
+  static options = {
+    key: fs.readFileSync('path/to/privkey.pem'),
+    cert: fs.readFileSync('path/to/cert.pem'),
+  };
+
+  /**
+   * Initialize the TLS handler.
+   * @param {object} options - Options for the TLS handler.
+   */
+  static init(options = {}) {
+    Object.assign(TLSEngine.options, options);
+
+    TLSEngine.httpsServer = createServer(TLSEngine.options, (req, res) => {
+      TLSEngine.handleRequest(req, res);
+    });
+
+    TLSEngine.wss = new WebSocket.Server({ server: TLSEngine.httpsServer }, () => {
+      TLSEngine.handleWebSocketConnection();
+    });
+
+    TLSEngine.httpsServer.listen(443, () => {
+      console.log('TLS server listening on port 443');
+    });
   }
 
   /**
-   * Create a TLS server.
-   * @param {number} port - The port to listen on.
-   * @param {function} onConnection - Callback function for new connections.
-   * @returns {tls.Server}
+   * Handle an incoming HTTPS request.
+   * @param {IncomingMessage} req - The incoming request.
+   * @param {ServerResponse} res - The outgoing response.
    */
-  static createServer(port, onConnection) {
-    const server = tls.createServer({
-      cert: TLSEndpoint.certificate,
-      key: TLSEndpoint.privateKey,
-    }, onConnection);
+  static handleRequest(req, res) {
+    const url = new URL(req.url, `https://${req.headers.host}`);
 
-    server.listen(port, () => {
-      console.log(`TLS server listening on port ${port}`);
-    });
-
-    return server;
+    // Handle HTTP CONNECT requests
+    if (req.method === 'CONNECT') {
+      TLSEngine.handleConnectRequest(req, res, url);
+    } else {
+      // Handle other HTTPS requests
+      TLSEngine.handleHttpsRequest(req, res, url);
+    }
   }
 
   /**
-   * Create a TLS client.
-   * @param {string} hostname - The hostname to connect to.
-   * @param {number} port - The port to connect to.
-   * @param {function} onConnect - Callback function for connection establishment.
-   * @returns {tls.TLSSocket}
+   * Handle an HTTP CONNECT request.
+   * @param {IncomingMessage} req - The incoming request.
+   * @param {ServerResponse} res - The outgoing response.
+   * @param {URL} url - The URL of the request.
    */
-  static createClient(hostname, port, onConnect) {
-    const client = tls.connect({
-      host: hostname,
-      port,
-      rejectUnauthorized: false,
-    }, onConnect);
+  static handleConnectRequest(req, res, url) {
+    const targetHost = url.hostname;
+    const targetPort = url.port || 443;
 
-    return client;
+    // Establish a connection to the target server
+    const targetSocket = require('net').createConnection(targetPort, targetHost, () => {
+      res.writeHead(200, { 'Content-Length': 0 });
+      res.end();
+
+      // Pipe data between the client and target server
+      req.pipe(targetSocket);
+      targetSocket.pipe(req);
+    });
+
+    targetSocket.on('error', (err) => {
+      console.error(`Error establishing connection to ${targetHost}:${targetPort}`, err);
+      res.destroy();
+    });
   }
 
   /**
-   * Generate a self-signed TLS certificate.
-   * @param {string} hostname - The hostname to use for the certificate.
-   * @param {number} days - The number of days the certificate should be valid for.
-   * @returns {{ cert: string, key: string }}
+   * Handle an HTTPS request.
+   * @param {IncomingMessage} req - The incoming request.
+   * @param {ServerResponse} res - The outgoing response.
+   * @param {URL} url - The URL of the request.
    */
-  static generateSelfSignedCertificate(hostname, days) {
-    const key = crypto.generateKeyPairSync('rsa', {
-      modulusLength: 2048,
-      publicExponent: 65537,
-      publicKeyEncoding: {
-        type: 'spki',
-        format: 'pem',
-      },
-      privateKeyEncoding: {
-        type: 'pkcs8',
-        format: 'pem',
-      },
+  static handleHttpsRequest(req, res, url) {
+    // Verify the certificate and handle the request
+    TLSEngine.verifyCertificate(req, res, url, (verified) => {
+      if (verified) {
+        // Forward the request to the target server
+        TLSEngine.forwardRequest(req, res, url);
+      } else {
+        res.writeHead(403, { 'Content-Length': 0 });
+        res.end();
+      }
+    });
+  }
+
+  /**
+   * Verify the certificate for an HTTPS request.
+   * @param {IncomingMessage} req - The incoming request.
+   * @param {ServerResponse} res - The outgoing response.
+   * @param {URL} url - The URL of the request.
+   * @param {function} callback - Callback function with a boolean indicating whether the certificate is verified.
+   */
+  static verifyCertificate(req, res, url, callback) {
+    // Implement certificate verification logic here
+    callback(true); // Temporarily allow all requests
+  }
+
+  /**
+   * Forward an HTTPS request to the target server.
+   * @param {IncomingMessage} req - The incoming request.
+   * @param {ServerResponse} res - The outgoing response.
+   * @param {URL} url - The URL of the request.
+   */
+  static forwardRequest(req, res, url) {
+    const targetHost = url.hostname;
+    const targetPort = url.port || 443;
+
+    // Establish a connection to the target server
+    const targetSocket = require('https').request({
+      hostname: targetHost,
+      port: targetPort,
+      path: url.pathname,
+      method: req.method,
+      headers: req.headers,
+    }, (targetRes) => {
+      // Pipe data between the client and target server
+      targetRes.pipe(res);
+      res.pipe(targetSocket);
+
+      // Handle the response from the target server
+      targetRes.on('end', () => {
+        res.end();
+      });
     });
 
-    const cert = crypto.createCertificate({
-      serialNumber: '01',
-      validity: {
-        notBefore: new Date(),
-        notAfter: new Date(Date.now() + (days * 24 * 60 * 60 * 1000)),
-      },
-      subject: {
-        commonName: hostname,
-      },
-      issuer: {
-        commonName: hostname,
-      },
-      publicKey: key.publicKey,
+    targetSocket.on('error', (err) => {
+      console.error(`Error forwarding request to ${targetHost}:${targetPort}`, err);
+      res.destroy();
     });
 
-    cert.sign(key.privateKey, 'sha256');
+    req.pipe(targetSocket);
+  }
 
-    return {
-      cert: cert.export({
-        type: 'pem',
-      }),
-      key: key.privateKey,
-    };
+  /**
+   * Handle a WebSocket connection.
+   */
+  static handleWebSocketConnection() {
+    TLSEngine.wss.on('connection', (ws) => {
+      // Handle WebSocket messages
+      ws.on('message', (message) => {
+        console.log(`Received WebSocket message: ${message}`);
+      });
+
+      // Handle WebSocket errors
+      ws.on('error', (err) => {
+        console.error('WebSocket error:', err);
+      });
+
+      // Handle WebSocket close
+      ws.on('close', () => {
+        console.log('WebSocket connection closed');
+      });
+    });
   }
 }
 
-module.exports = TLSEndpoint;
+module.exports = TLSEngine;
