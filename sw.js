@@ -109,12 +109,12 @@ class JSRewriter {
       return `window.open('${this.rewriteURL(p1)}')`;
     });
 
-    js = js.replace(this.historyPushStateRegex, () => {
-      return `history.pushState(${this.rewriteHistoryPushState()})`;
+    js = js.replace(this.historyPushStateRegex, (match) => {
+      return `history.pushState(${this.rewriteHistoryState(match)})`;
     });
 
-    js = js.replace(this.historyReplaceStateRegex, () => {
-      return `history.replaceState(${this.rewriteHistoryReplaceState()})`;
+    js = js.replace(this.historyReplaceStateRegex, (match) => {
+      return `history.replaceState(${this.rewriteHistoryState(match)})`;
     });
 
     return js;
@@ -129,27 +129,47 @@ class JSRewriter {
   }
 
   rewriteDynamicImport(match) {
-    return match.slice(7, -1);
+    return match;
   }
 
   rewriteRequire(match) {
-    return match.slice(8, -1);
+    return match;
   }
 
   rewriteURL(url) {
-    if (url.startsWith('http')) {
-      return url;
-    } else {
-      return xorBase64Encode(url, generateSalt());
-    }
+    return url;
   }
 
-  rewriteHistoryPushState() {
-    return `null, null, '${xorBase64Encode(window.location.href, generateSalt())}'`;
+  rewriteHistoryState(match) {
+    return match;
+  }
+}
+
+class CSSRewriter {
+  constructor() {
+    this.urlRegex = /url\(['"]([^'"]+)['"]\)/g;
+    this.importRegex = /@import\s+['"]([^'"]+)['"]/g;
+    this.contentRegex = /content:\s*url\(['"]([^'"]+)['"]\)/g;
   }
 
-  rewriteHistoryReplaceState() {
-    return `null, null, '${xorBase64Encode(window.location.href, generateSalt())}'`;
+  rewriteCSS(css) {
+    css = css.replace(this.urlRegex, (match, p1) => {
+      return `url('${this.rewriteURL(p1)}')`;
+    });
+
+    css = css.replace(this.importRegex, (match, p1) => {
+      return `@import '${this.rewriteURL(p1)}'`;
+    });
+
+    css = css.replace(this.contentRegex, (match, p1) => {
+      return `content: url('${this.rewriteURL(p1)}')`;
+    });
+
+    return css;
+  }
+
+  rewriteURL(url) {
+    return url;
   }
 }
 
@@ -187,43 +207,7 @@ class HTMLRewriter {
   }
 
   rewriteURL(url) {
-    if (url.startsWith('http')) {
-      return url;
-    } else {
-      return xorBase64Encode(url, generateSalt());
-    }
-  }
-}
-
-class CSSRewriter {
-  constructor() {
-    this.urlRegex = /url\(\s*['"]([^'"]+)['"]\s*\)/g;
-    this.importRegex = /@import\s+['"]([^'"]+)['"]/g;
-    this.contentRegex = /content:\s*url\(\s*['"]([^'"]+)['"]\s*\)/g;
-  }
-
-  rewriteCSS(css) {
-    css = css.replace(this.urlRegex, (match, p1) => {
-      return `url(${this.rewriteURL(p1)})`;
-    });
-
-    css = css.replace(this.importRegex, (match, p1) => {
-      return `@import ${this.rewriteURL(p1)}`;
-    });
-
-    css = css.replace(this.contentRegex, (match, p1) => {
-      return `content: url(${this.rewriteURL(p1)})`;
-    });
-
-    return css;
-  }
-
-  rewriteURL(url) {
-    if (url.startsWith('http')) {
-      return url;
-    } else {
-      return xorBase64Encode(url, generateSalt());
-    }
+    return url;
   }
 }
 
@@ -233,133 +217,43 @@ addEventListener('fetch', async (event) => {
 
 async function handleRequest(request) {
   const url = new URL(request.url);
-  const { pathname } = url;
+  const salt = generateSalt();
+  const encodedUrl = xorBase64Encode(url.href, salt);
 
-  if (pathname.startsWith('/_nexus/')) {
-    return await handleNexusRequest(request);
-  }
+  const newRequest = new Request(`/${encodedUrl}`, {
+    method: request.method,
+    headers: request.headers,
+    body: request.body,
+  });
 
-  const cache = await getCache();
-  const cachedResponse = await cache.match(request);
+  const response = await fetch(newRequest);
+  const contentType = response.headers.get('Content-Type');
 
-  if (cachedResponse) {
-    return cachedResponse;
-  }
-
-  try {
-    const response = await fetch(request);
-    const { status, headers } = response;
-
-    if (status === 200) {
-      const contentType = headers.get('Content-Type');
-
-      if (contentType && contentType.includes('text/html')) {
-        const html = await response.text();
-        const rewriter = new HTMLRewriter();
-        const rewrittenHtml = rewriter.rewriteHTML(html);
-        const newResponse = new Response(rewrittenHtml, {
-          status,
-          headers: {
-            ...headers,
-            'Content-Type': 'text/html',
-          },
-        });
-
-        await putResponse(request, newResponse);
-        return newResponse;
-      } else if (contentType && contentType.includes('application/javascript')) {
-        const js = await response.text();
-        const rewriter = new JSRewriter();
-        const rewrittenJs = rewriter.rewriteJS(js);
-        const newResponse = new Response(rewrittenJs, {
-          status,
-          headers: {
-            ...headers,
-            'Content-Type': 'application/javascript',
-          },
-        });
-
-        await putResponse(request, newResponse);
-        return newResponse;
-      } else if (contentType && contentType.includes('text/css')) {
-        const css = await response.text();
-        const rewriter = new CSSRewriter();
-        const rewrittenCss = rewriter.rewriteCSS(css);
-        const newResponse = new Response(rewrittenCss, {
-          status,
-          headers: {
-            ...headers,
-            'Content-Type': 'text/css',
-          },
-        });
-
-        await putResponse(request, newResponse);
-        return newResponse;
-      }
-    }
-
-    await putResponse(request, response);
+  if (contentType && contentType.includes('text/javascript')) {
+    const jsRewriter = new JSRewriter();
+    const responseBody = await response.text();
+    const rewrittenBody = jsRewriter.rewriteJS(responseBody);
+    return new Response(rewrittenBody, {
+      status: response.status,
+      headers: response.headers,
+    });
+  } else if (contentType && contentType.includes('text/css')) {
+    const cssRewriter = new CSSRewriter();
+    const responseBody = await response.text();
+    const rewrittenBody = cssRewriter.rewriteCSS(responseBody);
+    return new Response(rewrittenBody, {
+      status: response.status,
+      headers: response.headers,
+    });
+  } else if (contentType && contentType.includes('text/html')) {
+    const htmlRewriter = new HTMLRewriter();
+    const responseBody = await response.text();
+    const rewrittenBody = htmlRewriter.rewriteHTML(responseBody);
+    return new Response(rewrittenBody, {
+      status: response.status,
+      headers: response.headers,
+    });
+  } else {
     return response;
-  } catch (error) {
-    console.error('Error handling request:', error);
-    return new Response('Internal Server Error', {
-      status: 500,
-      headers: {
-        'Content-Type': 'text/plain',
-      },
-    });
   }
-}
-
-async function handleNexusRequest(request) {
-  const { pathname } = new URL(request.url);
-
-  if (pathname === '/_nexus/ws') {
-    return await handleWebSocketRequest(request);
-  }
-
-  if (pathname === '/_nexus/webrtc') {
-    return await handleWebRTCRequest(request);
-  }
-
-  return new Response('Not Found', {
-    status: 404,
-    headers: {
-      'Content-Type': 'text/plain',
-    },
-  });
-}
-
-async function handleWebSocketRequest(request) {
-  const { WebSocket } = await import('ws');
-  const wss = new WebSocket.Server({ noServer: true });
-
-  wss.on('connection', (ws) => {
-    ws.on('message', (message) => {
-      console.log(`Received message: ${message}`);
-    });
-
-    ws.on('close', () => {
-      console.log('WebSocket connection closed');
-    });
-  });
-
-  return new Response('WebSocket connection established', {
-    status: 101,
-    headers: {
-      'Content-Type': 'text/plain',
-      Upgrade: 'websocket',
-      Connection: 'Upgrade',
-    },
-  });
-}
-
-async function handleWebRTCRequest(request) {
-  // Handle WebRTC request
-  return new Response('WebRTC request handled', {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/plain',
-    },
-  });
 }
