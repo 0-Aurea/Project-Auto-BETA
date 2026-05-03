@@ -130,77 +130,69 @@ function compressBody(req, res, next) {
 
 function handleWebSocket(req, res, next) {
   if (req.headers['upgrade'] === 'websocket') {
+    const websocketUrl = req.url;
+    const websocketReq = {
+      ...req,
+      url: websocketUrl,
+    };
     wss.handleUpgrade(req, res, (ws) => {
-      wss.emit('connection', ws, req);
+      wss.emit('connection', ws, websocketReq);
     });
   } else {
     next();
   }
 }
 
-function cacheResponse(req, res, next) {
-  const cacheControl = req.headers['cache-control'];
-  if (cacheControl) {
-    const ttl = parseInt(cacheControl.split('=')[1]);
-    if (ttl > 0) {
-      res.set("Cache-Control", `public, max-age=${ttl}`);
-    }
-  }
-  next();
-}
-
-function prefetchHints(req, res, next) {
-  const prefetchLinks = req.headers['link'];
-  if (prefetchLinks) {
-    const links = prefetchLinks.split(',');
-    links.forEach((link) => {
-      const [url, rel] = link.trim().split(';');
-      if (rel === 'prefetch') {
-        // Prefetch the URL
-      }
-    });
-  }
-  next();
-}
-
+app.use(handleEncodedUrl);
 app.use(rewriteHeaders);
 app.use(cookieScope);
-app.use(handleEncodedUrl);
 app.use(decompressBody);
 app.use(compressBody);
 app.use(handleWebSocket);
-app.use(cacheResponse);
-app.use(prefetchHints);
 
 const proxy = createProxyMiddleware({
-  target: 'https://example.com', // Everything goes to example.com right now, not impresive.  Must be dynamic on the actual implementation of index.js for the website.
+  target: 'http://localhost:8081',
   changeOrigin: true,
-  pathRewrite: { '^/api': '' },
+  pathRewrite: { '^/': '/' },
+  onProxyReq: (proxyReq, req, res) => {
+    proxyReq.headers['content-length'] = req.body.length;
+  },
 });
 
-app.use('/api', proxy);
+app.use(proxy);
+
+httpsServer.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
+});
 
 quicServer.listen(port, () => {
   console.log(`QUIC server listening on port ${port}`);
 });
 
-httpsServer.listen(443, () => {
-  console.log('HTTPS server listening on port 443');
-});
-
-wss.on('connection', (ws) => {
-  console.log('WebSocket connection established');
+wss.on('connection', (ws, req) => {
   ws.on('message', (message) => {
     console.log(`Received message: ${message}`);
   });
+
   ws.on('close', () => {
     console.log('WebSocket connection closed');
+  });
+
+  ws.on('error', (error) => {
+    console.error('WebSocket error:', error);
   });
 });
 
 process.on('SIGINT', () => {
-  quicServer.close();
   httpsServer.close();
+  quicServer.close();
+  wss.close();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  httpsServer.close();
+  quicServer.close();
   wss.close();
   process.exit(0);
 });
