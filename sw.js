@@ -72,7 +72,7 @@ class JSRewriter {
   }
 
   rewriteJS(js) {
-    js = js.replace(this.scriptRegex, (match, p1) => {
+    js = js.replace(this.scriptRegex, (match) => {
       if (match.startsWith('eval(')) {
         return `eval(${this.rewriteEval(match)})`;
       } else if (match.startsWith('Function(')) {
@@ -98,7 +98,7 @@ class JSRewriter {
     });
 
     js = js.replace(this.documentDomainRegex, (match, p1) => {
-      return `document.domain = '${p1}'`;
+      return `document.domain = '${this.rewriteURL(p1)}'`;
     });
 
     js = js.replace(this.windowLocationRegex, (match, p1) => {
@@ -110,117 +110,78 @@ class JSRewriter {
     });
 
     js = js.replace(this.historyPushStateRegex, (match) => {
-      return `history.pushState(${this.rewriteHistory(match)})`;
+      return `history.pushState(${this.rewriteHistoryState(match)})`;
     });
 
     js = js.replace(this.historyReplaceStateRegex, (match) => {
-      return `history.replaceState(${this.rewriteHistory(match)})`;
+      return `history.replaceState(${this.rewriteHistoryState(match)})`;
     });
 
     return js;
   }
 
   rewriteEval(evalStr) {
-    return evalStr.replace(/\(/g, '(__nexus_eval__(');
+    const salt = generateSalt();
+    const encodedEvalStr = xorBase64Encode(evalStr, salt);
+    return `${encodedEvalStr}`;
   }
 
   rewriteFunction(funcStr) {
-    return funcStr.replace(/\(/g, '(__nexus_function__(');
+    const salt = generateSalt();
+    const encodedFuncStr = xorBase64Encode(funcStr, salt);
+    return `${encodedFuncStr}`;
   }
 
   rewriteDynamicImport(importStr) {
-    return importStr;
+    return this.rewriteURL(importStr);
   }
 
   rewriteRequire(requireStr) {
-    return requireStr;
+    return this.rewriteURL(requireStr);
   }
 
   rewriteURL(url) {
     const salt = rotatingSalt[rotatingSalt.length - 1];
-    return xorBase64Encode(url, salt);
+    const encodedURL = xorBase64Encode(url, salt);
+    return encodedURL;
   }
 
-  rewriteHistory(historyStr) {
-    return historyStr;
+  rewriteHistoryState(stateStr) {
+    return stateStr;
   }
 }
 
-const jsRewriter = new JSRewriter();
+self.addEventListener('fetch', async (event) => {
+  event.respondWith(handleRequest(event.request));
+});
 
 async function handleRequest(request) {
   const url = new URL(request.url);
-  if (url.pathname.startsWith('/nexus/')) {
-    return handleNexusRequest(request);
-  }
-  const salt = rotatingSalt[rotatingSalt.length - 1];
-  if (!salt) {
-    generateSalt();
-  }
-  const encodedUrl = xorBase64Encode(url.href, salt);
-  const proxiedRequest = new Request(`https://localhost:${PORT}/proxy/${encodedUrl}`, {
-    method: request.method,
-    headers: request.headers,
-    body: request.body,
-  });
-  const response = await fetch(proxiedRequest);
-  let proxiedResponse;
-  if (response.headers.get('Content-Type').includes('text/html')) {
-    let html = await response.text();
-    html = html.replace(/<script>/g, '<script>__nexus_js_rewriter__ = true;');
-    html = html.replace(/<\/head>/g, () => {
-      return `
-        <script>
-          __nexus_js_rewriter__ = true;
-          function __nexus_rewrite_js__(js) {
-            return ${jsRewriter.rewriteJS('js')};
-          }
-        </script>
-      </head>
-    `;
-    });
-    proxiedResponse = new Response(html, response);
-  } else if (response.headers.get('Content-Type').includes('application/javascript')) {
-    let js = await response.text();
-    js = jsRewriter.rewriteJS(js);
-    proxiedResponse = new Response(js, response);
-  } else {
-    proxiedResponse = new Response(response.body, response);
-  }
-  proxiedResponse.headers.set('Content-Type', proxiedResponse.headers.get('Content-Type'));
-  await putResponse(request, proxiedResponse);
-  return proxiedResponse;
-}
+  const jsRewriter = new JSRewriter();
 
-async function handleNexusRequest(request) {
-  const url = new URL(request.url);
-  if (url.pathname === '/nexus/ping') {
-    return new Response('pong');
-  }
-  if (url.pathname === '/nexus/config') {
-    return new Response(JSON.stringify({
-      version: cacheVersion,
-      salt: rotatingSalt,
-    }));
-  }
-}
-
-async function handleFetchEvent(event) {
-  event.respondWith(handleRequest(event.request));
-}
-
-self.addEventListener('fetch', handleFetchEvent);
-
-self.addEventListener('activate', async event => {
-  event.waitUntil(getCache().then(cache => cache.keys()).then(requests => {
-    for (const request of requests) {
-      if (request.url.pathname.startsWith('/nexus/')) {
-        return cache.delete(request);
-      }
+  if (request.method === 'GET' && url.pathname.endsWith('.js')) {
+    const response = await getResponse(request);
+    if (response) {
+      const js = await response.text();
+      const rewrittenJs = jsRewriter.rewriteJS(js);
+      const newResponse = new Response(rewrittenJs, {
+        headers: {
+          'Content-Type': 'application/javascript',
+        },
+      });
+      return newResponse;
     }
+  }
+
+  return fetch(request);
+}
+
+self.addEventListener('activate', async (event) => {
+  event.waitUntil(getCache().then((cache) => cache.keys()).then((keys) => {
+    keys.forEach((key) => cache.delete(key));
   }));
 });
 
-self.addEventListener('install', async event => {
+self.addEventListener('install', async (event) => {
   event.waitUntil(getCache());
 });
