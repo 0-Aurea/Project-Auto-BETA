@@ -18,9 +18,26 @@ services:
     restart: always
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx:/etc/nginx/conf.d
       - ./logs:/var/log/nginx
+      - ./certs:/etc/nginx/certs
+    command: /bin/bash -c "nginx -t && nginx -g 'daemon off;'"
 
 volumes:
   logs: {}
+  certs: {}
+
+networks:
+  nexus-net:
+    driver: bridge
+
+services:
+  nexus:
+    networks:
+      - nexus-net
+
+  nginx:
+    networks:
+      - nexus-net
