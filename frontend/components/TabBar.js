@@ -2,25 +2,18 @@ import React, { useState, useEffect } from 'react';
 
 const TabBar = () => {
   const [tabs, setTabs] = useState([]);
-  const [currentTab, setCurrentTab] = useState(null);
+  const [activeTab, setActiveTab] = useState(null);
   const [tabTitle, setTabTitle] = useState('');
   const [tabIcon, setTabIcon] = useState('');
-  const [tabUrl, setTabUrl] = useState('');
 
   useEffect(() => {
     const storedTabs = localStorage.getItem('tabs');
     if (storedTabs) {
-      setTabs(JSON.parse(storedTabs));
-    } else {
-      const newTab = {
-        id: Date.now(),
-        title: 'New Tab',
-        icon: '',
-        url: '',
-        isActive: true,
-      };
-      setTabs([newTab]);
-      setCurrentTab(newTab);
+      const tabsArray = JSON.parse(storedTabs);
+      setTabs(tabsArray);
+      if (tabsArray.length > 0) {
+        setActiveTab(tabsArray[0]);
+      }
     }
   }, []);
 
@@ -28,106 +21,75 @@ const TabBar = () => {
     localStorage.setItem('tabs', JSON.stringify(tabs));
   }, [tabs]);
 
-  const handleNewTab = () => {
-    const newTab = {
-      id: Date.now(),
-      title: tabTitle || 'New Tab',
-      icon: tabIcon,
-      url: tabUrl,
-      isActive: true,
-    };
+  const addTab = (title, icon, url) => {
+    const newTab = { title, icon, url };
     setTabs([...tabs, newTab]);
-    setCurrentTab(newTab);
+    setActiveTab(newTab);
     setTabTitle('');
     setTabIcon('');
-    setTabUrl('');
   };
 
-  const handleTabChange = (tab) => {
-    setCurrentTab(tab);
-    tab.isActive = true;
-    setTabs(tabs.map((t) => (t.id === tab.id ? tab : { ...t, isActive: false })));
-    const tabContent = document.getElementById('tab-content');
-    if (tabContent) {
-      tabContent.innerHTML = '';
-      const iframe = document.createElement('iframe');
-      iframe.src = tab.url;
-      iframe.frameBorder = '0';
-      iframe.width = '100%';
-      iframe.height = '100%';
-      tabContent.appendChild(iframe);
+  const removeTab = (tab) => {
+    const updatedTabs = tabs.filter((t) => t !== tab);
+    setTabs(updatedTabs);
+    if (tab === activeTab && updatedTabs.length > 0) {
+      setActiveTab(updatedTabs[0]);
+    } else if (updatedTabs.length === 0) {
+      setActiveTab(null);
     }
   };
 
-  const handleTabClose = (tab) => {
-    if (tab.isActive && tabs.length > 1) {
-      const newCurrentTab = tabs.find((t) => t.id !== tab.id);
-      setCurrentTab(newCurrentTab);
-      tab.isActive = false;
+  const handleTabClick = (tab) => {
+    setActiveTab(tab);
+  };
+
+  const handleTitleChange = (event) => {
+    setTabTitle(event.target.value);
+  };
+
+  const handleIconChange = (event) => {
+    setTabIcon(event.target.value);
+  };
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    if (tabTitle && tabIcon) {
+      addTab(tabTitle, tabIcon, 'about:blank');
     }
-    setTabs(tabs.filter((t) => t.id !== tab.id));
-  };
-
-  const handleTabUpdate = (tab, updates) => {
-    setTabs(
-      tabs.map((t) => (t.id === tab.id ? { ...t, ...updates } : t))
-    );
-  };
-
-  const handleUrlChange = (event) => {
-    setTabUrl(event.target.value);
   };
 
   return (
     <div className="tab-bar">
-      <div className="tab-bar-left">
-        {tabs.map((tab) => (
-          <div
-            key={tab.id}
-            className={`tab ${tab.isActive ? 'active' : ''}`}
-            onClick={() => handleTabChange(tab)}
-          >
-            <span className="tab-title">{tab.title}</span>
-            {tab.icon && (
-              <img
-                src={tab.icon}
-                alt="Tab icon"
-                className="tab-icon"
-              />
-            )}
-            <button
-              className="tab-close"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleTabClose(tab);
-              }}
-            >
-              ×
-            </button>
-          </div>
-        ))}
-      </div>
-      <div className="tab-bar-right">
+      <form onSubmit={handleSubmit}>
         <input
           type="text"
-          placeholder="Tab title"
           value={tabTitle}
-          onChange={(e) => setTabTitle(e.target.value)}
+          onChange={handleTitleChange}
+          placeholder="Tab title"
         />
         <input
           type="text"
-          placeholder="Tab icon"
           value={tabIcon}
-          onChange={(e) => setTabIcon(e.target.value)}
+          onChange={handleIconChange}
+          placeholder="Tab icon"
         />
-        <input
-          type="text"
-          placeholder="Tab URL"
-          value={tabUrl}
-          onChange={handleUrlChange}
-        />
-        <button onClick={handleNewTab}>New Tab</button>
-      </div>
+        <button type="submit">New Tab</button>
+      </form>
+      <ul>
+        {tabs.map((tab, index) => (
+          <li key={index}>
+            <a
+              href="#"
+              className={activeTab === tab ? 'active' : ''}
+              onClick={() => handleTabClick(tab)}
+            >
+              <img src={tab.icon} alt={tab.title} />
+              {tab.title}
+            </a>
+            <button onClick={() => removeTab(tab)}>Close</button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 };
