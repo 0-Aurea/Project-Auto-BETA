@@ -109,34 +109,33 @@ class JSRewriter {
       return `window.open('${this.rewriteURL(p1)}')`;
     });
 
-    js = js.replace(this.historyPushStateRegex, () => {
-      return `history.pushState(${this.rewriteHistoryPushState()})`;
+    js = js.replace(this.historyPushStateRegex, (match) => {
+      return `history.pushState(${this.rewriteHistoryState(match)})`;
     });
 
-    js = js.replace(this.historyReplaceStateRegex, () => {
-      return `history.replaceState(${this.rewriteHistoryReplaceState()})`;
+    js = js.replace(this.historyReplaceStateRegex, (match) => {
+      return `history.replaceState(${this.rewriteHistoryState(match)})`;
     });
 
     return js;
   }
 
-  rewriteEval(match) {
-    const code = match.slice(5, -1);
-    return this.rewriteJS(code);
+  rewriteEval(evalStr) {
+    return this.rewriteCode(evalStr.slice(5, -1));
   }
 
-  rewriteFunction(match) {
-    const args = match.slice(9, -1);
-    const code = args.split('),').pop();
-    return `${args}, ${this.rewriteJS(code)}`;
+  rewriteFunction(funcStr) {
+    const funcArgs = funcStr.slice(9, -1).split(',').map(arg => arg.trim());
+    const funcBody = funcArgs.pop();
+    return `${funcArgs.join(', ')}, ${this.rewriteCode(funcBody)}`;
   }
 
-  rewriteDynamicImport(match) {
-    return this.rewriteURL(match.slice(7, -1));
+  rewriteDynamicImport(importStr) {
+    return this.rewriteURL(importStr.slice(7, -1));
   }
 
-  rewriteRequire(match) {
-    return this.rewriteURL(match.slice(8, -1));
+  rewriteRequire(requireStr) {
+    return this.rewriteURL(requireStr.slice(8, -1));
   }
 
   rewriteURL(url) {
@@ -144,102 +143,50 @@ class JSRewriter {
     return xorBase64Encode(url, salt);
   }
 
-  rewriteHistoryPushState() {
-    return `null, null, '${this.rewriteURL(window.location.href)}'`;
+  rewriteCode(code) {
+    return code.replace(/['"]?(\/[^'"]+)['"]?/g, (match, p1) => {
+      return `'${this.rewriteURL(p1)}'`;
+    });
   }
 
-  rewriteHistoryReplaceState() {
-    return `null, null, '${this.rewriteURL(window.location.href)}'`;
-  }
-}
-
-class WebSocketRewriter {
-  constructor() {
-    this.websocketRegex = /wss?:\/\/[^)]+/g;
-  }
-
-  rewriteWebSocket(ws) {
-    return ws.replace(this.websocketRegex, (match) => {
-      const salt = rotatingSalt[rotatingSalt.length - 1];
-      return xorBase64Encode(match, salt);
+  rewriteHistoryState(stateStr) {
+    return stateStr.replace(/['"]?(\/[^'"]+)['"]?/g, (match, p1) => {
+      return `'${this.rewriteURL(p1)}'`;
     });
   }
 }
 
-addEventListener('fetch', async (event) => {
+const jsRewriter = new JSRewriter();
+
+self.addEventListener('fetch', async (event) => {
   event.respondWith(handleRequest(event.request));
 });
 
 async function handleRequest(request) {
-  const url = new URL(request.url);
-  const salt = rotatingSalt[rotatingSalt.length - 1];
-
-  if (request.method === 'GET') {
-    const response = await getResponse(request);
-    if (response) {
-      return response;
-    }
+  const cache = await getCache();
+  const cachedResponse = await cache.match(request);
+  if (cachedResponse) {
+    return cachedResponse;
   }
 
-  const response = await fetch(request);
-  const contentType = response.headers.get('content-type');
-
-  if (contentType && contentType.includes('application/javascript')) {
-    const jsRewriter = new JSRewriter();
-    const js = await response.text();
+  try {
+    const response = await fetch(request);
+    const responseClone = response.clone();
+    const js = await responseClone.text();
     const rewrittenJs = jsRewriter.rewriteJS(js);
-    return new Response(rewrittenJs, {
-      headers: {
-        'content-type': 'application/javascript',
-      },
-    });
-  }
-
-  if (contentType && contentType.includes('text/html')) {
-    const htmlRewriter = new HTMLRewriter();
-    const html = await response.text();
-    const rewrittenHtml = htmlRewriter.rewriteHTML(html);
-    return new Response(rewrittenHtml, {
-      headers: {
-        'content-type': 'text/html',
-      },
-    });
-  }
-
-  if (request.method === 'WebSocket') {
-    const wsRewriter = new WebSocketRewriter();
-    const ws = await response.body;
-    const rewrittenWs = wsRewriter.rewriteWebSocket(ws);
-    return new Response(rewrittenWs, {
-      headers: {
-        'content-type': 'application/websocket',
-      },
-    });
-  }
-
-  return response;
-}
-
-class HTMLRewriter {
-  constructor() {
-    this.srcRegex = /src=['"]([^'"]+)['"]/g;
-    this.hrefRegex = /href=['"]([^'"]+)['"]/g;
-  }
-
-  rewriteHTML(html) {
-    html = html.replace(this.srcRegex, (match, p1) => {
-      return `src='${this.rewriteURL(p1)}'`;
-    });
-
-    html = html.replace(this.hrefRegex, (match, p1) => {
-      return `href='${this.rewriteURL(p1)}'`;
-    });
-
-    return html;
-  }
-
-  rewriteURL(url) {
-    const salt = rotatingSalt[rotatingSalt.length - 1];
-    return xorBase64Encode(url, salt);
+    const rewrittenResponse = new Response(rewrittenJs, responseClone);
+    await putResponse(request, rewrittenResponse);
+    return rewrittenResponse;
+  } catch (error) {
+    console.error('Error handling request:', error);
+    return new Response('Error handling request', { status: 500 });
   }
 }
+
+self.addEventListener('activate', async (event) => {
+  event.waitUntil(getCache().then(cache => cache.keys().then(requests => Promise.all(requests.map(request => cache.delete(request)))));
+});
+
+self.addEventListener('install', async (event) => {
+  event.waitUntil(getCache());
+});
