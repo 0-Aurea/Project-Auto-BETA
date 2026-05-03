@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NEXUS Proxy</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
@@ -21,7 +21,7 @@
                 <input type="search" id="search-input" placeholder="Search...">
                 <button id="search-button">Go</button>
             </div>
-            <div class="tab-bar">
+            <div class="tab-bar" id="tab-bar">
                 <div class="tab" id="tab-0">
                     <iframe src="about:blank" frameborder="0" id="tab-0-iframe"></iframe>
                     <span id="tab-0-title">New Tab</span>
@@ -31,8 +31,8 @@
             <div class="settings-panel" id="settings-panel">
                 <h2>Settings</h2>
                 <form>
-                    <label for="encoding-mode">Encoding Mode:</label>
-                    <select id="encoding-mode">
+                    <label for="encoding-mode-select">Encoding Mode:</label>
+                    <select id="encoding-mode-select">
                         <option value="xor-base64">XOR + Base64</option>
                         <option value="url-prefix">URL Prefix</option>
                     </select>
@@ -49,6 +49,10 @@
                 <ul id="bookmarks-list"></ul>
                 <input type="text" id="bookmark-input" placeholder="Add Bookmark...">
                 <button id="bookmark-add">Add</button>
+            </div>
+            <div class="proxy-history-panel" id="proxy-history-panel">
+                <h2>Proxy History</h2>
+                <ul id="proxy-history-list"></ul>
             </div>
         </main>
     </div>
