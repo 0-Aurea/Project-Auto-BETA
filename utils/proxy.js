@@ -1,6 +1,8 @@
 const WebSocket = require('ws');
 const { URL } = require('url');
 const { IncomingMessage, ServerResponse } = require('http');
+const { EncodingUtils } = require('./encoding');
+const { CacheUtils } = require('./cache');
 
 /**
  * Proxy utility class for managing full request/response header rewriting,
@@ -61,6 +63,35 @@ class ProxyUtils {
       proxiedWs.on('close', () => {
         ws.close();
       });
+
+      // Handle WebSocket ping
+      ws.on('ping', () => {
+        proxiedWs.ping();
+      });
+
+      // Set up connection timeout
+      let timeoutId = setTimeout(() => {
+        ws.terminate();
+        proxiedWs.close();
+      }, 30000); // 30 seconds
+
+      // Reset timeout on message
+      ws.on('message', () => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          ws.terminate();
+          proxiedWs.close();
+        }, 30000);
+      });
+
+      // Reset timeout on proxied message
+      proxiedWs.on('message', () => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          ws.terminate();
+          proxiedWs.close();
+        }, 30000);
+      });
     });
   }
 
@@ -70,8 +101,9 @@ class ProxyUtils {
    * @returns {string} The proxied URL.
    */
   static getProxiedUrl(url) {
-    // Implement URL rewriting logic here
-    return url;
+    const salt = EncodingUtils.getSalt();
+    const encodedUrl = EncodingUtils.encode(url, salt);
+    return `/${encodedUrl}`;
   }
 
   /**
@@ -99,6 +131,9 @@ class ProxyUtils {
         .join(';');
     }
 
+    // Add cache-control header to prevent caching
+    rewrittenHeaders['cache-control'] = 'no-cache, no-store, must-revalidate';
+
     return rewrittenHeaders;
   }
 
@@ -106,55 +141,38 @@ class ProxyUtils {
    * Handle HTTP request proxying.
    * @param {IncomingMessage} req - The incoming request.
    * @param {ServerResponse} res - The server response.
+   * @returns {Promise<void>}
    */
-  static handleHttpRequest(req, res) {
-    const { headers, url } = req;
-    const proxiedUrl = ProxyUtils.getProxiedUrl(url);
-    const destination = new URL(proxiedUrl);
-    const destinationHeaders = ProxyUtils.rewriteHeaders(headers);
+  static async handleRequest(req, res) {
+    const { headers, url, method } = req;
 
-    // Establish connection to the proxied server
-    const options = {
-      method: req.method,
-      headers: destinationHeaders,
-      hostname: destination.hostname,
-      port: destination.port,
-      path: destination.pathname,
+    // Get the proxied URL
+    const proxiedUrl = ProxyUtils.getProxiedUrl(url);
+
+    // Create a new request to the proxied server
+    const proxiedReq = {
+      method,
+      headers: ProxyUtils.rewriteHeaders(headers),
+      url: proxiedUrl,
     };
 
-    const proxyReq = require('http').request(options, (proxyRes) => {
-      // Rewrite response headers
-      const rewrittenHeaders = { ...proxyRes.headers };
+    // Pipe the request body
+    const { readable, writable } = new Duplex();
+    req.pipe(readable);
+    writable.pipe(res);
 
-      // Strip CSP, HSTS, and X-Frame-Options headers
-      delete rewrittenHeaders['content-security-policy'];
-      delete rewrittenHeaders['strict-transport-security'];
-      delete rewrittenHeaders['x-frame-options'];
+    // Handle the response
+    const proxiedRes = await fetch(proxiedUrl, proxiedReq);
+    const { status, statusText, headers: proxiedHeaders } = proxiedRes;
 
-      // Set response headers
-      Object.keys(rewrittenHeaders).forEach((header) => {
-        res.setHeader(header, rewrittenHeaders[header]);
-      });
+    // Rewrite the response headers
+    const rewrittenHeaders = { ...proxiedHeaders };
+    delete rewrittenHeaders['transfer-encoding'];
 
-      // Handle response body
-      proxyRes.on('data', (chunk) => {
-        res.write(chunk);
-      });
-
-      proxyRes.on('end', () => {
-        res.end();
-      });
-    });
-
-    // Handle request body
-    req.on('data', (chunk) => {
-      proxyReq.write(chunk);
-    });
-
-    req.on('end', () => {
-      proxyReq.end();
-    });
+    // Send the response
+    res.writeHead(status, rewrittenHeaders);
+    res.end(await proxiedRes.arrayBuffer());
   }
 }
 
-module.exports = ProxyUtils;
+module.exports = { ProxyUtils };
