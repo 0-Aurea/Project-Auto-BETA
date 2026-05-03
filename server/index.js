@@ -19,6 +19,10 @@ const options = {
   key: fs.readFileSync(serverConfig.https.key),
   cert: fs.readFileSync(serverConfig.https.cert),
   allowHTTP2: serverConfig.https.allowHTTP2,
+  tls: {
+    requestCert: false,
+    rejectUnauthorized: false,
+  },
 };
 
 const httpsServer = https.createServer(options, app);
@@ -38,6 +42,10 @@ function rewriteHeaders(req, res, next) {
   res.header('Cache-Control', 'no-cache');
   res.header('Pragma', 'no-cache');
   res.header('Expires', 0);
+  res.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.header('Content-Security-Policy', "default-src 'self'; script-src 'self' https://cdn.example.com; object-src 'none'");
+  res.header('X-Frame-Options', 'DENY');
+  res.header('X-Content-Type-Options', 'nosniff');
   next();
 }
 
@@ -47,7 +55,7 @@ function cookieScope(req, res, next) {
     const cookies = cookieHeader.split(';');
     const scopedCookies = cookies.map((cookie) => {
       const [key, value] = cookie.trim().split('=');
-      return `${key}=${value}; Domain=${req.headers.host}; Path=/`;
+      return `${key}=${value}; Domain=${req.headers.host}; Path=/; Secure; HttpOnly`;
     });
     res.header('Set-Cookie', scopedCookies);
   }
@@ -125,47 +133,67 @@ function compressBody(req, res, next) {
   }
 }
 
+app.use(handleEncodedUrl);
 app.use(rewriteHeaders);
 app.use(cookieScope);
-
-app.use((req, res, next) => {
-  handleEncodedUrl(req, res, () => {
-    decompressBody(req, res, next);
-  });
-});
+app.use(decompressBody);
 
 const proxy = createProxyMiddleware({
   target: 'http://localhost:8081',
   changeOrigin: true,
   onProxyReq: (proxyReq, req, res) => {
-    proxyReq.headers['Content-Type'] = req.headers['content-type'];
+    proxyReq.headers['content-length'] = req.body.length;
   },
   onProxyRes: (proxyRes, req, res) => {
-    proxyRes.headers['Content-Type'] = req.headers['content-type'];
+    res.set("Content-Type", proxyRes.headers['content-type']);
+    res.set("Content-Length", proxyRes.headers['content-length']);
   },
 });
 
 app.use(proxy);
 
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).send('Internal Server Error');
+app.use(compressBody);
+
+wss.on('connection', (ws, req) => {
+  const { hostname, port } = url.parse(req.url, true);
+  const target = `ws://${hostname}:${port}`;
+  const wsTarget = new WebSocket(target);
+
+  ws.on('message', (message) => {
+    wsTarget.send(message);
+  });
+
+  wsTarget.on('message', (message) => {
+    ws.send(message);
+  });
+
+  ws.on('close', () => {
+    wsTarget.close();
+  });
+
+  wsTarget.on('close', () => {
+    ws.close();
+  });
+
+  ws.on('error', (error) => {
+    console.error(error);
+  });
+
+  wsTarget.on('error', (error) => {
+    console.error(error);
+  });
 });
 
 httpsServer.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
 
-wss.on('connection', (ws) => {
-  ws.on('message', (message) => {
-    console.log(`Received message: ${message}`);
-  });
+process.on('SIGINT', () => {
+  httpsServer.close();
+  process.exit(0);
+});
 
-  ws.on('close', () => {
-    console.log('Client disconnected');
-  });
-
-  ws.on('error', (error) => {
-    console.error('Error occurred', error);
-  });
+process.on('SIGTERM', () => {
+  httpsServer.close();
+  process.exit(0);
 });
