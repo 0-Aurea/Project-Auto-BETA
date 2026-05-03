@@ -1,7 +1,10 @@
 const { caches } = require('worker_threads') ? globalThis : global;
+const { CompressionCodec, decompress } = require('ilt zlibjs');
+const { Buffer } = require('buffer');
 
 /**
- * Cache utility class for managing the Service Worker Cache API.
+ * Cache utility class for managing the Service Worker Cache API with TTL headers,
+ * Brotli/gzip decompression + re-compression pipeline.
  */
 class CacheUtils {
   /**
@@ -13,6 +16,14 @@ class CacheUtils {
    * Cache instance.
    */
   static cache;
+
+  /**
+   * Supported compression algorithms.
+   */
+  static COMPRESSION_ALGORITHMS = {
+    'br': 'brotli',
+    'gzip': 'gzip',
+  };
 
   /**
    * Initialize the cache instance.
@@ -48,6 +59,19 @@ class CacheUtils {
     headers.delete('Set-Cookie');
     headers.delete('Set-Cookie2');
 
+    // Decompress and re-compress response body
+    const contentEncoding = headers.get('content-encoding');
+    if (contentEncoding && CacheUtils.COMPRESSION_ALGORITHMS[contentEncoding]) {
+      const decompressedBody = await decompress(response.body, contentEncoding);
+      responseToCache.body = decompressedBody;
+
+      // Re-compress response body
+      const reCompressedBody = await CacheUtils.recompressBody(decompressedBody, 'gzip');
+      responseToCache.body = reCompressedBody;
+
+      headers.set('content-encoding', 'gzip');
+    }
+
     await CacheUtils.cache.put(request, responseToCache);
   }
 
@@ -63,7 +87,14 @@ class CacheUtils {
 
     const cachedResponse = await CacheUtils.cache.match(request);
 
-    return cachedResponse;
+    if (cachedResponse) {
+      const cachedBody = await cachedResponse.arrayBuffer();
+      const decompressedBody = await CacheUtils.decompressBody(cachedBody, cachedResponse.headers.get('content-encoding'));
+
+      return new Response(decompressedBody, cachedResponse);
+    }
+
+    return null;
   }
 
   /**
@@ -109,6 +140,66 @@ class CacheUtils {
 
     return false;
   }
+
+  /**
+   * Decompress response body.
+   * @param {ArrayBuffer} body - The response body to decompress.
+   * @param {string} contentEncoding - The content encoding of the response body.
+   * @returns {Promise<Uint8Array>} The decompressed response body.
+   */
+  static async decompressBody(body, contentEncoding) {
+    if (!contentEncoding || !CacheUtils.COMPRESSION_ALGORITHMS[contentEncoding]) {
+      return new Uint8Array(body);
+    }
+
+    const decompressionAlgorithm = CacheUtils.COMPRESSION_ALGORITHMS[contentEncoding];
+    const decompressedBody = await decompress(body, decompressionAlgorithm);
+
+    return decompressedBody;
+  }
+
+  /**
+   * Re-compress response body.
+   * @param {Uint8Array} body - The response body to re-compress.
+   * @param {string} contentEncoding - The content encoding to use for re-compression.
+   * @returns {Promise<Uint8Array>} The re-compressed response body.
+   */
+  static async recompressBody(body, contentEncoding) {
+    if (!contentEncoding || !CacheUtils.COMPRESSION_ALGORITHMS[contentEncoding]) {
+      return body;
+    }
+
+    const compressionAlgorithm = CacheUtils.COMPRESSION_ALGORITHMS[contentEncoding];
+    const reCompressedBody = await compress(body, compressionAlgorithm);
+
+    return reCompressedBody;
+  }
+}
+
+async function compress(body, algorithm) {
+  return new Promise((resolve, reject) => {
+    const encoder = new CompressionCodec(algorithm);
+    encoder.compress(body, (err, compressed) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(compressed);
+      }
+    });
+  });
+}
+
+async function decompress(body, algorithm) {
+  return new Promise((resolve, reject) => {
+    const decoder = new CompressionCodec(algorithm);
+    decoder.decompress(body, (err, decompressed) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(decompressed);
+      }
+    });
+  });
 }
 
 module.exports = CacheUtils;
