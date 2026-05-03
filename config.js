@@ -25,6 +25,23 @@ const WEBSOCKET_KEEP_ALIVE_INTERVAL = 10 * 1000; // 10 seconds
 const WEBSOCKET_PING_INTERVAL = 5 * 1000; // 5 seconds
 const WEBSOCKET_PONG_TIMEOUT = 5 * 1000; // 5 seconds
 
+const WEBSOCKET_SETTINGS = {
+  // WebSocket connection settings
+  connectionTimeout: WEBSOCKET_TIMEOUT,
+  keepAliveInterval: WEBSOCKET_KEEP_ALIVE_INTERVAL,
+  pingInterval: WEBSOCKET_PING_INTERVAL,
+  pongTimeout: WEBSOCKET_PONG_TIMEOUT,
+};
+
+const WEBRTC_SETTINGS = {
+  // WebRTC settings
+  iceCandidateScrubbing: true,
+  peerConnectionConfig: {
+    iceServers: [],
+    iceCandidatePoolSize: 0,
+  },
+};
+
 const COOKIE_SCOPING_ENABLED = true;
 const COOKIE_STORAGE_KEY = 'nexus-cookies';
 
@@ -76,19 +93,10 @@ const UI_FONT_FAMILY = process.env.UI_FONT_FAMILY || 'Arial, sans-serif';
 // QUIC protocol and HTTP/3 configuration
 const QUIC_ENABLED = false;
 const QUIC_PORT = 443;
-const QUIC_PROTOCOL_VERSION = 'draft-29';
 const HTTP3_ENABLED = false;
 const HTTP3_PORT = 443;
 
-// Service Worker configuration
-const SERVICE_WORKER_SCOPE = '/';
-const SERVICE_WORKER_FILE = 'sw.js';
-
-// SSL/TLS certificate configuration
-const SSL_CERT_RELOAD_INTERVAL = 60 * 60 * 1000; // 1 hour
-
-// Export configuration
-export {
+module.exports = {
   CACHE_NAME,
   VERSION,
   SALT_ROTATION_INTERVAL,
@@ -105,10 +113,8 @@ export {
   SSL_KEY_FILE,
   HTTPS_PORT,
   TLS_PROTOCOLS,
-  WEBSOCKET_TIMEOUT,
-  WEBSOCKET_KEEP_ALIVE_INTERVAL,
-  WEBSOCKET_PING_INTERVAL,
-  WEBSOCKET_PONG_TIMEOUT,
+  WEBSOCKET_SETTINGS,
+  WEBRTC_SETTINGS,
   COOKIE_SCOPING_ENABLED,
   COOKIE_STORAGE_KEY,
   HEADER_REWRITE_RULES,
@@ -142,10 +148,6 @@ export {
   UI_FONT_FAMILY,
   QUIC_ENABLED,
   QUIC_PORT,
-  QUIC_PROTOCOL_VERSION,
   HTTP3_ENABLED,
   HTTP3_PORT,
-  SERVICE_WORKER_SCOPE,
-  SERVICE_WORKER_FILE,
-  SSL_CERT_RELOAD_INTERVAL,
 };
