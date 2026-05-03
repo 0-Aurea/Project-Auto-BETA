@@ -4,6 +4,7 @@ const WebSocket = require('ws');
 const { URL } = require('url');
 const https = require('https');
 const fs = require('fs');
+const { JSDOM } = require('jsdom');
 
 class ProxyEngine {
   constructor() {
@@ -96,8 +97,66 @@ class ProxyEngine {
       'x-frame-options': '',
     };
 
+    let responseBody = targetRes.body;
+    if (targetRes.headers['content-type'] && targetRes.headers['content-type'].includes('text/html')) {
+      responseBody = await this.rewriteHtml(responseBody, targetHost);
+    } else if (targetRes.headers['content-type'] && targetRes.headers['content-type'].includes('application/javascript')) {
+      responseBody = await this.rewriteJs(responseBody, targetHost);
+    } else if (targetRes.headers['content-type'] && targetRes.headers['content-type'].includes('text/css')) {
+      responseBody = await this.rewriteCss(responseBody, targetHost);
+    }
+
     res.writeHead(targetRes.statusCode, responseHeaders);
-    res.end(targetRes.body);
+    res.end(responseBody);
+  }
+
+  async rewriteHtml(html, targetHost) {
+    const dom = new JSDOM(html);
+    const document = dom.window.document;
+
+    // Handle HTML elements
+    const elements = document.querySelectorAll('script, style, iframe, img, link, form');
+    elements.forEach((element) => {
+      if (element.src) {
+        element.src = this.rewriteUrl(element.src, targetHost);
+      }
+      if (element.href) {
+        element.href = this.rewriteUrl(element.href, targetHost);
+      }
+      if (element.action) {
+        element.action = this.rewriteUrl(element.action, targetHost);
+      }
+    });
+
+    // Handle meta tags
+    const metaTags = document.querySelectorAll('meta');
+    metaTags.forEach((metaTag) => {
+      if (metaTag.httpEquiv === 'refresh') {
+        const content = metaTag.content;
+        const urlMatch = content.match(/url=([^;]+)/);
+        if (urlMatch) {
+          const url = urlMatch[1];
+          metaTag.content = `url=${this.rewriteUrl(url, targetHost)}`;
+        }
+      }
+    });
+
+    return dom.serialize();
+  }
+
+  async rewriteJs(js, targetHost) {
+    // Implement JS rewriting logic here
+    return js;
+  }
+
+  async rewriteCss(css, targetHost) {
+    // Implement CSS rewriting logic here
+    return css;
+  }
+
+  rewriteUrl(url, targetHost) {
+    const absoluteUrl = new URL(url, `https://${targetHost}`);
+    return absoluteUrl.href;
   }
 
   async forwardRequest(req) {
@@ -124,8 +183,8 @@ class ProxyEngine {
         });
       });
 
-      targetReq.on('error', (err) => {
-        reject(err);
+      targetReq.on('error', (error) => {
+        reject(error);
       });
 
       if (req.body) {
@@ -137,9 +196,7 @@ class ProxyEngine {
 
   handleWebSocket(req, ws) {
     const targetHost = req.headers['host'];
-    const targetUrl = `wss://${targetHost}${req.url}`;
-
-    const targetWs = new WebSocket(targetUrl);
+    const targetWs = new WebSocket(`wss://${targetHost}`);
 
     ws.on('message', (message) => {
       targetWs.send(message);
@@ -149,40 +206,12 @@ class ProxyEngine {
       ws.send(message);
     });
 
-    ws.on('close', () => {
-      targetWs.close();
+    targetWs.on('error', (error) => {
+      console.error(error);
     });
 
-    targetWs.on('close', () => {
-      ws.close();
-    });
-
-    targetWs.on('error', (err) => {
-      console.error(err);
-    });
-
-    ws.on('error', (err) => {
-      console.error(err);
-    });
-
-    // WebRTC ICE candidate scrubbing
-    ws.on('message', (message) => {
-      try {
-        const data = JSON.parse(message);
-        if (data.type === 'candidate') {
-          const candidate = data.candidate;
-          const ipRegex = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/;
-          const match = candidate.match(ipRegex);
-          if (match) {
-            const ip = match[0];
-            // Scrub the IP address
-            data.candidate = candidate.replace(ip, '0.0.0.0');
-          }
-        }
-        targetWs.send(JSON.stringify(data));
-      } catch (err) {
-        console.error(err);
-      }
+    ws.on('error', (error) => {
+      console.error(error);
     });
   }
 }
