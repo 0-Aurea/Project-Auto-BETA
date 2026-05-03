@@ -10,6 +10,19 @@ class ProxyEngine {
     this.clients = new Map();
     this.salt = crypto.randomBytes(16);
     this.saltIndex = 0;
+    this.server = createServer((req, res) => {
+      this.handleRequest(req, res).catch((error) => {
+        console.error('Error handling request:', error);
+        res.writeHead(500);
+        res.end('Internal Server Error');
+      });
+    });
+    this.server.on('upgrade', (req, socket, head) => {
+      this.handleUpgrade(req, socket, head).catch((error) => {
+        console.error('Error handling upgrade:', error);
+        socket.destroy();
+      });
+    });
   }
 
   async handleUpgrade(req, socket, head) {
@@ -47,19 +60,28 @@ class ProxyEngine {
       targetSocket.on('close', () => {
         this.clients.delete(clientId);
       });
+
+      ws.on('error', (error) => {
+        console.error('Error occurred on client WebSocket:', error);
+      });
+
+      targetSocket.on('error', (error) => {
+        console.error('Error occurred on target WebSocket:', error);
+      });
     });
   }
 
   async connectToTarget(targetHost) {
-    const targetSocket = new WebSocket(targetHost);
-    targetSocket.on('error', (error) => {
-      console.error('Error connecting to target:', error);
+    return new Promise((resolve, reject) => {
+      const targetSocket = new WebSocket(targetHost);
+      targetSocket.on('error', (error) => {
+        console.error('Error connecting to target:', error);
+        reject(error);
+      });
+      targetSocket.on('open', () => {
+        resolve(targetSocket);
+      });
     });
-    await new Promise((resolve, reject) => {
-      targetSocket.on('open', resolve);
-      targetSocket.on('error', reject);
-    });
-    return targetSocket;
   }
 
   handleClientMessage(clientId, message) {
@@ -88,7 +110,6 @@ class ProxyEngine {
 
   async handleRequest(req, res) {
     if (req.headers['upgrade'] === 'websocket') {
-      await this.handleUpgrade(req, req.socket, req.headers['sec-websocket-key']);
       return;
     }
 
@@ -108,57 +129,30 @@ class ProxyEngine {
     };
 
     const targetRes = await this.forwardRequest(targetReq);
-    if (targetRes) {
-      res.writeHead(targetRes.statusCode, targetRes.headers);
-      res.end(targetRes.body);
-    } else {
-      res.writeHead(502);
-      res.end('Bad Gateway');
-    }
-  }
+    const responseHeaders = targetRes.headers;
+    const statusCode = targetRes.statusCode;
 
-  encodePathname(pathname) {
-    const buffer = Buffer.from(pathname, 'utf8');
-    const xorBuffer = this.xorBuffer(buffer, this.salt);
-    const base64Encoded = xorBuffer.toString('base64');
-    this.salt = crypto.randomBytes(16);
-    return base64Encoded;
-  }
-
-  xorBuffer(buffer, key) {
-    const xorBuffer = Buffer.alloc(buffer.length);
-    for (let i = 0; i < buffer.length; i++) {
-      xorBuffer[i] = buffer[i] ^ key[i % key.length];
-    }
-    return xorBuffer;
+    res.writeHead(statusCode, responseHeaders);
+    targetRes.on('data', (chunk) => {
+      res.write(chunk);
+    });
+    targetRes.on('end', () => {
+      res.end();
+    });
   }
 
   async forwardRequest(req) {
-    const targetHost = req.url.split('://')?.[1]?.split('/')[0];
-    if (!targetHost) return null;
-
-    const options = {
-      method: req.method,
-      headers: req.headers,
-      hostname: targetHost,
-      port: 80,
-      path: req.url,
-    };
-
     return new Promise((resolve, reject) => {
-      const targetReq = require('http').request(options, (targetRes) => {
-        let body = '';
-        targetRes.on('data', (chunk) => {
-          body += chunk;
-        });
-        targetRes.on('end', () => {
-          const decompressedBody = this.decompressBody(body, targetRes.headers['content-encoding']);
-          resolve({
-            statusCode: targetRes.statusCode,
-            headers: targetRes.headers,
-            body: decompressedBody,
-          });
-        });
+      const options = {
+        method: req.method,
+        headers: req.headers,
+        hostname: new URL(req.url).hostname,
+        port: 80,
+        path: req.url,
+      };
+
+      const targetReq = require('https').request(options, (res) => {
+        resolve(res);
       });
 
       targetReq.on('error', (error) => {
@@ -169,39 +163,32 @@ class ProxyEngine {
     });
   }
 
-  decompressBody(body, encoding) {
-    switch (encoding) {
-      case 'gzip':
-        return zlib.gunzipSync(Buffer.from(body)).toString();
-      case 'br':
-        return zlib.brotliDecompressSync(Buffer.from(body)).toString();
-      default:
-        return body;
-    }
+  encodePathname(pathname) {
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-cbc', this.salt, iv);
+    const encrypted = Buffer.concat([cipher.update(pathname), cipher.final()]);
+    const encoded = iv.toString('base64') + ':' + encrypted.toString('base64');
+    return encoded;
   }
 
-  startServer() {
-    const server = createServer((req, res) => {
-      this.handleRequest(req, res).catch((error) => {
-        console.error(error);
-        res.writeHead(500);
-        res.end('Internal Server Error');
-      });
-    });
-
-    server.listen(8080, () => {
+  start() {
+    this.server.listen(8080, () => {
       console.log('Proxy server listening on port 8080');
     });
+  }
 
-    this.wss.on('connection', (ws) => {
-      console.log('Client connected');
-    });
-
-    this.wss.on('error', (error) => {
-      console.error('WebSocket server error:', error);
-    });
+  stop() {
+    this.server.close();
   }
 }
 
 const proxyEngine = new ProxyEngine();
-proxyEngine.startServer();
+proxyEngine.start();
+
+async function handleWebRTCIceCandidate(candidate) {
+  // TO DO: implement WebRTC ICE candidate handling
+}
+
+async function handleWebSocketUpgrade(req, socket, head) {
+  // TO DO: implement WebSocket upgrade handling
+}
