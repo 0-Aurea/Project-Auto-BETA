@@ -1,0 +1,75 @@
+# Ignore node_modules and package-lock.json
+node_modules/
+package-lock.json
+
+# Ignore build and dist folders
+build/
+dist/
+public/build/
+public/dist/
+
+# Ignore IDE and editor files
+.vscode/
+.idea/
+*.vscode/
+*.idea/
+
+# Ignore OS and system files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Ignore log files
+*.log
+*.logs
+
+# Ignore test and coverage reports
+/coverage/
+*.coverage
+.nyc_output/
+
+# Ignore Docker files
+Dockerfile
+docker-compose.yml
+container.log
+
+# Ignore TypeScript and JavaScript compiled files
+*.tsbuildinfo
+*.js.map
+
+# Ignore Python compiled files
+*.pyc
+__pycache__/
+
+# Ignore other unnecessary files
+*.tmp
+*.temp
+*.cache
+*.swp
+
+# Ignore npm and yarn files
+.npm
+yarn-error.log
+yarn.lock
+
+# Ignore GitHub Actions workflow files
+.github/workflows/*.yml
+
+# Ignore local development files
+.localenv
+.env.local
+
+# Ignore browser cache files
+.cache/
+
+# Ignore Webpack and Rollup files
+webpack.config.js
+rollup.config.js
+webpack-stats.json
+
+# Ignore ESLint and Prettier files
+.eslintrc
+.prettierrc
+.eslintrc.json
+.prettierrc.json
