@@ -29,6 +29,10 @@ jobs:
       - name: Run tests
         run: npm run test
 
+      - name: Test JS rewriting functionality
+        run: |
+          npm run test-js-rewriting
+
       - name: Automated fetch tests
         run: npm run fetch-tests
 
