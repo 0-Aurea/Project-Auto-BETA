@@ -94,27 +94,19 @@ class CacheUtils {
     }
 
     const cachedResponse = await CacheUtils.cache.match(request);
-
-    if (cachedResponse) {
-      const cachedBody = await cachedResponse.arrayBuffer();
-      const decompressedBody = await CacheUtils.decompressBody(cachedBody, cachedResponse.headers.get('content-encoding'));
-
-      return new Response(decompressedBody, cachedResponse);
-    }
-
-    return null;
+    return cachedResponse;
   }
 
   /**
-   * Re-compress a response body.
+   * Re-compress a response body using a specified algorithm.
    * @param {Buffer} body - The response body to re-compress.
-   * @param {string} algorithm - The compression algorithm to use.
+   * @param {string} algorithm - The compression algorithm to use (e.g., 'gzip', 'brotli').
    * @returns {Promise<Buffer>} The re-compressed response body.
    */
   static async recompressBody(body, algorithm) {
-    const compressedBody = await new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       const zlib = require('zlib');
-      zlib.gzip(body, (err, compressed) => {
+      zlib[algorithm](body, (err, compressed) => {
         if (err) {
           reject(err);
         } else {
@@ -122,77 +114,51 @@ class CacheUtils {
         }
       });
     });
-
-    return compressedBody;
   }
 
   /**
-   * Decompress a response body.
-   * @param {Buffer} body - The response body to decompress.
-   * @param {string} algorithm - The compression algorithm to use.
-   * @returns {Promise<Buffer>} The decompressed response body.
-   */
-  static async decompressBody(body, algorithm) {
-    if (!algorithm) {
-      return body;
-    }
-
-    const decompressedBody = await decompress(body, algorithm);
-
-    return decompressedBody;
-  }
-
-  /**
-   * Check cache size and evict oldest entries if necessary.
+   * Check the cache size and evict oldest entries if necessary.
    * @returns {Promise<void>}
    */
   static async checkCacheSize() {
     const cache = await CacheUtils.cache.keys();
-    const cacheSize = await CacheUtils.getCacheSize();
+    let totalSize = 0;
+    const entries = [];
 
-    if (cacheSize > CacheUtils.MAX_CACHE_SIZE) {
-      const oldestEntries = await cache.sort((a, b) => a.timestamp - b.timestamp).take(10);
+    for await (const entry of cache) {
+      const response = await CacheUtils.cache.get(entry.request);
+      const body = await response.arrayBuffer();
+      const size = body.byteLength;
+      totalSize += size;
+      entries.push({ entry, size });
+    }
 
-      for (const entry of oldestEntries) {
-        await CacheUtils.cache.delete(entry);
+    if (totalSize > CacheUtils.MAX_CACHE_SIZE) {
+      // Sort entries by oldest first
+      entries.sort((a, b) => a.entry.timestamp - b.entry.timestamp);
+
+      // Evict oldest entries until cache size is within limit
+      while (totalSize > CacheUtils.MAX_CACHE_SIZE && entries.length > 0) {
+        const oldestEntry = entries.shift();
+        await CacheUtils.cache.delete(oldestEntry.entry.request);
+        totalSize -= oldestEntry.size;
       }
     }
   }
 
   /**
-   * Get cache size in bytes.
-   * @returns {Promise<number>} The cache size in bytes.
-   */
-  static async getCacheSize() {
-    const cache = await CacheUtils.cache.keys();
-    let cacheSize = 0;
-
-    for (const entry of cache) {
-      const response = await CacheUtils.cache.match(entry);
-      const body = await response.arrayBuffer();
-      cacheSize += body.byteLength;
-    }
-
-    return cacheSize;
-  }
-
-  /**
-   * Invalidate cache entries by URL prefix.
-   * @param {string} prefix - The URL prefix to invalidate.
+   * Invalidate cache entries matching a specific URL pattern.
+   * @param {string} urlPattern - The URL pattern to match.
    * @returns {Promise<void>}
    */
-  static async invalidateCache(prefix) {
+  static async invalidateCacheEntries(urlPattern) {
     const cache = await CacheUtils.cache.keys();
-    const entriesToRemove = [];
+    const regex = new RegExp(urlPattern);
 
-    for (const entry of cache) {
-      if (entry.url.startsWith(prefix)) {
-        entriesToRemove.push(entry);
+    for await (const entry of cache) {
+      if (regex.test(entry.url)) {
+        await CacheUtils.cache.delete(entry.request);
       }
-    }
-
-    for (const entry of entriesToRemove) {
-      await CacheUtils.cache.delete(entry);
     }
   }
 }
