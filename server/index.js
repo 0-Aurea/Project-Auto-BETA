@@ -15,7 +15,8 @@ const port = 8080;
 
 const options = {
   key: fs.readFileSync('server.key'),
-  cert: fs.readFileSync('server.crt')
+  cert: fs.readFileSync('server.crt'),
+  allowHTTP2: true
 };
 
 const httpsServer = https.createServer(options, app);
@@ -117,83 +118,68 @@ function compressBody(req, res, next) {
       }
     });
   } else {
-    next();
+    res.send(req.body);
   }
 }
 
-function handleWebSocketUpgrade(req, res, next) {
+function handleWebSocket(req, res, next) {
   if (req.headers['upgrade'] === 'websocket') {
-    const websocketKey = req.headers['sec-websocket-key'];
-    const websocketAccept = require('crypto').createHash('sha1').update(websocketKey + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
-    res.writeHead(101, {
-      'Upgrade': 'websocket',
-      'Connection': 'Upgrade',
-      'Sec-WebSocket-Accept': websocketAccept
-    });
-    const websocket = new WebSocket(req.socket, req.headers['sec-websocket-protocol']);
-    websocket.on('message', (message) => {
-      console.log(`Received WebSocket message: ${message}`);
-    });
-    websocket.on('close', () => {
-      console.log('WebSocket connection closed');
-    });
-    req.socket.on('close', () => {
-      websocket.terminate();
+    const websocketUrl = req.url;
+    const websocketReq = {
+      ...req,
+      url: websocketUrl
+    };
+    wss.handleUpgrade(req, res, (ws) => {
+      wss.emit('connection', ws, websocketReq);
     });
   } else {
     next();
   }
 }
 
-function scrubWebRTCIceCandidates(req, res, next) {
-  if (req.headers['content-type'] === 'application/json') {
-    let body = '';
-    req.on('data', (chunk) => {
-      body += chunk;
+function http2Stream(req, res) {
+  const http2Stream = res.http2Stream;
+  if (http2Stream) {
+    http2Stream.on('close', () => {
+      res.end();
     });
-    req.on('end', () => {
-      try {
-        const jsonData = JSON.parse(body);
-        if (jsonData.type === 'icecandidate') {
-          jsonData.candidate = '';
-          req.body = JSON.stringify(jsonData);
-        }
-      } catch (error) {
-        console.error(error);
-      }
-      next();
-    });
-  } else {
-    next();
   }
 }
 
-app.use(handleEncodedUrl);
 app.use(rewriteHeaders);
 app.use(cookieScope);
+app.use(handleEncodedUrl);
 app.use(decompressBody);
-app.use(scrubWebRTCIceCandidates);
-app.use(handleWebSocketUpgrade);
 
-app.use(createProxyMiddleware({
+const proxy = createProxyMiddleware({
   target: 'http://localhost:8081',
   changeOrigin: true,
-  pathRewrite: { '^/': '' },
   onProxyReq: (proxyReq, req, res) => {
     proxyReq.headers['content-length'] = req.body.length;
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    res.set("Content-Length", proxyRes.headers['content-length']);
   }
-}));
+});
+
+app.use(proxy);
+app.use(compressBody);
+app.use(handleWebSocket);
+
+httpsServer.on('stream', http2Stream);
 
 httpsServer.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
 
-wss.on('connection', (ws) => {
-  console.log('WebSocket connection established');
+wss.on('connection', (ws, req) => {
   ws.on('message', (message) => {
-    console.log(`Received WebSocket message: ${message}`);
+    console.log(`Received message: ${message}`);
   });
   ws.on('close', () => {
-    console.log('WebSocket connection closed');
+    console.log('Client disconnected');
+  });
+  ws.on('error', (error) => {
+    console.error('Error occurred:', error);
   });
 });
