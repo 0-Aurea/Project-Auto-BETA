@@ -104,16 +104,9 @@ class CacheUtils {
    * @returns {Promise<Buffer>} The re-compressed response body.
    */
   static async recompressBody(body, algorithm) {
-    return new Promise((resolve, reject) => {
-      const zlib = require('zlib');
-      zlib[algorithm](body, (err, compressed) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(compressed);
-        }
-      });
-    });
+    const encoder = new CompressionCodec(algorithm);
+    const reCompressedBody = await encoder.compress(body);
+    return reCompressedBody;
   }
 
   /**
@@ -121,46 +114,42 @@ class CacheUtils {
    * @returns {Promise<void>}
    */
   static async checkCacheSize() {
-    const cache = await CacheUtils.cache.keys();
-    let totalSize = 0;
-    const entries = [];
+    const cacheKeys = await CacheUtils.cache.keys();
+    const cacheSize = Array.from(cacheKeys).reduce((size, key) => size + key.size, 0);
 
-    for await (const entry of cache) {
-      const response = await CacheUtils.cache.get(entry.request);
-      const body = await response.arrayBuffer();
-      const size = body.byteLength;
-      totalSize += size;
-      entries.push({ entry, size });
-    }
-
-    if (totalSize > CacheUtils.MAX_CACHE_SIZE) {
-      // Sort entries by oldest first
-      entries.sort((a, b) => a.entry.timestamp - b.entry.timestamp);
-
+    if (cacheSize > CacheUtils.MAX_CACHE_SIZE) {
       // Evict oldest entries until cache size is within limit
-      while (totalSize > CacheUtils.MAX_CACHE_SIZE && entries.length > 0) {
-        const oldestEntry = entries.shift();
-        await CacheUtils.cache.delete(oldestEntry.entry.request);
-        totalSize -= oldestEntry.size;
+      while (cacheSize > CacheUtils.MAX_CACHE_SIZE) {
+        const oldestKey = await CacheUtils.cache.keys().next().value;
+        await CacheUtils.cache.delete(oldestKey);
       }
     }
   }
 
   /**
-   * Invalidate cache entries matching a specific URL pattern.
-   * @param {string} urlPattern - The URL pattern to match.
+   * Handle prefetch hints by caching linked resources.
+   * @param {Request} request - The request to handle.
+   * @param {Response} response - The response to handle.
    * @returns {Promise<void>}
    */
-  static async invalidateCacheEntries(urlPattern) {
-    const cache = await CacheUtils.cache.keys();
-    const regex = new RegExp(urlPattern);
-
-    for await (const entry of cache) {
-      if (regex.test(entry.url)) {
-        await CacheUtils.cache.delete(entry.request);
+  static async handlePrefetch(request, response) {
+    const linkHeader = response.headers.get('link');
+    if (linkHeader) {
+      const linkedResources = linkHeader.split(',').map((link) => link.trim());
+      for (const linkedResource of linkedResources) {
+        if (linkedResource.startsWith('<') && linkedResource.endsWith('>')) {
+          const linkedResourceUrl = linkedResource.substring(1, linkedResource.length - 1);
+          const prefetchRequest = new Request(linkedResourceUrl, {
+            method: 'GET',
+            headers: {
+              'Accept': '*/*',
+            },
+          });
+          await CacheUtils.cacheResponse(prefetchRequest, await fetch(prefetchRequest), 3600);
+        }
       }
     }
   }
 }
 
-module.exports = { CacheUtils };
+module.exports = CacheUtils;
