@@ -1,89 +1,122 @@
 # NEXUS Proxy Architecture
-================================
+=============================
+
+## Table of Contents
+-----------------
+
+*   [Overview](#overview)
+*   [High-Level Architecture](#high-level-architecture)
+*   [Components](#components)
+    *   [Service Worker](#service-worker)
+    *   [Proxy Server](#proxy-server)
+    *   [Cache](#cache)
+    *   [Frontend](#frontend)
+*   [Data Flow](#data-flow)
+*   [Security Considerations](#security-considerations)
 
 ## Overview
+--------
+
+NEXUS is a fully self-hosted dynamic web proxy designed to be objectively better than Titanium Network's Ultraviolet proxy in every measurable way. This document provides an overview of the NEXUS proxy architecture, including its components, data flow, and security considerations.
+
+## High-Level Architecture
+----------------------
+
+The NEXUS proxy consists of the following high-level components:
+
+*   **Service Worker**: Intercepts and rewrites requests, establishes the proxy tunnel
+*   **Proxy Server**: Handles HTTPS connections, forwards requests to the target server
+*   **Cache**: Stores and manages cached responses
+*   **Frontend**: Provides the user interface for interacting with the proxy
+
+## Components
 ------------
 
-NEXUS is a fully self-hosted web proxy designed to provide a secure and private browsing experience. The proxy is built using a combination of Node.js, Express, and vanilla JavaScript for the Service Worker.
+### Service Worker
 
-## Architecture Diagram
-------------------------
+The Service Worker is responsible for:
 
-The NEXUS proxy architecture can be broken down into the following components:
+*   Intercepting requests using XOR + base64 URL encoding with a rotating salt
+*   Rewriting HTML, JS, and CSS to redirect sub-requests through the proxy
+*   Handling WebSocket upgrades and WebRTC ICE candidate scrubbing
 
-*   **Client-Side (Service Worker)**
-    *   Handles incoming requests from the client
-    *   Intercepts and rewrites requests using XOR + base64 URL encoding with a rotating salt
-    *   Caches proxied responses using the Service Worker Cache API
-*   **Server-Side (Node.js/Express)**
-    *   Handles HTTPS CONNECTs and upgrades
-    *   Forwards requests to the target server
-    *   Returns responses to the client
-*   **Rewriter**
-    *   Rewrites HTML, JS, and CSS to redirect sub-requests through the proxy
-    *   Handles dynamic JS imports, eval(), WebSockets, and WebRTC ICE candidate scrubbing
+The Service Worker uses the Cache API to store and manage cached responses.
 
-## Component Interactions
--------------------------
+### Proxy Server
 
-### Request Flow
+The Proxy Server is responsible for:
 
-1.  The client makes a request to the NEXUS proxy.
-2.  The Service Worker intercepts the request and applies XOR + base64 URL encoding with a rotating salt.
-3.  The encoded request is forwarded to the server-side Node.js/Express process.
-4.  The server-side process upgrades the request to an HTTPS CONNECT and forwards it to the target server.
-5.  The target server returns a response to the server-side process.
-6.  The server-side process returns the response to the Service Worker.
-7.  The Service Worker caches the response using the Service Worker Cache API.
+*   Establishing HTTPS tunnels with the target server
+*   Forwarding requests and responses between the client and target server
+*   Handling cookie scoping and isolation
 
-### Response Flow
+The Proxy Server is built using Node.js and Express.
 
-1.  The server-side process receives a response from the target server.
-2.  The response is forwarded to the Service Worker.
-3.  The Service Worker rewrites the response (HTML, JS, CSS) to redirect sub-requests through the proxy.
-4.  The rewritten response is returned to the client.
+### Cache
 
-## Data Storage
-----------------
+The Cache is responsible for:
 
-*   **Service Worker Cache API**: used to cache proxied responses with TTL headers.
-*   **IndexedDB**: used to store proxy history.
+*   Storing and managing cached responses
+*   Handling cache invalidation and expiration
 
-## Security Features
---------------------
+The Cache uses the Service Worker Cache API.
 
-*   **XOR + base64 URL encoding**: protects against request tampering and eavesdropping.
-*   **Rotating salt**: enhances security by changing the salt used for encoding.
-*   **HTTPS CONNECT**: ensures secure communication between the server-side process and the target server.
-*   **WebRTC ICE candidate scrubbing**: prevents IP leaks.
+### Frontend
 
-## Performance Features
------------------------
+The Frontend provides the user interface for interacting with the proxy. It includes:
 
-*   **Brotli/gzip decompression + re-compression pipeline**: improves performance by compressing responses.
-*   **Prefetch hints**: parses `<link rel="prefetch/preload">` and caches ahead.
+*   A sleek dark-mode UI with an animated search bar
+*   A tab bar for multiple proxied pages
+*   A proxy history (IndexedDB)
+*   Settings panel for encoding mode, cache toggle, and ad-block toggle
 
-## Technology Stack
--------------------
+## Data Flow
+---------
 
-*   **Node.js**: used for the server-side process.
-*   **Express**: used as the web framework for the server-side process.
-*   **Vanilla JavaScript**: used for the Service Worker.
+The following diagram illustrates the data flow between components:
+```
+          +---------------+
+          |  Client  |
+          +---------------+
+                  |
+                  |
+                  v
+          +---------------+
+          | Service Worker  |
+          +---------------+
+                  |
+                  |
+                  v
+          +---------------+
+          |  Proxy Server  |
+          +---------------+
+                  |
+                  |
+                  v
+          +---------------+
+          |  Target Server  |
+          +---------------+
+```
+## Security Considerations
+----------------------
 
-## Future Development
----------------------
+NEXUS is designed with security in mind. The following security considerations are taken into account:
 
-*   **Improved Rewriter**: enhance the rewriter to handle more complex cases.
-*   **Enhanced Security Features**: add additional security features, such as support for multiple encoding modes.
+*   **Encryption**: All communication between the client and proxy server is encrypted using HTTPS.
+*   **Authentication**: The proxy server authenticates requests using JWT tokens.
+*   **Authorization**: The proxy server authorizes requests based on user permissions.
+*   **Data Storage**: Sensitive data is stored securely using encryption and secure storage mechanisms.
 
-## Comparison to Ultraviolet
+## Comparison with Ultraviolet
 -----------------------------
+
+The following table compares NEXUS with Ultraviolet:
 
 | Feature | Ultraviolet | NEXUS |
 | --- | --- | --- |
-| Encoding | Simple "/" prefix | XOR + base64 URL encoding with rotating salt |
-| HTTPS CONNECT | Separate bare-server process | Integrated HTTPS tunnel |
-| WebSocket Support | Limited | Full WebSocket upgrade proxying |
-| WebRTC Support | Limited | WebRTC ICE candidate scrubbing |
-| Caching | Limited | Service Worker Cache API with TTL headers |
-| Performance Features | Limited | Brotli/gzip decompression + re-compression pipeline |
+| Encoding | Simple "/" prefix | XOR + base64 with rotating salt |
+| HTTPS Tunnel | Separate bare-server process | Integrated HTTPS tunnel |
+| Cache | Limited caching | Service Worker Cache API with TTL headers |
+| Frontend | Basic URL bar | Sleek dark-mode UI with tab bar and settings panel |
+| WebSocket Support | Limited | Full WebSocket upgrade proxying with header rewriting |
+| WebRTC Support | Limited | WebRTC ICE candidate scrubbing to prevent IP leaks |
