@@ -1,10 +1,12 @@
 const WebSocket = require('ws');
 const { URL } = require('url');
+const { IncomingMessage, ServerResponse } = require('http');
 
 /**
- * WebSocket utility class for managing WebSocket upgrade proxying.
+ * Proxy utility class for managing full request/response header rewriting,
+ * WebSocket upgrade proxying, and HTTPS tunnel integration.
  */
-class WebSocketProxy {
+class ProxyUtils {
   /**
    * WebSocket server instance.
    */
@@ -15,15 +17,15 @@ class WebSocketProxy {
    * @param {Server} server - The HTTP server instance.
    */
   static init(server) {
-    WebSocketProxy.wss = new WebSocket.Server({ server });
+    ProxyUtils.wss = new WebSocket.Server({ server });
 
-    WebSocketProxy.wss.on('connection', (ws, req) => {
+    ProxyUtils.wss.on('connection', (ws, req) => {
       const { headers, url } = req;
 
       // Handle WebSocket upgrade request
-      const proxiedUrl = WebSocketProxy.getProxiedUrl(url);
+      const proxiedUrl = ProxyUtils.getProxiedUrl(url);
       const destination = new URL(proxiedUrl);
-      const destinationHeaders = WebSocketProxy.rewriteHeaders(headers);
+      const destinationHeaders = ProxyUtils.rewriteHeaders(headers);
 
       // Establish connection to the proxied WebSocket server
       const proxiedWs = new WebSocket(destination.href, {
@@ -73,7 +75,7 @@ class WebSocketProxy {
   }
 
   /**
-   * Rewrite headers for the proxied WebSocket request.
+   * Rewrite headers for the proxied request.
    * @param {object} headers - The original headers.
    * @returns {object} The rewritten headers.
    */
@@ -84,8 +86,75 @@ class WebSocketProxy {
     delete rewrittenHeaders['sec-websocket-protocol'];
     delete rewrittenHeaders['sec-websocket-version'];
 
+    // Strip CSP, HSTS, and X-Frame-Options headers
+    delete rewrittenHeaders['content-security-policy'];
+    delete rewrittenHeaders['strict-transport-security'];
+    delete rewrittenHeaders['x-frame-options'];
+
+    // Rewrite Cookie header to isolate cookies per proxied origin
+    if (rewrittenHeaders.cookie) {
+      const cookies = rewrittenHeaders.cookie.split(';');
+      rewrittenHeaders.cookie = cookies
+        .filter((cookie) => !cookie.trim().startsWith('__Secure-'))
+        .join(';');
+    }
+
     return rewrittenHeaders;
+  }
+
+  /**
+   * Handle HTTP request proxying.
+   * @param {IncomingMessage} req - The incoming request.
+   * @param {ServerResponse} res - The server response.
+   */
+  static handleHttpRequest(req, res) {
+    const { headers, url } = req;
+    const proxiedUrl = ProxyUtils.getProxiedUrl(url);
+    const destination = new URL(proxiedUrl);
+    const destinationHeaders = ProxyUtils.rewriteHeaders(headers);
+
+    // Establish connection to the proxied server
+    const options = {
+      method: req.method,
+      headers: destinationHeaders,
+      hostname: destination.hostname,
+      port: destination.port,
+      path: destination.pathname,
+    };
+
+    const proxyReq = require('http').request(options, (proxyRes) => {
+      // Rewrite response headers
+      const rewrittenHeaders = { ...proxyRes.headers };
+
+      // Strip CSP, HSTS, and X-Frame-Options headers
+      delete rewrittenHeaders['content-security-policy'];
+      delete rewrittenHeaders['strict-transport-security'];
+      delete rewrittenHeaders['x-frame-options'];
+
+      // Set response headers
+      Object.keys(rewrittenHeaders).forEach((header) => {
+        res.setHeader(header, rewrittenHeaders[header]);
+      });
+
+      // Handle response body
+      proxyRes.on('data', (chunk) => {
+        res.write(chunk);
+      });
+
+      proxyRes.on('end', () => {
+        res.end();
+      });
+    });
+
+    // Handle request body
+    req.on('data', (chunk) => {
+      proxyReq.write(chunk);
+    });
+
+    req.on('end', () => {
+      proxyReq.end();
+    });
   }
 }
 
-module.exports = WebSocketProxy;
+module.exports = ProxyUtils;
