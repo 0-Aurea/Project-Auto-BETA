@@ -65,85 +65,75 @@ class HTMLRewriterUtils {
     }
 
     // Handle src attributes
-    HTMLRewriterUtils.SRC_ATTRIBUTE_TAGS.forEach((tag) => {
-      const matches = html.match(tag);
-      if (matches) {
-        matches.forEach((match) => {
-          const attributeValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
-          const rewrittenAttributeValue = HTMLRewriterUtils.rewriteAttributeValue(attributeValue, proxiedUrl);
-          html = html.replace(match, match.replace(attributeValue, rewrittenAttributeValue));
-        });
-      }
-    });
+    const srcMatches = html.match(HTMLRewriterUtils.SRC_ATTRIBUTE_TAGS);
+    if (srcMatches) {
+      srcMatches.forEach((match) => {
+        const attributeValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
+        const rewrittenAttributeValue = HTMLRewriterUtils.rewriteAttributeValue(attributeValue, proxiedUrl);
+        html = html.replace(match, match.replace(attributeValue, rewrittenAttributeValue));
+      });
+    }
 
     // Handle href attributes
-    HTMLRewriterUtils.HREF_ATTRIBUTE_TAGS.forEach((tag) => {
-      const matches = html.match(tag);
-      if (matches) {
-        matches.forEach((match) => {
-          const attributeValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
-          const rewrittenAttributeValue = HTMLRewriterUtils.rewriteAttributeValue(attributeValue, proxiedUrl);
-          html = html.replace(match, match.replace(attributeValue, rewrittenAttributeValue));
-        });
-      }
-    });
+    const hrefMatches = html.match(HTMLRewriterUtils.HREF_ATTRIBUTE_TAGS);
+    if (hrefMatches) {
+      hrefMatches.forEach((match) => {
+        const attributeValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
+        const rewrittenAttributeValue = HTMLRewriterUtils.rewriteAttributeValue(attributeValue, proxiedUrl);
+        html = html.replace(match, match.replace(attributeValue, rewrittenAttributeValue));
+      });
+    }
 
     // Handle action attributes
-    HTMLRewriterUtils.ACTION_ATTRIBUTE_TAGS.forEach((tag) => {
-      const matches = html.match(tag);
-      if (matches) {
-        matches.forEach((match) => {
-          const attributeValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
-          const rewrittenAttributeValue = HTMLRewriterUtils.rewriteAttributeValue(attributeValue, proxiedUrl);
-          html = html.replace(match, match.replace(attributeValue, rewrittenAttributeValue));
-        });
-      }
-    });
+    const actionMatches = html.match(HTMLRewriterUtils.ACTION_ATTRIBUTE_TAGS);
+    if (actionMatches) {
+      actionMatches.forEach((match) => {
+        const attributeValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
+        const rewrittenAttributeValue = HTMLRewriterUtils.rewriteAttributeValue(attributeValue, proxiedUrl);
+        html = html.replace(match, match.replace(attributeValue, rewrittenAttributeValue));
+      });
+    }
 
     // Handle srcset attributes
-    HTMLRewriterUtils.SRCSET_ATTRIBUTE_TAGS.forEach((tag) => {
-      const matches = html.match(tag);
-      if (matches) {
-        matches.forEach((match) => {
-          const attributeValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
-          const rewrittenAttributeValue = HTMLRewriterUtils.rewriteSrcsetAttributeValue(attributeValue, proxiedUrl);
-          html = html.replace(match, match.replace(attributeValue, rewrittenAttributeValue));
-        });
-      }
-    });
+    const srcsetMatches = html.match(HTMLRewriterUtils.SRCSET_ATTRIBUTE_TAGS);
+    if (srcsetMatches) {
+      srcsetMatches.forEach((match) => {
+        const attributeValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
+        const rewrittenAttributeValue = HTMLRewriterUtils.rewriteAttributeValue(attributeValue, proxiedUrl);
+        html = html.replace(match, match.replace(attributeValue, rewrittenAttributeValue));
+      });
+    }
 
     // Handle data attributes
-    HTMLRewriterUtils.DATA_ATTRIBUTE_TAGS.forEach((tag) => {
-      const matches = html.match(tag);
-      if (matches) {
-        matches.forEach((match) => {
-          const attributeValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
-          const rewrittenAttributeValue = HTMLRewriterUtils.rewriteAttributeValue(attributeValue, proxiedUrl);
-          html = html.replace(match, match.replace(attributeValue, rewrittenAttributeValue));
-        });
-      }
-    });
+    const dataMatches = html.match(HTMLRewriterUtils.DATA_ATTRIBUTE_TAGS);
+    if (dataMatches) {
+      dataMatches.forEach((match) => {
+        const attributeValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
+        const rewrittenAttributeValue = HTMLRewriterUtils.rewriteAttributeValue(attributeValue, proxiedUrl);
+        html = html.replace(match, match.replace(attributeValue, rewrittenAttributeValue));
+      });
+    }
 
     // Handle <meta http-equiv="refresh"> tags
-    const metaRefreshTags = html.match(HTMLRewriterUtils.META_REFRESH_TAG_REGEX);
-    if (metaRefreshTags) {
-      metaRefreshTags.forEach((tag) => {
-        const content = tag.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
-        const rewrittenContent = HTMLRewriterUtils.rewriteMetaRefreshContent(content, proxiedUrl);
-        html = html.replace(tag, tag.replace(content, rewrittenContent));
+    const metaRefreshMatches = html.match(HTMLRewriterUtils.META_REFRESH_TAG_REGEX);
+    if (metaRefreshMatches) {
+      metaRefreshMatches.forEach((match) => {
+        const contentValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
+        const rewrittenContentValue = HTMLRewriterUtils.rewriteContentValue(contentValue, proxiedUrl);
+        html = html.replace(match, match.replace(contentValue, rewrittenContentValue));
       });
     }
 
     // Handle inline <script> and <style> blocks
-    const inlineScriptStyleBlocks = html.match(HTMLRewriterUtils.INLINE_SCRIPT_STYLE_REGEX);
-    if (inlineScriptStyleBlocks) {
-      inlineScriptStyleBlocks.forEach((block) => {
-        const rewrittenBlock = HTMLRewriterUtils.rewriteInlineScriptStyleBlock(block, proxiedUrl);
-        html = html.replace(block, rewrittenBlock);
+    const inlineScriptStyleMatches = html.match(HTMLRewriterUtils.INLINE_SCRIPT_STYLE_REGEX);
+    if (inlineScriptStyleMatches) {
+      inlineScriptStyleMatches.forEach((match) => {
+        const rewrittenMatch = HTMLRewriterUtils.rewriteInlineScriptStyle(match, proxiedUrl);
+        html = html.replace(match, rewrittenMatch);
       });
     }
 
-    return dom.serialize();
+    return html;
   }
 
   /**
@@ -160,48 +150,35 @@ class HTMLRewriterUtils {
   }
 
   /**
-   * Rewrites a srcset attribute value by prepending the proxied URL.
-   * @param {string} srcsetAttributeValue - The srcset attribute value to rewrite.
+   * Rewrites a content value for <meta http-equiv="refresh"> tags.
+   * @param {string} contentValue - The content value to rewrite.
    * @param {string} proxiedUrl - The URL of the proxied request.
-   * @returns {string} The rewritten srcset attribute value.
+   * @returns {string} The rewritten content value.
    */
-  static rewriteSrcsetAttributeValue(srcsetAttributeValue, proxiedUrl) {
-    return srcsetAttributeValue.split(',').map((value) => {
-      const trimmedValue = value.trim();
-      const url = trimmedValue.replace(/[^ ]*/, '');
-      if (url.startsWith('http')) {
-        return trimmedValue;
-      }
-      return `${proxiedUrl}/${url} ${trimmedValue.replace(/[^ ]*/, '')}`;
-    }).join(', ');
-  }
-
-  /**
-   * Rewrites the content of a <meta http-equiv="refresh"> tag.
-   * @param {string} content - The content to rewrite.
-   * @param {string} proxiedUrl - The URL of the proxied request.
-   * @returns {string} The rewritten content.
-   */
-  static rewriteMetaRefreshContent(content, proxiedUrl) {
-    if (content.startsWith('http')) {
-      return content;
+  static rewriteContentValue(contentValue, proxiedUrl) {
+    if (contentValue.startsWith('http')) {
+      return contentValue;
     }
-    return `${proxiedUrl}/${content}`;
+    return `${contentValue.replace(/url=/, `${proxiedUrl}/`)}`;
   }
 
   /**
    * Rewrites an inline <script> or <style> block.
-   * @param {string} block - The block to rewrite.
+   * @param {string} match - The inline <script> or <style> block to rewrite.
    * @param {string} proxiedUrl - The URL of the proxied request.
-   * @returns {string} The rewritten block.
+   * @returns {string} The rewritten inline <script> or <style> block.
    */
-  static rewriteInlineScriptStyleBlock(block, proxiedUrl) {
-    return block.replace(/url\(['"](.*?)['"]\)/g, (match, url) => {
-      if (url.startsWith('http')) {
-        return match;
-      }
-      return `url('${proxiedUrl}/${url}')`;
-    });
+  static rewriteInlineScriptStyle(match, proxiedUrl) {
+    return match.replace(/url\(/g, `url(${proxiedUrl}/`);
+  }
+
+  /**
+   * Strips nonce values from inline <script> and <style> blocks.
+   * @param {string} html - The HTML content to strip nonce values from.
+   * @returns {string} The HTML content with nonce values stripped.
+   */
+  static stripNonce(html) {
+    return html.replace(/nonce\s*=\s*["'][^"']*["']/gi, '');
   }
 }
 
