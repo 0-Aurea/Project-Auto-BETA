@@ -105,74 +105,71 @@ class ProxyUtils {
         proxiedWs.close();
       }, 60000); // 1 minute
 
-      // Reset timeout on message
-      ws.on('message', () => {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
+      // Handle WebRTC ICE candidate scrubbing
+      proxiedWs.on('message', (message) => {
+        try {
+          const data = JSON.parse(message);
+          if (data.type === 'candidate') {
+            const scrubbedMessage = ProxyUtils.scrubWebRTCIceCandidate(data);
+            proxiedWs.send(JSON.stringify(scrubbedMessage));
+          } else {
+            proxiedWs.send(message);
+          }
+        } catch (error) {
+          console.error('Error handling WebRTC ICE candidate:', error);
           ws.terminate();
           proxiedWs.close();
-        }, 60000);
-      });
-
-      // Reset timeout on proxied message
-      proxiedWs.on('message', () => {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-          ws.terminate();
-          proxiedWs.close();
-        }, 60000);
+        }
       });
     });
   }
 
   /**
-   * Get the proxied URL for the given WebSocket URL.
-   * @param {string} url - The WebSocket URL to proxy.
+   * Get the proxied URL for a given URL.
+   * @param {string} url - The URL to proxy.
    * @returns {string} The proxied URL.
    */
   static getProxiedUrl(url) {
-    const salt = EncodingUtils.getSalt();
-    const encodedUrl = EncodingUtils.encodeUrl(url, salt);
-    return `ws://${encodedUrl}`;
+    const encodedUrl = EncodingUtils.encodeUrl(url, EncodingUtils.getSalt());
+    return `/proxy/${encodedUrl}`;
   }
 
   /**
-   * Rewrite headers for the proxied request.
-   * @param {object} headers - The original headers.
+   * Rewrite headers for a proxied request.
+   * @param {object} headers - The headers to rewrite.
    * @returns {object} The rewritten headers.
    */
   static rewriteHeaders(headers) {
     const rewrittenHeaders = { ...headers };
 
     // Remove sensitive headers
+    delete rewrittenHeaders['sec-websocket-origin'];
     delete rewrittenHeaders['sec-websocket-protocol'];
-    delete rewrittenHeaders['sec-websocket-extensions'];
 
-    // Rewrite origin header
-    rewrittenHeaders['origin'] = 'https://' + new URL(headers['origin']).hostname;
+    // Rewrite WebSocket upgrade headers
+    rewrittenHeaders['upgrade'] = 'websocket';
+    rewrittenHeaders['connection'] = 'upgrade';
 
     return rewrittenHeaders;
   }
 
   /**
-   * Handle WebSocket upgrade request and establish a proxied connection.
-   * @param {IncomingMessage} req - The incoming request.
-   * @param {ServerResponse} res - The server response.
+   * Scrub WebRTC ICE candidate IP addresses.
+   * @param {object} candidate - The ICE candidate to scrub.
+   * @returns {object} The scrubbed ICE candidate.
    */
-  static handleWebSocketUpgrade(req, res) {
-    const { headers, url } = req;
+  static scrubWebRTCIceCandidate(candidate) {
+    const scrubbedCandidate = { ...candidate };
+    scrubbedCandidate.candidate = WebRTCUtils.scrubIPAddr(scrubbedCandidate.candidate);
+    return scrubbedCandidate;
+  }
 
-    // Check if the request is a WebSocket upgrade request
-    if (headers['upgrade'] === 'websocket') {
-      // Handle WebSocket upgrade
-      ProxyUtils.wss.handleUpgrade(req, res, (ws) => {
-        ProxyUtils.wss.emit('connection', ws, req);
-      });
-    } else {
-      // Handle other requests
-      res.writeHead(400);
-      res.end('Bad Request');
-    }
+  /**
+   * Handle WebSocket errors.
+   * @param {Error} error - The error to handle.
+   */
+  static handleWebSocketError(error) {
+    console.error('WebSocket error:', error);
   }
 }
 
