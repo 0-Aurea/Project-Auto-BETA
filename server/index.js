@@ -24,6 +24,11 @@ const wss = new WebSocket.Server({ server: httpsServer });
 
 let rotatingSalt = Math.random().toString(36).substr(2, 10);
 
+app.use(helmet());
+app.use(cookieParser());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 function rewriteHeaders(req, res, next) {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
@@ -116,70 +121,15 @@ function compressBody(req, res, next) {
   }
 }
 
-function handleWebSocketUpgrade(req, res, next) {
-  const websocketKey = req.headers['sec-websocket-key'];
-  if (websocketKey) {
-    const websocketAccept = require('crypto').createHash('sha1').update(websocketKey + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
-    res.writeHead(101, {
-      'Upgrade': 'websocket',
-      'Connection': 'Upgrade',
-      'Sec-WebSocket-Accept': websocketAccept,
-      'Sec-WebSocket-Protocol': req.headers['sec-websocket-protocol']
-    });
-
-    const targetHost = req.headers['x-target-host'];
-    const targetPort = req.headers['x-target-port'];
-
-    const targetSocket = new WebSocket(`ws://${targetHost}:${targetPort}`);
-
-    req.on('close', () => {
-      targetSocket.close();
-    });
-
-    req.on('error', (err) => {
-      targetSocket.close();
-      next(err);
-    });
-
-    targetSocket.on('message', (message) => {
-      res.send(message);
-    });
-
-    targetSocket.on('close', () => {
-      req.destroy();
-    });
-
-    targetSocket.on('error', (err) => {
-      req.destroy();
-      next(err);
-    });
-
-    res.on('data', (data) => {
-      targetSocket.send(data);
-    });
-  } else {
-    next();
-  }
-}
-
-function scrubWebRTCIceCandidates(req, res, next) {
-  if (req.headers['content-type'] === 'application/json') {
-    let body = '';
-    req.on('data', (chunk) => {
-      body += chunk;
-    });
-    req.on('end', () => {
-      try {
-        const jsonData = JSON.parse(body);
-        if (jsonData.type === 'candidate') {
-          delete jsonData.candidate;
-          jsonData.sdpMLineIndex = 0;
-          jsonData.sdpMid = null;
-        }
-        res.send(JSON.stringify(jsonData));
-      } catch (err) {
-        next(err);
-      }
+function handleWebSocket(req, res, next) {
+  if (req.headers['upgrade'] === 'websocket') {
+    const websocketUrl = req.url;
+    const websocketReq = {
+      url: websocketUrl,
+      headers: req.headers
+    };
+    wss.handleUpgrade(req, res, (ws) => {
+      wss.emit('connection', ws, websocketReq);
     });
   } else {
     next();
@@ -188,39 +138,38 @@ function scrubWebRTCIceCandidates(req, res, next) {
 
 app.use(handleEncodedUrl);
 app.use(rewriteHeaders);
-app.use(cookieParser());
+app.use(cookieScope);
 app.use(decompressBody);
 
-app.use('/websocket', handleWebSocketUpgrade);
-
-app.use(scrubWebRTCIceCandidates);
-
-app.use((req, res, next) => {
-  createProxyMiddleware({
-    target: req.url,
-    changeOrigin: true,
-    pathRewrite: { '^/': '' },
-    onProxyReq: (proxyReq, req, res) => {
-      proxyReq.headers['x-target-host'] = req.headers.host;
-      proxyReq.headers['x-target-port'] = req.headers['x-target-port'];
-    }
-  })(req, res, next);
+const proxy = createProxyMiddleware({
+  target: 'http://localhost:8081',
+  changeOrigin: true,
+  onProxyReq: (proxyReq, req, res) => {
+    proxyReq.headers['content-length'] = req.body.length;
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    res.set("Content-Length", proxyRes.headers['content-length']);
+  }
 });
+
+app.use(proxy);
+app.use(compressBody);
+app.use(handleWebSocket);
 
 httpsServer.listen(port, () => {
-  console.log(`Server started on port ${port}`);
+  console.log(`Server listening on port ${port}`);
 });
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
   ws.on('message', (message) => {
-    console.log(`Received message: ${message}`);
+    console.log(`Received message => ${message}`);
   });
 
   ws.on('close', () => {
     console.log('Client disconnected');
   });
 
-  ws.on('error', (err) => {
-    console.error('Error occurred', err);
+  ws.on('error', (error) => {
+    console.log(`Error occurred => ${error}`);
   });
 });
