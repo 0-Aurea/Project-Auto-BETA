@@ -5,11 +5,22 @@ const TabBar = () => {
   const [currentTab, setCurrentTab] = useState(null);
   const [tabTitle, setTabTitle] = useState('');
   const [tabIcon, setTabIcon] = useState('');
+  const [tabUrl, setTabUrl] = useState('');
 
   useEffect(() => {
     const storedTabs = localStorage.getItem('tabs');
     if (storedTabs) {
       setTabs(JSON.parse(storedTabs));
+    } else {
+      const newTab = {
+        id: Date.now(),
+        title: 'New Tab',
+        icon: '',
+        url: '',
+        isActive: true,
+      };
+      setTabs([newTab]);
+      setCurrentTab(newTab);
     }
   }, []);
 
@@ -22,19 +33,30 @@ const TabBar = () => {
       id: Date.now(),
       title: tabTitle || 'New Tab',
       icon: tabIcon,
-      url: '',
+      url: tabUrl,
       isActive: true,
     };
     setTabs([...tabs, newTab]);
     setCurrentTab(newTab);
     setTabTitle('');
     setTabIcon('');
+    setTabUrl('');
   };
 
   const handleTabChange = (tab) => {
     setCurrentTab(tab);
     tab.isActive = true;
     setTabs(tabs.map((t) => (t.id === tab.id ? tab : { ...t, isActive: false })));
+    const tabContent = document.getElementById('tab-content');
+    if (tabContent) {
+      tabContent.innerHTML = '';
+      const iframe = document.createElement('iframe');
+      iframe.src = tab.url;
+      iframe.frameBorder = '0';
+      iframe.width = '100%';
+      iframe.height = '100%';
+      tabContent.appendChild(iframe);
+    }
   };
 
   const handleTabClose = (tab) => {
@@ -52,6 +74,10 @@ const TabBar = () => {
     );
   };
 
+  const handleUrlChange = (event) => {
+    setTabUrl(event.target.value);
+  };
+
   return (
     <div className="tab-bar">
       <div className="tab-bar-left">
@@ -62,6 +88,13 @@ const TabBar = () => {
             onClick={() => handleTabChange(tab)}
           >
             <span className="tab-title">{tab.title}</span>
+            {tab.icon && (
+              <img
+                src={tab.icon}
+                alt="Tab icon"
+                className="tab-icon"
+              />
+            )}
             <button
               className="tab-close"
               onClick={(e) => {
@@ -86,6 +119,12 @@ const TabBar = () => {
           placeholder="Tab icon"
           value={tabIcon}
           onChange={(e) => setTabIcon(e.target.value)}
+        />
+        <input
+          type="text"
+          placeholder="Tab URL"
+          value={tabUrl}
+          onChange={handleUrlChange}
         />
         <button onClick={handleNewTab}>New Tab</button>
       </div>
