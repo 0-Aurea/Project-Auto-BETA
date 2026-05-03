@@ -109,43 +109,47 @@ class JSRewriter {
       return `window.open('${this.rewriteURL(p1)}')`;
     });
 
-    js = js.replace(this.historyPushStateRegex, () => {
-      return `history.pushState(${this.rewriteHistoryPushState()})`;
+    js = js.replace(this.historyPushStateRegex, (match) => {
+      return `history.pushState(${this.rewriteHistoryPushState(match)})`;
     });
 
-    js = js.replace(this.historyReplaceStateRegex, () => {
-      return `history.replaceState(${this.rewriteHistoryReplaceState()})`;
+    js = js.replace(this.historyReplaceStateRegex, (match) => {
+      return `history.replaceState(${this.rewriteHistoryReplaceState(match)})`;
     });
 
     return js;
   }
 
   rewriteEval(match) {
-    return match.slice(5, -1);
+    const code = match.slice(5, -1);
+    return this.rewriteJS(code);
   }
 
   rewriteFunction(match) {
-    return match.slice(9, -1);
+    const args = match.slice(9, -1);
+    const code = args + '{' + this.rewriteJS(match.slice(match.indexOf('{') + 1, -1)) + '}';
+    return code;
   }
 
   rewriteDynamicImport(match) {
-    return match.slice(7, -1);
+    return this.rewriteURL(match.slice(7, -1));
   }
 
   rewriteRequire(match) {
-    return match.slice(8, -1);
+    return this.rewriteURL(match.slice(8, -1));
   }
 
   rewriteURL(url) {
-    return url;
+    const salt = rotatingSalt[rotatingSalt.length - 1];
+    return xorBase64Encode(url, salt);
   }
 
-  rewriteHistoryPushState() {
-    return '';
+  rewriteHistoryPushState(match) {
+    return match.slice(17);
   }
 
-  rewriteHistoryReplaceState() {
-    return '';
+  rewriteHistoryReplaceState(match) {
+    return match.slice(19);
   }
 }
 
@@ -183,14 +187,15 @@ class HTMLRewriter {
   }
 
   rewriteURL(url) {
-    return url;
+    const salt = rotatingSalt[rotatingSalt.length - 1];
+    return xorBase64Encode(url, salt);
   }
 }
 
 class CSSRewriter {
   constructor() {
     this.urlRegex = /url\(\s*['"]([^'"]+)['"]\s*\)/g;
-    this.importRegex = /@import\s+['"]([^'"]+)['"]/g;
+    this.importRegex = /@import\s*['"]([^'"]+)['"]/g;
     this.contentRegex = /content:\s*url\(\s*['"]([^'"]+)['"]\s*\)/g;
   }
 
@@ -200,7 +205,7 @@ class CSSRewriter {
     });
 
     css = css.replace(this.importRegex, (match, p1) => {
-      return `@import "${this.rewriteURL(p1)}"`;
+      return `@import ${this.rewriteURL(p1)}`;
     });
 
     css = css.replace(this.contentRegex, (match, p1) => {
@@ -211,83 +216,80 @@ class CSSRewriter {
   }
 
   rewriteURL(url) {
-    return url;
+    const salt = rotatingSalt[rotatingSalt.length - 1];
+    return xorBase64Encode(url, salt);
   }
 }
 
 addEventListener('fetch', async (event) => {
-  event.respondWith(handleRequest(event.request));
-});
-
-async function handleRequest(request) {
+  const request = event.request;
   const url = new URL(request.url);
+
+  if (request.method === 'GET') {
+    const cache = await getCache();
+    const cachedResponse = await cache.match(request);
+
+    if (cachedResponse) {
+      event.respondWith(cachedResponse);
+      return;
+    }
+  }
+
+  const response = await fetch(request);
+  const clonedResponse = response.clone();
+
+  const jsRewriter = new JSRewriter();
+  const htmlRewriter = new HTMLRewriter();
+  const cssRewriter = new CSSRewriter();
+
+  let body = await response.text();
+
+  if (body && body.startsWith('<!DOCTYPE html>')) {
+    body = htmlRewriter.rewriteHTML(body);
+  }
+
+  if (body && body.startsWith('{') && body.endsWith('}')) {
+    try {
+      const json = JSON.parse(body);
+      body = JSON.stringify(json);
+    } catch (e) {}
+  }
+
+  if (body && body.includes('script')) {
+    body = jsRewriter.rewriteJS(body);
+  }
+
+  if (body && body.includes('url(')) {
+    body = cssRewriter.rewriteCSS(body);
+  }
+
+  const headers = new Headers(response.headers);
+  headers.set('Cache-Control', 'max-age=3600');
+
+  const rewrittenResponse = new Response(body, {
+    status: response.status,
+    headers: headers,
+  });
+
+  event.respondWith(rewrittenResponse);
+
+  putResponse(request, clonedResponse);
+});
+
+addEventListener('scheduled', async (event) => {
   const cache = await getCache();
-  let response = await cache.match(request);
-
-  if (!response) {
-    response = await fetch(request);
-    await cache.put(request, response.clone());
-  }
-
-  const contentType = response.headers.get('Content-Type');
-  if (contentType && contentType.includes('text/html')) {
-    const html = await response.text();
-    const rewriter = new HTMLRewriter();
-    const rewrittenHtml = rewriter.rewriteHTML(html);
-    return new Response(rewrittenHtml, {
-      headers: {
-        'Content-Type': 'text/html',
-      },
-    });
-  } else if (contentType && contentType.includes('application/javascript')) {
-    const js = await response.text();
-    const rewriter = new JSRewriter();
-    const rewrittenJs = rewriter.rewriteJS(js);
-    return new Response(rewrittenJs, {
-      headers: {
-        'Content-Type': 'application/javascript',
-      },
-    });
-  } else if (contentType && contentType.includes('text/css')) {
-    const css = await response.text();
-    const rewriter = new CSSRewriter();
-    const rewrittenCss = rewriter.rewriteCSS(css);
-    return new Response(rewrittenCss, {
-      headers: {
-        'Content-Type': 'text/css',
-      },
-    });
-  }
-
-  return response;
-}
-
-addEventListener('activate', async (event) => {
-  event.waitUntil(getCache().then((cache) => cache.keys()).then((keys) => {
-    return Promise.all(keys.map((key) => cache.delete(key)));
-  }));
+  await cache.keys().then(async (keys) => {
+    for (const key of keys) {
+      const response = await cache.get(key);
+      if (response) {
+        const headers = response.headers;
+        const ttl = headers.get('ttl');
+        if (ttl && Date.now() > ttl) {
+          await cache.delete(key);
+        }
+      }
+    }
+  });
 });
 
-addEventListener('message', async (event) => {
-  if (event.data.type === 'generateSalt') {
-    generateSalt();
-  }
-});
-
-addEventListener('message', async (event) => {
-  if (event.data.type === 'xorBase64Encode') {
-    const data = event.data.data;
-    const salt = rotatingSalt[rotatingSalt.length - 1];
-    const encodedData = xorBase64Encode(data, salt);
-    event.ports[0].postMessage(encodedData);
-  }
-});
-
-addEventListener('message', async (event) => {
-  if (event.data.type === 'xorBase64Decode') {
-    const data = event.data.data;
-    const salt = rotatingSalt[rotatingSalt.length - 1];
-    const decodedData = xorBase64Decode(data, salt);
-    event.ports[0].postMessage(decodedData);
-  }
-});
+generateSalt();
