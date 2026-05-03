@@ -1,4 +1,4 @@
-const { RTCPeerConnection } = globalThis;
+const { RTCPeerConnection, RTCSessionDescription } = globalThis;
 
 /**
  * WebRTC utility class for handling WebRTC ICE candidate scrubbing to prevent IP leaks.
@@ -40,6 +40,18 @@ class WebRTCUtils {
   }
 
   /**
+   * Scrub IP addresses from a WebRTC SDP string.
+   * @param {string} sdp - The WebRTC SDP string.
+   * @returns {string} The scrubbed WebRTC SDP string.
+   */
+  static scrubSdpIpAddresses(sdp) {
+    return sdp.replace(WebRTCUtils.IP_ADDRESS_REGEX, (match) => {
+      // Replace IP addresses with a placeholder value
+      return '0.0.0.0';
+    });
+  }
+
+  /**
    * Patch the RTCPeerConnection prototype to scrub WebRTC ICE candidate IP addresses.
    */
   static patchRTCPeerConnection() {
@@ -57,6 +69,28 @@ class WebRTCUtils {
       }
 
       this._originalIceCandidate.call(this, event);
+    };
+
+    RTCPeerConnection.prototype._originalSetLocalDescription = RTCPeerConnection.prototype.setLocalDescription;
+
+    RTCPeerConnection.prototype.setLocalDescription = async function (description) {
+      if (description.type === 'offer' || description.type === 'answer') {
+        const scrubbedSdp = WebRTCUtils.scrubSdpIpAddresses(description.sdp);
+        description.sdp = scrubbedSdp;
+      }
+
+      return this._originalSetLocalDescription.call(this, description);
+    };
+
+    RTCPeerConnection.prototype._originalSetRemoteDescription = RTCPeerConnection.prototype.setRemoteDescription;
+
+    RTCPeerConnection.prototype.setRemoteDescription = async function (description) {
+      if (description.type === 'offer' || description.type === 'answer') {
+        const scrubbedSdp = WebRTCUtils.scrubSdpIpAddresses(description.sdp);
+        description.sdp = scrubbedSdp;
+      }
+
+      return this._originalSetRemoteDescription.call(this, description);
     };
   }
 }
