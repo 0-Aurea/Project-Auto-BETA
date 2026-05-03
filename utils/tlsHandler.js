@@ -1,97 +1,111 @@
-const { TLSSocket } = require('tls');
-const { Socket } = require('net');
-const { URL } = require('url');
+const tls = require('tls');
 const fs = require('fs');
+const crypto = require('crypto');
 
 /**
- * TLS handler utility class for managing TLS connections and certificate verification.
+ * TLS handler utility class for managing TLS connections and certificate management.
  */
 class TLSEndpoint {
   /**
-   * TLS socket instance.
+   * TLS certificate.
    */
-  static tlsSocket;
+  static certificate = null;
 
   /**
-   * Certificate verification callback.
+   * TLS private key.
    */
-  static verifyCertificate = (hostname, cert) => {
-    if (!cert) return false;
-
-    try {
-      const { subject, issuer } = cert;
-      const { CN } = subject;
-      const { CN: issuerCN } = issuer;
-
-      if (CN === hostname) return true;
-      if (issuerCN === 'Nexus Certificate Authority') return true;
-
-      return false;
-    } catch (e) {
-      globalThis.console.error(e);
-      return false;
-    }
-  };
+  static privateKey = null;
 
   /**
-   * Creates a TLS socket and sets up event listeners.
-   * @param {string} hostname - The hostname to connect to.
-   * @param {number} port - The port to connect to.
-   * @param {function} onConnect - The callback function for when the socket connects.
-   * @param {function} onData - The callback function for when data is received.
-   * @param {function} onError - The callback function for when an error occurs.
-   * @returns {TLSSocket} The TLS socket instance.
+   * Initialize TLS endpoint with certificate and private key.
+   * @param {string} certPath - Path to the TLS certificate file.
+   * @param {string} keyPath - Path to the TLS private key file.
    */
-  static createTlsSocket(hostname, port, onConnect, onData, onError) {
-    const options = {
-      rejectUnauthorized: false,
-      checkServerIdentity: (servername, cert) => {
-        if (!TLSEndpoint.verifyCertificate(servername, cert)) {
-          return new Error('Certificate verification failed');
-        }
-        return undefined;
-      },
-    };
-
-    const tlsSocket = new TLSSocket(
-      new Socket({
-        host: hostname,
-        port,
-      }),
-      options,
-    );
-
-    tlsSocket.on('connect', onConnect);
-    tlsSocket.on('data', onData);
-    tlsSocket.on('error', onError);
-
-    return tlsSocket;
+  static init(certPath, keyPath) {
+    TLSEndpoint.certificate = fs.readFileSync(certPath, 'utf8');
+    TLSEndpoint.privateKey = fs.readFileSync(keyPath, 'utf8');
   }
 
   /**
-   * Handles TLS connections and certificate verification for proxied requests.
+   * Create a TLS server.
+   * @param {number} port - The port to listen on.
+   * @param {function} onConnection - Callback function for new connections.
+   * @returns {tls.Server}
+   */
+  static createServer(port, onConnection) {
+    const server = tls.createServer({
+      cert: TLSEndpoint.certificate,
+      key: TLSEndpoint.privateKey,
+    }, onConnection);
+
+    server.listen(port, () => {
+      console.log(`TLS server listening on port ${port}`);
+    });
+
+    return server;
+  }
+
+  /**
+   * Create a TLS client.
    * @param {string} hostname - The hostname to connect to.
    * @param {number} port - The port to connect to.
-   * @param {string} req - The request string.
-   * @returns {Promise<Buffer>} The response buffer.
+   * @param {function} onConnect - Callback function for connection establishment.
+   * @returns {tls.TLSSocket}
    */
-  static async handleTlsConnection(hostname, port, req) {
-    return new Promise((resolve, reject) => {
-      const tlsSocket = TLSEndpoint.createTlsSocket(
-        hostname,
-        port,
-        () => {
-          tlsSocket.write(req);
-        },
-        (data) => {
-          resolve(data);
-        },
-        (err) => {
-          reject(err);
-        },
-      );
+  static createClient(hostname, port, onConnect) {
+    const client = tls.connect({
+      host: hostname,
+      port,
+      rejectUnauthorized: false,
+    }, onConnect);
+
+    return client;
+  }
+
+  /**
+   * Generate a self-signed TLS certificate.
+   * @param {string} hostname - The hostname to use for the certificate.
+   * @param {number} days - The number of days the certificate should be valid for.
+   * @returns {{ cert: string, key: string }}
+   */
+  static generateSelfSignedCertificate(hostname, days) {
+    const key = crypto.generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicExponent: 65537,
+      publicKeyEncoding: {
+        type: 'spki',
+        format: 'pem',
+      },
+      privateKeyEncoding: {
+        type: 'pkcs8',
+        format: 'pem',
+      },
     });
+
+    const cert = crypto.createCertificate({
+      serialNumber: '01',
+      validity: {
+        notBefore: new Date(),
+        notAfter: new Date(Date.now() + (days * 24 * 60 * 60 * 1000)),
+      },
+      subject: {
+        commonName: hostname,
+      },
+      issuer: {
+        commonName: hostname,
+      },
+      publicKey: key.publicKey,
+    });
+
+    cert.sign(key.privateKey, 'sha256');
+
+    return {
+      cert: cert.export({
+        type: 'pem',
+      }),
+      key: key.privateKey,
+    };
   }
 }
 
-module.exports = { TLSEndpoint };
+module.exports = TLSEndpoint;
