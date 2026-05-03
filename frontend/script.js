@@ -39,8 +39,9 @@ const openDB = async () => {
     const tx = db.transaction('bookmarks', 'readonly');
     const store = tx.objectStore('bookmarks');
     const bookmarksReq = store.getAll();
-    bookmarksReq.onsuccess = () => {
-      bookmarks = bookmarksReq.result;
+    bookmarksReq.onsuccess = (event) => {
+      bookmarks = event.target.result;
+      renderBookmarksPanel();
     };
     await tx.done;
   } catch (e) {
@@ -49,7 +50,57 @@ const openDB = async () => {
 };
 openDB();
 
-// Search bar input event handler
+// Render tab bar
+const renderTabBar = () => {
+  tabBar.innerHTML = '';
+  tabs.forEach((tab, index) => {
+    const tabButton = document.createElement('button');
+    tabButton.textContent = tab.title;
+    tabButton.addEventListener('click', () => {
+      switchToTab(tab);
+    });
+    tabBar.appendChild(tabButton);
+  });
+};
+
+// Switch to tab
+const switchToTab = (tab) => {
+  currentTab = tab;
+  document.getElementById('tab-content').innerHTML = tab.content;
+};
+
+// Create new tab
+const createTab = async (searchTerm) => {
+  const tab = {
+    title: searchTerm,
+    content: `Searching for ${searchTerm}...`,
+    url: `https://www.google.com/search?q=${searchTerm}`
+  };
+  const response = await fetch(tab.url);
+  const html = await response.text();
+  tab.content = html;
+  return tab;
+};
+
+// Render settings panel
+const renderSettingsPanel = () => {
+  adBlockToggle.checked = settings.adBlockEnabled;
+  cacheToggle.checked = settings.cacheEnabled;
+  encodingModeSelect.value = settings.encodingMode;
+};
+
+// Render bookmarks panel
+const renderBookmarksPanel = () => {
+  const bookmarksList = document.getElementById('bookmarks-list');
+  bookmarksList.innerHTML = '';
+  bookmarks.forEach((bookmark) => {
+    const bookmarkItem = document.createElement('li');
+    bookmarkItem.textContent = bookmark.title;
+    bookmarksList.appendChild(bookmarkItem);
+  });
+};
+
+// Add event listeners
 searchInput.addEventListener('input', () => {
   const searchTerm = searchInput.value.trim();
   if (searchTerm) {
@@ -59,7 +110,6 @@ searchInput.addEventListener('input', () => {
   }
 });
 
-// Search button click event handler
 searchButton.addEventListener('click', async () => {
   const searchTerm = searchInput.value.trim();
   if (searchTerm) {
@@ -70,100 +120,30 @@ searchButton.addEventListener('click', async () => {
   }
 });
 
-// Settings toggle click event handler
 settingsToggle.addEventListener('click', () => {
   settingsPanel.classList.toggle('visible');
+  renderSettingsPanel();
 });
 
-// Bookmarks toggle click event handler
 bookmarksToggle.addEventListener('click', () => {
   bookmarksPanel.classList.toggle('visible');
 });
 
-// Ad block toggle change event handler
 adBlockToggle.addEventListener('change', () => {
   settings.adBlockEnabled = adBlockToggle.checked;
   localStorage.setItem('nexus-settings', JSON.stringify(settings));
 });
 
-// Cache toggle change event handler
 cacheToggle.addEventListener('change', () => {
   settings.cacheEnabled = cacheToggle.checked;
   localStorage.setItem('nexus-settings', JSON.stringify(settings));
 });
 
-// Encoding mode select change event handler
 encodingModeSelect.addEventListener('change', () => {
   settings.encodingMode = encodingModeSelect.value;
   localStorage.setItem('nexus-settings', JSON.stringify(settings));
 });
 
-// Tab bar click event handler
-tabBar.addEventListener('click', (e) => {
-  if (e.target.classList.contains('tab')) {
-    const tabId = e.target.dataset.tabId;
-    switchToTab(tabs.find((tab) => tab.id === tabId));
-  } else if (e.target.classList.contains('close-button')) {
-    const tabId = e.target.dataset.tabId;
-    const tabIndex = tabs.findIndex((tab) => tab.id === tabId);
-    if (tabIndex !== -1) {
-      tabs.splice(tabIndex, 1);
-      renderTabBar();
-      if (tabs.length > 0) {
-        switchToTab(tabs[0]);
-      }
-    }
-  }
-});
-
-// Create a new tab
-const createTab = async (searchTerm) => {
-  const tabId = Math.random().toString(36).substr(2, 9);
-  const tab = {
-    id: tabId,
-    searchTerm,
-    url: `https://www.google.com/search?q=${searchTerm}`,
-    iframe: document.createElement('iframe')
-  };
-  tab.iframe.src = tab.url;
-  tab.iframe.frameBorder = '0';
-  tab.iframe.width = '100%';
-  tab.iframe.height = '100vh';
-  return tab;
-};
-
-// Render the tab bar
-const renderTabBar = () => {
-  tabBar.innerHTML = '';
-  tabs.forEach((tab) => {
-    const tabElement = document.createElement('div');
-    tabElement.classList.add('tab');
-    tabElement.dataset.tabId = tab.id;
-    tabElement.innerHTML = `
-      <span>${tab.searchTerm}</span>
-      <button class="close-button" data-tab-id="${tab.id}">Close</button>
-    `;
-    tabBar.appendChild(tabElement);
-  });
-};
-
-// Switch to a tab
-const switchToTab = (tab) => {
-  if (currentTab) {
-    currentTab.iframe.style.display = 'none';
-  }
-  currentTab = tab;
-  currentTab.iframe.style.display = 'block';
-  document.body.appendChild(currentTab.iframe);
-};
-
-// Initialize UI
-(() => {
-  adBlockToggle.checked = settings.adBlockEnabled;
-  cacheToggle.checked = settings.cacheEnabled;
-  encodingModeSelect.value = settings.encodingMode;
-  renderTabBar();
-  if (tabs.length > 0) {
-    switchToTab(tabs[0]);
-  }
-})();
+// Initialize
+renderSettingsPanel();
+renderBookmarksPanel();
