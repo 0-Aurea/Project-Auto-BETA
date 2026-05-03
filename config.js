@@ -86,81 +86,96 @@ const QUIC_HEADER_REWRITE_RULES = {
   'Content-Security-Policy': (value) => value.replace('default-src', 'script-src \'self\''),
 };
 
-const INTEGRATED_HTTPS_TUNNEL_OPTIONS = {
-  tlsProtocols: TLS_PROTOCOLS,
-  sslCertFile: SSL_CERT_FILE,
-  sslKeyFile: SSL_KEY_FILE,
-  httpsPort: HTTPS_PORT,
+const config = {
+  cache: {
+    name: CACHE_NAME,
+    maxAge: MAX_CACHE_AGE,
+    prefetchCacheAge: PREFETCH_CACHE_AGE,
+    ttlHeaders: CACHE_TTL_HEADERS,
+    revalidateThreshold: CACHE_REVALIDATE_THRESHOLD,
+    sizeLimit: CACHE_SIZE_LIMIT,
+  },
+  encoding: {
+    modes: ENCODING_MODES,
+    defaultMode: DEFAULT_ENCODING_MODE,
+  },
+  adBlock: {
+    enabled: AD_BLOCK_ENABLED,
+    filterListUrl: AD_BLOCK_FILTER_LIST_URL,
+    filterListUpdateInterval: AD_BLOCK_FILTER_LIST_UPDATE_INTERVAL,
+  },
+  bookmarks: {
+    enabled: BOOKMARKS_ENABLED,
+    syncEnabled: BOOKMARKS_SYNC_ENABLED,
+    storageKey: BOOKMARKS_STORAGE_KEY,
+  },
+  proxy: {
+    https: {
+      port: HTTPS_PORT,
+      tlsProtocols: TLS_PROTOCOLS,
+      sslCertFile: SSL_CERT_FILE,
+      sslKeyFile: SSL_KEY_FILE,
+    },
+    websocket: {
+      timeout: WEBSOCKET_TIMEOUT,
+      keepAliveInterval: WEBSOCKET_KEEP_ALIVE_INTERVAL,
+      pingInterval: WEBSOCKET_PING_INTERVAL,
+      pongTimeout: WEBSOCKET_PONG_TIMEOUT,
+    },
+    integratedHttpsTunnel: INTEGRATED_HTTPS_TUNNEL,
+    websocketUpgradeProxying: WEBSOCKET_UPGRADE_PROXYING,
+  },
+  cookieScoping: {
+    enabled: COOKIE_SCOPING_ENABLED,
+    storageKey: COOKIE_STORAGE_KEY,
+  },
+  headerRewrite: {
+    rules: HEADER_REWRITE_RULES,
+  },
+  quic: {
+    enabled: QUIC_ENABLED,
+    port: QUIC_PORT,
+    protocolVersion: QUIC_PROTOCOL_VERSION,
+    spinningBit: QUIC_SPINNING_BIT,
+    headerRewriteRules: QUIC_HEADER_REWRITE_RULES,
+  },
+  http3: {
+    enabled: HTTP3_ENABLED,
+    port: HTTP3_PORT,
+    protocolVersion: HTTP3_PROTOCOL_VERSION,
+  },
+  ui: {
+    theme: UI_THEME,
+    fontSize: UI_FONT_SIZE,
+    fontFamily: UI_FONT_FAMILY,
+    tabBar: {
+      enabled: TAB_BAR_ENABLED,
+      width: TAB_BAR_WIDTH,
+      height: TAB_BAR_HEIGHT,
+    },
+    settingsPanel: {
+      enabled: SETTINGS_PANEL_ENABLED,
+      width: SETTINGS_PANEL_WIDTH,
+      height: SETTINGS_PANEL_HEIGHT,
+    },
+  },
+  prefetchHints: {
+    enabled: PREFETCH_HINTS_ENABLED,
+    cacheAge: PREFETCH_HINTS_CACHE_AGE,
+  },
+  compression: {
+    enabled: COMPRESSION_ENABLED,
+    brotliCompressionThreshold: BROTLI_COMPRESSION_THRESHOLD,
+    gzipCompressionThreshold: GZIP_COMPRESSION_THRESHOLD,
+    minSize: COMPRESSION_MIN_SIZE,
+    maxSize: COMPRESSION_MAX_SIZE,
+  },
+  connection: {
+    timeout: CONNECTION_TIMEOUT,
+  },
+  socket: {
+    timeout: SOCKET_TIMEOUT,
+  },
 };
 
-const WEBSOCKET_UPGRADE_PROXYING_OPTIONS = {
-  timeout: WEBSOCKET_TIMEOUT,
-  keepAliveInterval: WEBSOCKET_KEEP_ALIVE_INTERVAL,
-  pingInterval: WEBSOCKET_PING_INTERVAL,
-  pongTimeout: WEBSOCKET_PONG_TIMEOUT,
-};
-
-const CACHE_OPTIONS = {
-  name: CACHE_NAME,
-  maxAge: MAX_CACHE_AGE,
-  prefetchCacheAge: PREFETCH_CACHE_AGE,
-  ttlHeaders: CACHE_TTL_HEADERS,
-  revalidateThreshold: CACHE_REVALIDATE_THRESHOLD,
-  sizeLimit: CACHE_SIZE_LIMIT,
-};
-
-const COMPRESSION_OPTIONS = {
-  enabled: COMPRESSION_ENABLED,
-  brotliThreshold: BROTLI_COMPRESSION_THRESHOLD,
-  gzipThreshold: GZIP_COMPRESSION_THRESHOLD,
-  minSize: COMPRESSION_MIN_SIZE,
-  maxSize: COMPRESSION_MAX_SIZE,
-};
-
-const CONNECTION_OPTIONS = {
-  timeout: CONNECTION_TIMEOUT,
-  socketTimeout: SOCKET_TIMEOUT,
-};
-
-const TAB_BAR_OPTIONS = {
-  enabled: TAB_BAR_ENABLED,
-  width: TAB_BAR_WIDTH,
-  height: TAB_BAR_HEIGHT,
-};
-
-const SETTINGS_PANEL_OPTIONS = {
-  enabled: SETTINGS_PANEL_ENABLED,
-  width: SETTINGS_PANEL_WIDTH,
-  height: SETTINGS_PANEL_HEIGHT,
-};
-
-const BOOKMARKS_OPTIONS = {
-  enabled: BOOKMARKS_ENABLED,
-  syncEnabled: BOOKMARKS_SYNC_ENABLED,
-};
-
-const AD_BLOCK_OPTIONS = {
-  enabled: AD_BLOCK_ENABLED,
-  filterListUrl: AD_BLOCK_FILTER_LIST_URL,
-  hostsFileUrl: HOSTS_FILE_URL,
-  updateInterval: AD_BLOCK_FILTER_LIST_UPDATE_INTERVAL,
-};
-
-const UI_OPTIONS = {
-  theme: UI_THEME,
-  fontSize: UI_FONT_SIZE,
-  fontFamily: UI_FONT_FAMILY,
-};
-
-const QUIC_OPTIONS = {
-  enabled: QUIC_ENABLED,
-  port: QUIC_PORT,
-  protocolVersion: QUIC_PROTOCOL_VERSION,
-  spinningBit: QUIC_SPINNING_BIT,
-};
-
-const HTTP3_OPTIONS = {
-  enabled: HTTP3_ENABLED,
-  port: HTTP3_PORT,
-  protocolVersion: HTTP3_PROTOCOL_VERSION,
-};
+export default config;
