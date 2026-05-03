@@ -58,6 +58,96 @@ function xorBase64Decode(data, salt) {
   return String.fromCharCode(...decodedArray);
 }
 
+class JSRewriter {
+  constructor() {
+    this.scriptRegex = /(?:eval|Function|import|require)\(/g;
+    this.dynamicImportRegex = /import\(['"]([^'"]+)['"]\)/g;
+    this.workerRegex = /new\s+Worker\(['"]([^'"]+)['"]\)/g;
+    this.importScriptsRegex = /importScripts\(['"]([^'"]+)['"]\)/g;
+    this.documentDomainRegex = /document\.domain\s*=\s*['"]([^'"]+)['"]/g;
+    this.windowLocationRegex = /window\.location\s*=\s*['"]([^'"]+)['"]/g;
+    this.windowOpenRegex = /window\.open\(['"]([^'"]+)['"]\)/g;
+    this.historyPushStateRegex = /history\.pushState\(/g;
+    this.historyReplaceStateRegex = /history\.replaceState\(/g;
+  }
+
+  rewriteJS(js) {
+    js = js.replace(this.scriptRegex, (match, p1) => {
+      if (match.startsWith('eval(')) {
+        return `eval(${this.rewriteEval(match)})`;
+      } else if (match.startsWith('Function(')) {
+        return `Function(${this.rewriteFunction(match)})`;
+      } else if (match.startsWith('import(')) {
+        return `import(${this.rewriteDynamicImport(match)})`;
+      } else if (match.startsWith('require(')) {
+        return `require(${this.rewriteRequire(match)})`;
+      }
+      return match;
+    });
+
+    js = js.replace(this.dynamicImportRegex, (match, p1) => {
+      return `import('${this.rewriteURL(p1)}')`;
+    });
+
+    js = js.replace(this.workerRegex, (match, p1) => {
+      return `new Worker('${this.rewriteURL(p1)}')`;
+    });
+
+    js = js.replace(this.importScriptsRegex, (match, p1) => {
+      return `importScripts('${this.rewriteURL(p1)}')`;
+    });
+
+    js = js.replace(this.documentDomainRegex, (match, p1) => {
+      return `document.domain = '${p1}'`;
+    });
+
+    js = js.replace(this.windowLocationRegex, (match, p1) => {
+      return `window.location = '${this.rewriteURL(p1)}'`;
+    });
+
+    js = js.replace(this.windowOpenRegex, (match, p1) => {
+      return `window.open('${this.rewriteURL(p1)}')`;
+    });
+
+    js = js.replace(this.historyPushStateRegex, (match) => {
+      return `history.pushState(${this.rewriteHistory(match)})`;
+    });
+
+    js = js.replace(this.historyReplaceStateRegex, (match) => {
+      return `history.replaceState(${this.rewriteHistory(match)})`;
+    });
+
+    return js;
+  }
+
+  rewriteEval(evalStr) {
+    return evalStr.replace(/\(/g, '(__nexus_eval__(');
+  }
+
+  rewriteFunction(funcStr) {
+    return funcStr.replace(/\(/g, '(__nexus_function__(');
+  }
+
+  rewriteDynamicImport(importStr) {
+    return importStr;
+  }
+
+  rewriteRequire(requireStr) {
+    return requireStr;
+  }
+
+  rewriteURL(url) {
+    const salt = rotatingSalt[rotatingSalt.length - 1];
+    return xorBase64Encode(url, salt);
+  }
+
+  rewriteHistory(historyStr) {
+    return historyStr;
+  }
+}
+
+const jsRewriter = new JSRewriter();
+
 async function handleRequest(request) {
   const url = new URL(request.url);
   if (url.pathname.startsWith('/nexus/')) {
@@ -74,8 +164,30 @@ async function handleRequest(request) {
     body: request.body,
   });
   const response = await fetch(proxiedRequest);
-  const proxiedResponse = new Response(response.body, response);
-  proxiedResponse.headers.set('Content-Type', 'text/html; charset=utf-8');
+  let proxiedResponse;
+  if (response.headers.get('Content-Type').includes('text/html')) {
+    let html = await response.text();
+    html = html.replace(/<script>/g, '<script>__nexus_js_rewriter__ = true;');
+    html = html.replace(/<\/head>/g, () => {
+      return `
+        <script>
+          __nexus_js_rewriter__ = true;
+          function __nexus_rewrite_js__(js) {
+            return ${jsRewriter.rewriteJS('js')};
+          }
+        </script>
+      </head>
+    `;
+    });
+    proxiedResponse = new Response(html, response);
+  } else if (response.headers.get('Content-Type').includes('application/javascript')) {
+    let js = await response.text();
+    js = jsRewriter.rewriteJS(js);
+    proxiedResponse = new Response(js, response);
+  } else {
+    proxiedResponse = new Response(response.body, response);
+  }
+  proxiedResponse.headers.set('Content-Type', proxiedResponse.headers.get('Content-Type'));
   await putResponse(request, proxiedResponse);
   return proxiedResponse;
 }
