@@ -90,6 +90,32 @@ class WebRTCUtils {
     const scrubbedCandidate = WebRTCUtils.scrubICECandidate(candidate.candidate);
     return new RTCIceCandidate({ candidate: scrubbedCandidate });
   }
+
+  /**
+   * Mangle WebRTC-related properties to prevent IP leaks.
+   * @param {RTCPeerConnection} pc - The RTCPeerConnection to mangle.
+   */
+  static mangleWebRTC(pc) {
+    Object.defineProperty(pc, 'localDescription', {
+      get: () => {
+        const description = pc.getLocalDescription();
+        if (description) {
+          return WebRTCUtils.scrubSessionDescription(description);
+        }
+        return null;
+      },
+    });
+
+    Object.defineProperty(pc, 'remoteDescription', {
+      get: () => {
+        const description = pc.getRemoteDescription();
+        if (description) {
+          return WebRTCUtils.scrubSessionDescription(description);
+        }
+        return null;
+      },
+    });
+  }
 }
 
-export default WebRTCUtils;
+export { WebRTCUtils };
