@@ -18,7 +18,7 @@ class WebSocketUtils {
    * @param {Server} server - The HTTP server instance.
    */
   static init(server) {
-    WebSocketUtils.wss = new WebSocket.Server({ server });
+    WebSocketUtils.wss = new WebSocket.Server({ server, noServer: true });
 
     WebSocketUtils.wss.on('connection', (ws, req) => {
       const { headers, url } = req;
@@ -98,6 +98,57 @@ class WebSocketUtils {
       res.writeHead(400);
       res.end('Bad Request');
     }
+  }
+
+  /**
+   * Proxy WebSocket connection to target server.
+   * @param {WebSocket} ws - The client WebSocket instance.
+   * @param {string} targetUrl - The URL of the target WebSocket server.
+   */
+  static proxyWebSocket(ws, targetUrl) {
+    const targetWs = new WebSocket(targetUrl);
+
+    ws.on('message', (message) => {
+      targetWs.send(message);
+    });
+
+    ws.on('error', (error) => {
+      targetWs.terminate();
+    });
+
+    ws.on('close', () => {
+      targetWs.terminate();
+    });
+
+    targetWs.on('message', (message) => {
+      ws.send(message);
+    });
+
+    targetWs.on('error', (error) => {
+      ws.terminate();
+    });
+
+    targetWs.on('close', () => {
+      ws.terminate();
+    });
+  }
+
+  /**
+   * Rewrite WebSocket headers to prevent IP leaks.
+   * @param {object} headers - The WebSocket headers to rewrite.
+   * @returns {object} The rewritten WebSocket headers.
+   */
+  static rewriteWebSocketHeaders(headers) {
+    const rewrittenHeaders = { ...headers };
+
+    // Remove sensitive headers
+    delete rewrittenHeaders['X-Forwarded-For'];
+    delete rewrittenHeaders['X-Real-IP'];
+
+    // Rewrite Origin header
+    rewrittenHeaders['Origin'] = rewrittenHeaders['Origin'].replace('http://', 'ws://').replace('https://', 'wss://');
+
+    return rewrittenHeaders;
   }
 }
 
