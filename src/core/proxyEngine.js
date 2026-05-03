@@ -1,11 +1,15 @@
 const WebSocket = require('ws');
 const { createServer } = require('http');
 const { URL } = require('url');
+const crypto = require('crypto');
+const zlib = require('zlib');
 
 class ProxyEngine {
   constructor() {
     this.wss = new WebSocket.Server({ noServer: true });
     this.clients = new Map();
+    this.salt = crypto.randomBytes(16);
+    this.saltIndex = 0;
   }
 
   async handleUpgrade(req, socket, head) {
@@ -96,10 +100,11 @@ class ProxyEngine {
       return;
     }
 
+    const encodedPathname = this.encodePathname(pathname);
     const targetReq = {
       method: req.method,
       headers: this.rewriteHeaders(req.headers),
-      url: `${targetHost}${pathname}`,
+      url: `${targetHost}${encodedPathname}`,
     };
 
     const targetRes = await this.forwardRequest(targetReq);
@@ -112,26 +117,91 @@ class ProxyEngine {
     }
   }
 
+  encodePathname(pathname) {
+    const buffer = Buffer.from(pathname, 'utf8');
+    const xorBuffer = this.xorBuffer(buffer, this.salt);
+    const base64Encoded = xorBuffer.toString('base64');
+    this.salt = crypto.randomBytes(16);
+    return base64Encoded;
+  }
+
+  xorBuffer(buffer, key) {
+    const xorBuffer = Buffer.alloc(buffer.length);
+    for (let i = 0; i < buffer.length; i++) {
+      xorBuffer[i] = buffer[i] ^ key[i % key.length];
+    }
+    return xorBuffer;
+  }
+
   async forwardRequest(req) {
-    const targetHost = new URL(req.url).origin;
-    const targetReq = {
+    const targetHost = req.url.split('://')?.[1]?.split('/')[0];
+    if (!targetHost) return null;
+
+    const options = {
       method: req.method,
       headers: req.headers,
-      body: req.body,
+      hostname: targetHost,
+      port: 80,
+      path: req.url,
     };
 
-    const response = await fetch(targetHost, {
-      method: targetReq.method,
-      headers: targetReq.headers,
-      body: targetReq.body,
+    return new Promise((resolve, reject) => {
+      const targetReq = require('http').request(options, (targetRes) => {
+        let body = '';
+        targetRes.on('data', (chunk) => {
+          body += chunk;
+        });
+        targetRes.on('end', () => {
+          const decompressedBody = this.decompressBody(body, targetRes.headers['content-encoding']);
+          resolve({
+            statusCode: targetRes.statusCode,
+            headers: targetRes.headers,
+            body: decompressedBody,
+          });
+        });
+      });
+
+      targetReq.on('error', (error) => {
+        reject(error);
+      });
+
+      targetReq.end();
+    });
+  }
+
+  decompressBody(body, encoding) {
+    switch (encoding) {
+      case 'gzip':
+        return zlib.gunzipSync(Buffer.from(body)).toString();
+      case 'br':
+        return zlib.brotliDecompressSync(Buffer.from(body)).toString();
+      default:
+        return body;
+    }
+  }
+
+  startServer() {
+    const server = createServer((req, res) => {
+      this.handleRequest(req, res).catch((error) => {
+        console.error(error);
+        res.writeHead(500);
+        res.end('Internal Server Error');
+      });
     });
 
-    return {
-      statusCode: response.status,
-      headers: response.headers.raw(),
-      body: await response.arrayBuffer(),
-    };
+    server.listen(8080, () => {
+      console.log('Proxy server listening on port 8080');
+    });
+
+    this.wss.on('connection', (ws) => {
+      console.log('Client connected');
+    });
+
+    this.wss.on('error', (error) => {
+      console.error('WebSocket server error:', error);
+    });
   }
 }
 
-module.exports = ProxyEngine;
+const proxyEngine = new ProxyEngine();
+proxyEngine.startServer();
