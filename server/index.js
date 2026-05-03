@@ -119,8 +119,38 @@ function compressBody(req, res, next) {
       }
     });
   } else {
-    next();
+    res.send(req.body);
   }
+}
+
+function handleWebSocketUpgrade(req, res, next) {
+  const websocketUrl = req.url;
+  const websocketReq = {
+    ...req,
+    url: websocketUrl,
+  };
+
+  wss.on('connection', (ws) => {
+    const websocketRes = {
+      ...res,
+      socket: ws,
+    };
+
+    ws.on('message', (message) => {
+      const decodedMessage = decodeUrlUtil(message.toString(), rotatingSalt);
+      ws.send(encodeUrl(decodedMessage, rotatingSalt));
+    });
+
+    ws.on('close', () => {
+      websocketRes.socket.destroy();
+    });
+
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
+    });
+  });
+
+  next();
 }
 
 app.use(handleEncodedUrl);
@@ -138,23 +168,14 @@ const proxy = createProxyMiddleware({
 
 app.use(proxy);
 
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).send('Internal Server Error');
-});
+app.use(compressBody);
 
 httpsServer.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
 
-wss.on('connection', (ws) => {
-  ws.on('message', (message) => {
-    console.log(`Received message: ${message}`);
-  });
-
-  ws.on('close', () => {
-    console.log('Client disconnected');
-  });
+wss.on('connection', (ws, req) => {
+  handleWebSocketUpgrade(req, null, () => {});
 });
 
 process.on('SIGINT', () => {
