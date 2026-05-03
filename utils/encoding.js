@@ -104,6 +104,30 @@ class EncodingUtils {
       throw new Error('Invalid encoded URL');
     }
   }
+
+  /**
+   * Generates a random salt and updates the current salt and last rotation timestamp.
+   * @returns {Buffer} The new salt.
+   */
+  static rotateSalt() {
+    EncodingUtils.salt = crypto.randomBytes(EncodingUtils.SALT_SIZE);
+    EncodingUtils.lastSaltRotation = Date.now();
+    return EncodingUtils.salt;
+  }
+
+  /**
+   * Validates a URL for encoding and decoding.
+   * @param {string} url The URL to validate.
+   * @returns {boolean} True if the URL is valid, false otherwise.
+   */
+  static isValidUrl(url) {
+    try {
+      const result = new URL(url);
+      return result.protocol && result.host;
+    } catch {
+      return false;
+    }
+  }
 }
 
 module.exports = EncodingUtils;
