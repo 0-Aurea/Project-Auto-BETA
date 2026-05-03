@@ -109,196 +109,107 @@ class JSRewriter {
       return `window.open('${this.rewriteURL(p1)}')`;
     });
 
-    js = js.replace(this.historyPushStateRegex, () => {
-      return `history.pushState(${this.rewriteHistoryPushState()})`;
+    js = js.replace(this.historyPushStateRegex, (match) => {
+      return `history.pushState(${this.rewriteHistoryState(match)})`;
     });
 
-    js = js.replace(this.historyReplaceStateRegex, () => {
-      return `history.replaceState(${this.rewriteHistoryReplaceState()})`;
+    js = js.replace(this.historyReplaceStateRegex, (match) => {
+      return `history.replaceState(${this.rewriteHistoryState(match)})`;
     });
 
     return js;
   }
 
-  rewriteEval(match) {
-    return match.slice(5, -1);
+  rewriteEval(evalString) {
+    try {
+      const evalFunc = new Function(`return ${evalString}`);
+      const result = evalFunc();
+      return xorBase64Encode(result.toString(), generateSalt());
+    } catch (e) {
+      return evalString;
+    }
   }
 
-  rewriteFunction(match) {
-    return match.slice(9, -1);
+  rewriteFunction(funcString) {
+    try {
+      const func = new Function(`return ${funcString}`);
+      const funcStringified = func.toString();
+      return xorBase64Encode(funcStringified, generateSalt());
+    } catch (e) {
+      return funcString;
+    }
   }
 
-  rewriteDynamicImport(match) {
-    return match;
+  rewriteDynamicImport(importString) {
+    return this.rewriteURL(importString);
   }
 
-  rewriteRequire(match) {
-    return match;
+  rewriteRequire(requireString) {
+    return this.rewriteURL(requireString);
   }
 
   rewriteURL(url) {
-    return url;
+    const salt = rotatingSalt[rotatingSalt.length - 1];
+    return xorBase64Encode(url, salt);
   }
 
-  rewriteHistoryPushState() {
-    return '';
-  }
-
-  rewriteHistoryReplaceState() {
-    return '';
+  rewriteHistoryState(state) {
+    try {
+      const stateObj = JSON.parse(state);
+      stateObj.url = this.rewriteURL(stateObj.url);
+      return JSON.stringify(stateObj);
+    } catch (e) {
+      return state;
+    }
   }
 }
 
-class BrotliGzipPipeline {
+class NexusProxy {
   constructor() {
-    this.brotliDecoder = new BrotliDecoder();
-    this.gzipDecoder = new Zlib.Gunzip();
+    this.jsRewriter = new JSRewriter();
   }
 
-  async decompress(response) {
-    const contentEncoding = response.headers.get('content-encoding');
-    if (contentEncoding === 'br') {
-      return await this.brotliDecompress(response);
-    } else if (contentEncoding === 'gzip') {
-      return await this.gzipDecompress(response);
+  async handleRequest(request) {
+    const cache = await getCache();
+    const cachedResponse = await cache.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
     }
-    return response;
-  }
 
-  async brotliDecompress(response) {
-    const arrayBuffer = await response.arrayBuffer();
-    const decompressedArrayBuffer = await this.brotliDecoder.decode(arrayBuffer);
-    return new Response(decompressedArrayBuffer, {
-      headers: response.headers,
-    });
-  }
-
-  async gzipDecompress(response) {
-    const arrayBuffer = await response.arrayBuffer();
-    const decompressedArrayBuffer = await this.gzipDecoder.decode(arrayBuffer);
-    return new Response(decompressedArrayBuffer, {
-      headers: response.headers,
-    });
-  }
-
-  async reCompress(response) {
-    const contentEncoding = response.headers.get('content-encoding');
-    if (contentEncoding === 'br') {
-      return await this.brotliRecompress(response);
-    } else if (contentEncoding === 'gzip') {
-      return await this.gzipRecompress(response);
+    try {
+      const response = await fetch(request);
+      const contentType = response.headers.get('Content-Type');
+      if (contentType && contentType.includes('application/javascript')) {
+        const js = await response.text();
+        const rewrittenJs = this.jsRewriter.rewriteJS(js);
+        const rewrittenResponse = new Response(rewrittenJs, {
+          status: response.status,
+          headers: response.headers,
+        });
+        await putResponse(request, rewrittenResponse);
+        return rewrittenResponse;
+      } else {
+        await putResponse(request, response);
+        return response;
+      }
+    } catch (e) {
+      return new Response('Error', {
+        status: 500,
+      });
     }
-    return response;
-  }
-
-  async brotliRecompress(response) {
-    const arrayBuffer = await response.arrayBuffer();
-    const compressedArrayBuffer = await this.brotliEncoder.encode(arrayBuffer);
-    return new Response(compressedArrayBuffer, {
-      headers: response.headers,
-    });
-  }
-
-  async gzipRecompress(response) {
-    const arrayBuffer = await response.arrayBuffer();
-    const compressedArrayBuffer = await this.gzipEncoder.encode(arrayBuffer);
-    return new Response(compressedArrayBuffer, {
-      headers: response.headers,
-    });
   }
 }
 
-addEventListener('fetch', async (event) => {
-  event.respondWith(handleRequest(event.request));
+self.addEventListener('fetch', (event) => {
+  event.respondWith(new NexusProxy().handleRequest(event.request));
 });
 
-async function handleRequest(request) {
-  const cache = await getCache();
-  const response = await cache.match(request);
-  if (response) {
-    return response;
-  }
+self.addEventListener('activate', (event) => {
+  event.waitUntil(getCache().then((cache) => cache.keys()).then((keys) => {
+    keys.forEach((key) => cache.delete(key));
+  }));
+});
 
-  const proxiedResponse = await fetch(request);
-  const decompressedResponse = await new BrotliGzipPipeline().decompress(proxiedResponse);
-  const recompressedResponse = await new BrotliGzipPipeline().reCompress(decompressedResponse);
-
-  await cache.put(request, recompressedResponse.clone());
-  return recompressedResponse;
-}
-
-class BrotliDecoder {
-  async decode(arrayBuffer) {
-    return new Promise((resolve, reject) => {
-      const decompressed = brotliDecompressSync(arrayBuffer);
-      resolve(decompressed);
-    });
-  }
-}
-
-function brotliDecompressSync(arrayBuffer) {
-  // brotli decompression implementation
-  // This implementation uses the pako library
-  const pako = require('pako');
-  return pako.inflate(arrayBuffer, { to: 'Uint8Array' });
-}
-
-class Zlib {
-  static Gunzip() {
-    return new Zlib.GunzipClass();
-  }
-
-  static async gunzip(arrayBuffer) {
-    return new Promise((resolve, reject) => {
-      const zlib = require('zlib');
-      zlib.gunzip(arrayBuffer, (err, decompressed) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(decompressed);
-        }
-      });
-    });
-  }
-}
-
-class ZlibGunzipClass {
-  async decode(arrayBuffer) {
-    return Zlib.gunzip(arrayBuffer);
-  }
-}
-
-const brotliEncoder = new BrotliEncoder();
-
-class BrotliEncoder {
-  async encode(arrayBuffer) {
-    return new Promise((resolve, reject) => {
-      const compressed = brotliCompressSync(arrayBuffer);
-      resolve(compressed);
-    });
-  }
-}
-
-function brotliCompressSync(arrayBuffer) {
-  // brotli compression implementation
-  // This implementation uses the pako library
-  const pako = require('pako');
-  return pako.deflate(arrayBuffer, { to: 'Uint8Array' });
-}
-
-const gzipEncoder = new GzipEncoder();
-
-class GzipEncoder {
-  async encode(arrayBuffer) {
-    return new Promise((resolve, reject) => {
-      const zlib = require('zlib');
-      zlib.gzip(arrayBuffer, (err, compressed) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(compressed);
-        }
-      });
-    });
-  }
-}
+self.addEventListener('install', (event) => {
+  event.waitUntil(getCache());
+});
