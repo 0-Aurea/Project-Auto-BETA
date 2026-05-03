@@ -1,116 +1,66 @@
-const { RTCPeerConnection, RTCSessionDescription, RTCIceCandidate } = globalThis;
+const { RTCPeerConnection } = globalThis;
 
 /**
- * WebRTC utility class for managing ICE candidate scrubbing and WebRTC-related functions.
+ * WebRTC utility class for handling WebRTC ICE candidate scrubbing to prevent IP leaks.
  */
 class WebRTCUtils {
   /**
-   * Regular expression to match IP addresses in SDP strings.
+   * Regular expression to match WebRTC ICE candidate IP addresses.
    */
   static IP_ADDRESS_REGEX = /\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g;
 
   /**
-   * Regular expression to match IP addresses in ICE candidate strings.
+   * Scrub WebRTC ICE candidate IP addresses to prevent IP leaks.
+   * @param {RTCPeerConnection} pc - The RTCPeerConnection instance.
    */
-  static ICE_CANDIDATE_IP_ADDRESS_REGEX = /(?:candidate:)[^ ]* (?:[0-9]{1,3}\.){3}[0-9]{1,3}/g;
-
-  /**
-   * Scrub IP addresses from an SDP string.
-   * @param {string} sdp - The SDP string to scrub.
-   * @returns {string} The scrubbed SDP string.
-   */
-  static scrubIPAddresses(sdp) {
-    return sdp.replace(WebRTCUtils.IP_ADDRESS_REGEX, '0.0.0.0');
-  }
-
-  /**
-   * Scrub IP addresses from an ICE candidate string.
-   * @param {string} candidate - The ICE candidate string to scrub.
-   * @returns {string} The scrubbed ICE candidate string.
-   */
-  static scrubICECandidate(candidate) {
-    return candidate.replace(WebRTCUtils.ICE_CANDIDATE_IP_ADDRESS_REGEX, 'candidate:0 0.0.0.0');
-  }
-
-  /**
-   * Scrub IP addresses from an RTCSessionDescription.
-   * @param {RTCSessionDescription} description - The RTCSessionDescription to scrub.
-   * @returns {RTCSessionDescription} The scrubbed RTCSessionDescription.
-   */
-  static async scrubSessionDescription(description) {
-    const scrubbedSDP = WebRTCUtils.scrubIPAddresses(description.sdp);
-    return new RTCSessionDescription({ sdp: scrubbedSDP });
-  }
-
-  /**
-   * Create a new RTCPeerConnection with IP address scrubbing.
-   * @param {RTCConfiguration} configuration - The RTCConfiguration for the peer connection.
-   * @returns {RTCPeerConnection} The new RTCPeerConnection.
-   */
-  static createPeerConnection(configuration) {
-    const pc = new RTCPeerConnection(configuration);
+  static scrubIceCandidates(pc) {
+    if (!(pc instanceof RTCPeerConnection)) {
+      throw new Error('Invalid RTCPeerConnection instance');
+    }
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        const scrubbedCandidate = WebRTCUtils.scrubICECandidate(event.candidate.candidate);
-        event.candidate.candidate = scrubbedCandidate;
-      }
-    };
-
-    pc.onsignalingstatechange = () => {
-      if (pc.signalingState === 'stable') {
-        pc.getLocalStreams().forEach((stream) => {
-          stream.getTracks().forEach((track) => track.stop());
-        });
-      }
-    };
-
-    return pc;
-  }
-
-  /**
-   * Handle WebRTC ICE candidate leaks by scrubbing IP addresses.
-   * @param {RTCPeerConnection} pc - The RTCPeerConnection to handle.
-   */
-  static handleICECandidateLeak(pc) {
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        const scrubbedCandidate = WebRTCUtils.scrubICECandidate(event.candidate.candidate);
+        const candidate = event.candidate.candidate;
+        const scrubbedCandidate = WebRTCUtils.scrubIpAddresses(candidate);
         event.candidate.candidate = scrubbedCandidate;
       }
     };
   }
 
   /**
-   * Scrub IP addresses from an RTCIceCandidate.
-   * @param {RTCIceCandidate} candidate - The RTCIceCandidate to scrub.
-   * @returns {RTCIceCandidate} The scrubbed RTCIceCandidate.
+   * Scrub IP addresses from a WebRTC ICE candidate string.
+   * @param {string} candidate - The WebRTC ICE candidate string.
+   * @returns {string} The scrubbed WebRTC ICE candidate string.
    */
-  static scrubRTCIceCandidate(candidate) {
-    const scrubbedCandidate = WebRTCUtils.scrubICECandidate(candidate.candidate);
-    return new RTCIceCandidate({ candidate: scrubbedCandidate });
+  static scrubIpAddresses(candidate) {
+    return candidate.replace(WebRTCUtils.IP_ADDRESS_REGEX, (match) => {
+      // Replace IP addresses with a placeholder value
+      return '0.0.0.0';
+    });
   }
 
   /**
-   * Set up event listeners for WebRTC IP address leaks.
-   * @param {RTCPeerConnection} pc - The RTCPeerConnection to set up.
+   * Patch the RTCPeerConnection prototype to scrub WebRTC ICE candidate IP addresses.
    */
-  static setupLeakProtection(pc) {
-    pc.onicecandidate = (event) => {
+  static patchRTCPeerConnection() {
+    if (RTCPeerConnection.prototype._originalIceCandidate) {
+      return;
+    }
+
+    RTCPeerConnection.prototype._originalIceCandidate = RTCPeerConnection.prototype.onicecandidate;
+
+    RTCPeerConnection.prototype.onicecandidate = function (event) {
       if (event.candidate) {
-        const scrubbedCandidate = WebRTCUtils.scrubICECandidate(event.candidate.candidate);
+        const candidate = event.candidate.candidate;
+        const scrubbedCandidate = WebRTCUtils.scrubIpAddresses(candidate);
         event.candidate.candidate = scrubbedCandidate;
       }
-    };
 
-    pc.onaddstream = (event) => {
-      event.stream.getTracks().forEach((track) => {
-        track.onended = () => {
-          track.stop();
-        };
-      });
+      this._originalIceCandidate.call(this, event);
     };
   }
 }
 
-export { WebRTCUtils };
+WebRTCUtils.patchRTCPeerConnection();
+
+export default WebRTCUtils;
