@@ -121,55 +121,69 @@ class ProxyUtils {
   static rewriteHeaders(headers) {
     const rewrittenHeaders = {};
 
-    // Remove hop-by-hop headers
-    const hopByHopHeaders = ['connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailers', 'transfer-encoding', 'upgrade'];
-    for (const header in headers) {
-      if (!hopByHopHeaders.includes(header.toLowerCase())) {
-        rewrittenHeaders[header] = headers[header];
+    // Remove sensitive headers
+    for (const key in headers) {
+      if (key.toLowerCase() !== 'origin' && key.toLowerCase() !== 'referer') {
+        rewrittenHeaders[key] = headers[key];
       }
     }
 
-    // Rewrite Cookie header to isolate cookies per proxied origin
-    if (headers.cookie) {
-      const requestUrl = headers['x-request-url'];
-      const isolatedCookies = CookieScopingUtils.isolateCookies(requestUrl, headers.cookie);
-      rewrittenHeaders.cookie = isolatedCookies;
-    }
-
-    // Add X-Forwarded-For header
-    rewrittenHeaders['x-forwarded-for'] = headers['x-forwarded-for'] || '127.0.0.1';
+    // Add or modify headers as needed
+    rewrittenHeaders['sec-websocket-protocol'] = headers['sec-websocket-protocol'];
 
     return rewrittenHeaders;
   }
 
   /**
-   * Handle WebSocket upgrade request and establish a proxied connection.
+   * Handle HTTPS CONNECT tunneling.
+   * @param {IncomingMessage} req - The incoming request.
+   * @param {ServerResponse} res - The server response.
+   */
+  static handleHttpsConnect(req, res) {
+    const { headers, socket } = req;
+
+    // Establish connection to the proxied server
+    const destination = new URL(`https://${headers['host']}`);
+    const options = {
+      hostname: destination.hostname,
+      port: destination.port,
+      secure: true,
+    };
+
+    const proxiedSocket = require('https').createConnection(options, () => {
+      // Send CONNECT response
+      res.writeHead(200, {
+        'Content-Length': 0,
+      });
+      res.end();
+
+      // Pipe data between sockets
+      socket.pipe(proxiedSocket);
+      proxiedSocket.pipe(socket);
+    });
+
+    proxiedSocket.on('error', (error) => {
+      console.error('HTTPS CONNECT error:', error);
+      socket.destroy();
+    });
+
+    socket.on('error', (error) => {
+      console.error('HTTPS CONNECT socket error:', error);
+      proxiedSocket.destroy();
+    });
+  }
+
+  /**
+   * Handle WebSocket upgrade requests.
    * @param {IncomingMessage} req - The incoming request.
    * @param {ServerResponse} res - The server response.
    */
   static handleWebSocketUpgrade(req, res) {
-    const { headers, url } = req;
-
-    // Check if the request is a WebSocket upgrade request
-    if (headers['upgrade'] === 'websocket') {
-      // Handle WebSocket upgrade request
+    if (req.headers['upgrade'] === 'websocket') {
       ProxyUtils.wss.handleUpgrade(req, res, (ws) => {
         ProxyUtils.wss.emit('connection', ws, req);
       });
-    } else {
-      // Handle non-WebSocket requests
-      res.writeHead(400);
-      res.end('Bad Request');
     }
-  }
-
-  /**
-   * Scrub IP addresses from WebRTC ICE candidate strings.
-   * @param {string} candidate - The ICE candidate string to scrub.
-   * @returns {string} The scrubbed ICE candidate string.
-   */
-  static scrubIceCandidate(candidate) {
-    return WebRTCUtils.scrubIPAddresses(candidate);
   }
 }
 
