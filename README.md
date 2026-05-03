@@ -9,8 +9,18 @@ Nexus is a self-hosted web proxy designed to be objectively better than Titanium
 
 * **Core Proxy Engine**: XOR + base64 URL encoding with a rotating salt, integrated HTTPS tunnel, full request/response header rewriting, cookie scoping, WebSocket upgrade proxying, and WebRTC ICE candidate scrubbing.
 * **JS / HTML / CSS Rewriting**: Smarter JS rewriter, CSS rewriter, and HTML rewriter to handle dynamic JS imports, eval(), WebSockets, blob URLs, inline event handlers, source maps, CSS @imports, and WebRTC leaks.
-* **Caching & Performance**: Service Worker Cache API, Brotli/gzip decompression + re-compression pipeline, and prefetch hints.
-* **Frontend**: Sleek dark-mode UI with animated search bar, tab bar, proxy history, settings panel, built-in hosts-based ad blocking, bookmarks system, and about:blank cloaking.
+* **Caching & Performance**: 
+  * Service Worker Cache API for caching proxied responses with TTL headers
+  * Brotli/gzip decompression + re-compression pipeline for efficient content encoding
+  * Prefetch hints for parsing `<link rel="prefetch/preload">` and caching ahead
+* **Frontend**: 
+  * Sleek dark-mode UI with animated search bar
+  * Tab bar for multiple proxied pages open in iframes simultaneously
+  * Proxy history (IndexedDB, never sent to server)
+  * Settings panel for encoding mode, cache toggle, ad-block toggle
+  * Built-in hosts-based ad blocking (filter list parsed in the SW)
+  * Bookmarks system
+  * About:blank cloaking + custom tab title/icon
 
 ## Setup Instructions
 
@@ -30,6 +40,20 @@ Nexus is a self-hosted web proxy designed to be objectively better than Titanium
 
 1. Build the Docker image: `docker build -t nexus-proxy .`
 2. Run the Docker container: `docker run -p 8080:8080 nexus-proxy`
+
+## Configuration Options
+
+### Caching
+
+* **Cache TTL**: Set the time-to-live (TTL) for cached responses in hours (default: 1 hour)
+* **Cache Size**: Set the maximum size of the cache in megabytes (default: 100 MB)
+* **Cache Enabled**: Enable or disable caching (default: enabled)
+
+### Performance
+
+* **Brotli Compression**: Enable or disable Brotli compression (default: enabled)
+* **Gzip Compression**: Enable or disable gzip compression (default: enabled)
+* **Prefetch Hints**: Enable or disable prefetch hints (default: enabled)
 
 ## Architecture Diagram
 
