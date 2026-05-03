@@ -26,6 +26,11 @@ class CacheUtils {
   };
 
   /**
+   * Maximum cache size in bytes.
+   */
+  static MAX_CACHE_SIZE = 100 * 1024 * 1024; // 100MB
+
+  /**
    * Initialize the cache instance.
    * @returns {Promise<void>}
    */
@@ -73,6 +78,9 @@ class CacheUtils {
     }
 
     await CacheUtils.cache.put(request, responseToCache);
+
+    // Check cache size and evict oldest entries if necessary
+    await CacheUtils.checkCacheSize();
   }
 
   /**
@@ -90,45 +98,11 @@ class CacheUtils {
     if (cachedResponse) {
       const cachedBody = await cachedResponse.arrayBuffer();
       const decompressedBody = await CacheUtils.decompressBody(cachedBody, cachedResponse.headers.get('content-encoding'));
-      const response = new Response(decompressedBody, cachedResponse);
 
-      return response;
+      return new Response(decompressedBody, cachedResponse);
     }
 
     return null;
-  }
-
-  /**
-   * Prefetch and cache a response.
-   * @param {Request} request - The request to prefetch.
-   * @param {number} ttl - The time to live in seconds.
-   * @returns {Promise<void>}
-   */
-  static async prefetchResponse(request, ttl) {
-    try {
-      const response = await fetch(request);
-      await CacheUtils.cacheResponse(request, response, ttl);
-    } catch (error) {
-      globalThis.console.error(`Error prefetching response: ${error}`);
-    }
-  }
-
-  /**
-   * Handle prefetch hints.
-   * @param {HTMLDocument} document - The HTML document to parse.
-   * @param {number} ttl - The time to live in seconds.
-   * @returns {Promise<void>}
-   */
-  static async handlePrefetchHints(document, ttl) {
-    const prefetchLinks = document.querySelectorAll('link[rel="prefetch"], link[rel="preload"]');
-
-    for (const link of prefetchLinks) {
-      const href = link.getAttribute('href');
-      if (href) {
-        const request = new Request(href);
-        await CacheUtils.prefetchResponse(request, ttl);
-      }
-    }
   }
 
   /**
@@ -138,10 +112,18 @@ class CacheUtils {
    * @returns {Promise<Buffer>} The re-compressed response body.
    */
   static async recompressBody(body, algorithm) {
-    const compressionCodec = new CompressionCodec(algorithm);
-    const reCompressedBody = await compressionCodec.compress(body);
+    const compressedBody = await new Promise((resolve, reject) => {
+      const zlib = require('zlib');
+      zlib.gzip(body, (err, compressed) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(compressed);
+        }
+      });
+    });
 
-    return reCompressedBody;
+    return compressedBody;
   }
 
   /**
@@ -159,6 +141,60 @@ class CacheUtils {
 
     return decompressedBody;
   }
+
+  /**
+   * Check cache size and evict oldest entries if necessary.
+   * @returns {Promise<void>}
+   */
+  static async checkCacheSize() {
+    const cache = await CacheUtils.cache.keys();
+    const cacheSize = await CacheUtils.getCacheSize();
+
+    if (cacheSize > CacheUtils.MAX_CACHE_SIZE) {
+      const oldestEntries = await cache.sort((a, b) => a.timestamp - b.timestamp).take(10);
+
+      for (const entry of oldestEntries) {
+        await CacheUtils.cache.delete(entry);
+      }
+    }
+  }
+
+  /**
+   * Get cache size in bytes.
+   * @returns {Promise<number>} The cache size in bytes.
+   */
+  static async getCacheSize() {
+    const cache = await CacheUtils.cache.keys();
+    let cacheSize = 0;
+
+    for (const entry of cache) {
+      const response = await CacheUtils.cache.match(entry);
+      const body = await response.arrayBuffer();
+      cacheSize += body.byteLength;
+    }
+
+    return cacheSize;
+  }
+
+  /**
+   * Invalidate cache entries by URL prefix.
+   * @param {string} prefix - The URL prefix to invalidate.
+   * @returns {Promise<void>}
+   */
+  static async invalidateCache(prefix) {
+    const cache = await CacheUtils.cache.keys();
+    const entriesToRemove = [];
+
+    for (const entry of cache) {
+      if (entry.url.startsWith(prefix)) {
+        entriesToRemove.push(entry);
+      }
+    }
+
+    for (const entry of entriesToRemove) {
+      await CacheUtils.cache.delete(entry);
+    }
+  }
 }
 
-export default CacheUtils;
+module.exports = { CacheUtils };
