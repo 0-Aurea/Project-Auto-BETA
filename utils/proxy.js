@@ -3,6 +3,8 @@ const { URL } = require('url');
 const { IncomingMessage, ServerResponse } = require('http');
 const { EncodingUtils } = require('./encoding');
 const { CacheUtils } = require('./cache');
+const { CookieScopingUtils } = require('./cookieScoping');
+const { WebRTCUtils } = require('./webrtc');
 
 /**
  * Proxy utility class for managing full request/response header rewriting,
@@ -69,6 +71,11 @@ class ProxyUtils {
         proxiedWs.ping();
       });
 
+      // Handle WebSocket pong
+      ws.on('pong', () => {
+        // No-op
+      });
+
       // Set up connection timeout
       let timeoutId = setTimeout(() => {
         ws.terminate();
@@ -102,7 +109,7 @@ class ProxyUtils {
    */
   static getProxiedUrl(url) {
     const salt = EncodingUtils.getSalt();
-    const encodedUrl = EncodingUtils.encode(url, salt);
+    const encodedUrl = EncodingUtils.encodeUrl(url, salt);
     return `/${encodedUrl}`;
   }
 
@@ -112,66 +119,57 @@ class ProxyUtils {
    * @returns {object} The rewritten headers.
    */
   static rewriteHeaders(headers) {
-    const rewrittenHeaders = { ...headers };
+    const rewrittenHeaders = {};
 
-    // Remove sensitive headers
-    delete rewrittenHeaders['sec-websocket-protocol'];
-    delete rewrittenHeaders['sec-websocket-version'];
-
-    // Strip CSP, HSTS, and X-Frame-Options headers
-    delete rewrittenHeaders['content-security-policy'];
-    delete rewrittenHeaders['strict-transport-security'];
-    delete rewrittenHeaders['x-frame-options'];
-
-    // Rewrite Cookie header to isolate cookies per proxied origin
-    if (rewrittenHeaders.cookie) {
-      const cookies = rewrittenHeaders.cookie.split(';');
-      rewrittenHeaders.cookie = cookies
-        .filter((cookie) => !cookie.trim().startsWith('__Secure-'))
-        .join(';');
+    // Remove hop-by-hop headers
+    const hopByHopHeaders = ['connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailers', 'transfer-encoding', 'upgrade'];
+    for (const header in headers) {
+      if (!hopByHopHeaders.includes(header.toLowerCase())) {
+        rewrittenHeaders[header] = headers[header];
+      }
     }
 
-    // Add cache-control header to prevent caching
-    rewrittenHeaders['cache-control'] = 'no-cache, no-store, must-revalidate';
+    // Rewrite Cookie header to isolate cookies per proxied origin
+    if (headers.cookie) {
+      const requestUrl = headers['x-request-url'];
+      const isolatedCookies = CookieScopingUtils.isolateCookies(requestUrl, headers.cookie);
+      rewrittenHeaders.cookie = isolatedCookies;
+    }
+
+    // Add X-Forwarded-For header
+    rewrittenHeaders['x-forwarded-for'] = headers['x-forwarded-for'] || '127.0.0.1';
 
     return rewrittenHeaders;
   }
 
   /**
-   * Handle HTTP request proxying.
+   * Handle WebSocket upgrade request and establish a proxied connection.
    * @param {IncomingMessage} req - The incoming request.
    * @param {ServerResponse} res - The server response.
-   * @returns {Promise<void>}
    */
-  static async handleRequest(req, res) {
-    const { headers, url, method } = req;
+  static handleWebSocketUpgrade(req, res) {
+    const { headers, url } = req;
 
-    // Get the proxied URL
-    const proxiedUrl = ProxyUtils.getProxiedUrl(url);
+    // Check if the request is a WebSocket upgrade request
+    if (headers['upgrade'] === 'websocket') {
+      // Handle WebSocket upgrade request
+      ProxyUtils.wss.handleUpgrade(req, res, (ws) => {
+        ProxyUtils.wss.emit('connection', ws, req);
+      });
+    } else {
+      // Handle non-WebSocket requests
+      res.writeHead(400);
+      res.end('Bad Request');
+    }
+  }
 
-    // Create a new request to the proxied server
-    const proxiedReq = {
-      method,
-      headers: ProxyUtils.rewriteHeaders(headers),
-      url: proxiedUrl,
-    };
-
-    // Pipe the request body
-    const { readable, writable } = new Duplex();
-    req.pipe(readable);
-    writable.pipe(res);
-
-    // Handle the response
-    const proxiedRes = await fetch(proxiedUrl, proxiedReq);
-    const { status, statusText, headers: proxiedHeaders } = proxiedRes;
-
-    // Rewrite the response headers
-    const rewrittenHeaders = { ...proxiedHeaders };
-    delete rewrittenHeaders['transfer-encoding'];
-
-    // Send the response
-    res.writeHead(status, rewrittenHeaders);
-    res.end(await proxiedRes.arrayBuffer());
+  /**
+   * Scrub IP addresses from WebRTC ICE candidate strings.
+   * @param {string} candidate - The ICE candidate string to scrub.
+   * @returns {string} The scrubbed ICE candidate string.
+   */
+  static scrubIceCandidate(candidate) {
+    return WebRTCUtils.scrubIPAddresses(candidate);
   }
 }
 
