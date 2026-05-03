@@ -7,7 +7,12 @@
     "start": "node server/index.js",
     "build": "npm run lint && npm run test",
     "lint": "eslint .",
-    "test": "jest"
+    "test": "jest",
+    "ci:lint": "eslint .",
+    "ci:test": "jest",
+    "ci:build": "npm run ci:lint && npm run ci:test",
+    "docker:build": "docker build -t nexus-proxy .",
+    "docker:run": "docker run -p 8080:8080 nexus-proxy"
   },
   "keywords": [],
   "author": "NEXUS-AI",
@@ -39,5 +44,12 @@
     "eslint-plugin-standard": "^5.3.1",
     "jest": "^27.5.1",
     "prettier": "^2.4.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NEXUS-AI/nexus-proxy.git"
+  },
+  "engines": {
+    "node": ">=14.17.0"
   }
 }
