@@ -3,6 +3,7 @@ const express = require('express');
 const WebSocket = require('ws');
 const { URL } = require('url');
 const https = require('https');
+const fs = require('fs');
 
 class ProxyEngine {
   constructor() {
@@ -114,7 +115,6 @@ class ProxyEngine {
         targetRes.on('data', (chunk) => {
           body += chunk;
         });
-
         targetRes.on('end', () => {
           resolve({
             statusCode: targetRes.statusCode,
@@ -124,24 +124,22 @@ class ProxyEngine {
         });
       });
 
-      if (req.body) {
-        targetReq.write(req.body);
-      }
-
-      targetReq.end();
-
       targetReq.on('error', (err) => {
         reject(err);
       });
+
+      if (req.body) {
+        targetReq.write(req.body);
+      }
+      targetReq.end();
     });
   }
 
   handleWebSocket(req, ws) {
-    const url = new URL(req.url, 'http://example.com');
-    const targetHost = url.host;
-    const targetPath = url.pathname;
+    const targetHost = req.headers['host'];
+    const targetUrl = `wss://${targetHost}${req.url}`;
 
-    const targetWs = new WebSocket(`wss://${targetHost}${targetPath}`);
+    const targetWs = new WebSocket(targetUrl);
 
     ws.on('message', (message) => {
       targetWs.send(message);
@@ -149,6 +147,14 @@ class ProxyEngine {
 
     targetWs.on('message', (message) => {
       ws.send(message);
+    });
+
+    ws.on('close', () => {
+      targetWs.close();
+    });
+
+    targetWs.on('close', () => {
+      ws.close();
     });
 
     targetWs.on('error', (err) => {
@@ -159,18 +165,26 @@ class ProxyEngine {
       console.error(err);
     });
 
-    ws.on('close', () => {
-      targetWs.close();
-    });
-
-    targetWs.on('close', () => {
-      ws.close();
+    // WebRTC ICE candidate scrubbing
+    ws.on('message', (message) => {
+      try {
+        const data = JSON.parse(message);
+        if (data.type === 'candidate') {
+          const candidate = data.candidate;
+          const ipRegex = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/;
+          const match = candidate.match(ipRegex);
+          if (match) {
+            const ip = match[0];
+            // Scrub the IP address
+            data.candidate = candidate.replace(ip, '0.0.0.0');
+          }
+        }
+        targetWs.send(JSON.stringify(data));
+      } catch (err) {
+        console.error(err);
+      }
     });
   }
 }
 
-const proxyEngine = new ProxyEngine();
-proxyEngine.httpsServer.listen(443, () => {
-  console.log('Proxy server listening on port 443');
-});
-const fs = require('fs');
+module.exports = ProxyEngine;
