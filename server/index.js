@@ -7,6 +7,8 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const { encodeUrl, decodeUrl: decodeUrlUtil } = require('./utils/encoding');
+const zlib = require('zlib');
+const brotli = require('iltorb');
 
 const app = express();
 const port = 8080;
@@ -55,6 +57,65 @@ function handleEncodedUrl(req, res, next) {
   }
 }
 
+function decompressBody(req, res, next) {
+  if (req.headers['content-encoding']) {
+    if (req.headers['content-encoding'].includes('gzip')) {
+      zlib.unzip(req.body, (err, buffer) => {
+        if (err) {
+          next(err);
+        } else {
+          req.body = buffer;
+          req.headers['content-length'] = req.body.length;
+          delete req.headers['content-encoding'];
+          next();
+        }
+      });
+    } else if (req.headers['content-encoding'].includes('br')) {
+      brotli.decompress(req.body, (err, buffer) => {
+        if (err) {
+          next(err);
+        } else {
+          req.body = buffer;
+          req.headers['content-length'] = req.body.length;
+          delete req.headers['content-encoding'];
+          next();
+        }
+      });
+    } else {
+      next();
+    }
+  } else {
+    next();
+  }
+}
+
+function compressBody(req, res, next) {
+  const encoding = req.query.encoding;
+  if (encoding === 'gzip') {
+    zlib.gzip(req.body, (err, buffer) => {
+      if (err) {
+        next(err);
+      } else {
+        res.set("Content-Encoding", "gzip");
+        res.set("Content-Length", buffer.length);
+        res.send(buffer);
+      }
+    });
+  } else if (encoding === 'br') {
+    brotli.compress(req.body, { mode: 0 }, (err, buffer) => {
+      if (err) {
+        next(err);
+      } else {
+        res.set("Content-Encoding", "br");
+        res.set("Content-Length", buffer.length);
+        res.send(buffer);
+      }
+    });
+  } else {
+    res.send(req.body);
+  }
+}
+
 app.use(helmet());
 app.use(cookieParser());
 app.use(rewriteHeaders);
@@ -82,6 +143,42 @@ app.use('/proxy', createProxyMiddleware({
     delete proxyRes.headers['content-security-policy'];
     delete proxyRes.headers['strict-transport-security'];
     delete proxyRes.headers['x-frame-options'];
+    const contentEncoding = proxyRes.headers['content-encoding'];
+    if (contentEncoding) {
+      const buffer = [];
+      proxyRes.on('data', (chunk) => {
+        buffer.push(chunk);
+      });
+      proxyRes.on('end', () => {
+        const body = Buffer.concat(buffer);
+        if (contentEncoding.includes('gzip')) {
+          zlib.unzip(body, (err, decompressedBody) => {
+            if (err) {
+              res.status(500).send('Error decompressing body');
+            } else {
+              req.body = decompressedBody;
+              compressBody(req, res, next);
+            }
+          });
+        } else if (contentEncoding.includes('br')) {
+          brotli.decompress(body, (err, decompressedBody) => {
+            if (err) {
+              res.status(500).send('Error decompressing body');
+            } else {
+              req.body = decompressedBody;
+              compressBody(req, res, next);
+            }
+          });
+        } else {
+          req.body = body;
+          compressBody(req, res, next);
+        }
+      });
+    } else {
+      res.set("Content-Type", proxyRes.headers['content-type']);
+      res.set("Content-Length", proxyRes.headers['content-length']);
+      proxyRes.pipe(res);
+    }
   }
 }));
 
@@ -97,26 +194,19 @@ wss.on('connection', (ws, req) => {
   try {
     const decodedUrl = decodeUrlUtil(encodedUrl, rotatingSalt);
     const { hostname: targetHostname, pathname: targetPathname } = url.parse(decodedUrl, true);
-    const wsTarget = new WebSocket(`wss://${targetHostname}${targetPathname}`);
-
+    const wsTarget = `wss://${targetHostname}${targetPathname}`;
+    const wsProxy = new WebSocket(wsTarget);
     ws.on('message', (message) => {
-      wsTarget.send(message);
+      wsProxy.send(message);
     });
-
-    wsTarget.on('message', (message) => {
+    wsProxy.on('message', (message) => {
       ws.send(message);
     });
-
     ws.on('close', () => {
-      wsTarget.close();
+      wsProxy.close();
     });
-
-    wsTarget.on('close', () => {
+    wsProxy.on('close', () => {
       ws.close();
-    });
-
-    ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
     });
   } catch (error) {
     ws.close();
