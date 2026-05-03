@@ -92,29 +92,24 @@ class WebRTCUtils {
   }
 
   /**
-   * Mangle WebRTC-related properties to prevent IP leaks.
-   * @param {RTCPeerConnection} pc - The RTCPeerConnection to mangle.
+   * Set up event listeners for WebRTC IP address leaks.
+   * @param {RTCPeerConnection} pc - The RTCPeerConnection to set up.
    */
-  static mangleWebRTC(pc) {
-    Object.defineProperty(pc, 'localDescription', {
-      get: () => {
-        const description = pc.getLocalDescription();
-        if (description) {
-          return WebRTCUtils.scrubSessionDescription(description);
-        }
-        return null;
-      },
-    });
+  static setupLeakProtection(pc) {
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        const scrubbedCandidate = WebRTCUtils.scrubICECandidate(event.candidate.candidate);
+        event.candidate.candidate = scrubbedCandidate;
+      }
+    };
 
-    Object.defineProperty(pc, 'remoteDescription', {
-      get: () => {
-        const description = pc.getRemoteDescription();
-        if (description) {
-          return WebRTCUtils.scrubSessionDescription(description);
-        }
-        return null;
-      },
-    });
+    pc.onaddstream = (event) => {
+      event.stream.getTracks().forEach((track) => {
+        track.onended = () => {
+          track.stop();
+        };
+      });
+    };
   }
 }
 
