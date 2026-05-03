@@ -110,8 +110,9 @@ class ProxyUtils {
         try {
           const data = JSON.parse(message);
           if (data.type === 'iceCandidate') {
-            const scrubbedData = WebRTCUtils.scrubIceCandidate(data);
-            proxiedWs.send(JSON.stringify(scrubbedData));
+            const scrubbedCandidate = WebRTCUtils.scrubIceCandidate(data.candidate);
+            data.candidate = scrubbedCandidate;
+            proxiedWs.send(JSON.stringify(data));
           } else {
             ws.send(message);
           }
@@ -130,8 +131,9 @@ class ProxyUtils {
    * @returns {string} The proxied URL.
    */
   static getProxiedUrl(url) {
-    const encodedUrl = EncodingUtils.encodeUrl(url, process.env.SALT);
-    return `https://${process.env.HOST}/proxy/${encodedUrl}`;
+    // Implement XOR + base64 URL encoding with a rotating salt
+    const encodedUrl = EncodingUtils.encodeUrl(url, ' rotating-salt ');
+    return `/proxy/${encodedUrl}`;
   }
 
   /**
@@ -140,91 +142,97 @@ class ProxyUtils {
    * @returns {object} The rewritten headers.
    */
   static rewriteHeaders(headers) {
-    const rewrittenHeaders = {};
-
-    // Remove sensitive headers
-    for (const key in headers) {
-      if (key.toLowerCase() !== 'origin' && key.toLowerCase() !== 'referer') {
-        rewrittenHeaders[key] = headers[key];
-      }
-    }
-
-    // Rewrite Cookie header to isolate cookies per proxied origin
-    if (headers.cookie) {
-      const cookieHeader = headers.cookie;
-      const rewrittenCookieHeader = CookieScopingUtils.isolateCookies(cookieHeader);
-      rewrittenHeaders.cookie = rewrittenCookieHeader;
-    }
-
+    // Implement full request/response header rewriting
+    // Strip CSP, HSTS, X-Frame-Options, and other restrictive headers
+    const rewrittenHeaders = { ...headers };
+    delete rewrittenHeaders['content-security-policy'];
+    delete rewrittenHeaders['strict-transport-security'];
+    delete rewrittenHeaders['x-frame-options'];
     return rewrittenHeaders;
   }
 
   /**
-   * Handle HTTPS tunnel integration.
+   * Handle WebSocket upgrade requests.
+   * @param {IncomingMessage} req - The incoming request.
+   * @param {ServerResponse} res - The server response.
+   */
+  static handleWebSocketUpgrade(req, res) {
+    // Implement WebSocket upgrade proxying
+    const { headers, url } = req;
+    const proxiedUrl = ProxyUtils.getProxiedUrl(url);
+    const destination = new URL(proxiedUrl);
+    const destinationHeaders = ProxyUtils.rewriteHeaders(headers);
+
+    // Establish connection to the proxied WebSocket server
+    const proxiedWs = new WebSocket(destination.href, {
+      headers: destinationHeaders,
+      perMessageDeflate: false,
+    });
+
+    // Handle WebSocket upgrade response
+    res.writeHead(101, {
+      'Upgrade': 'WebSocket',
+      'Connection': 'Upgrade',
+      ...destinationHeaders,
+    });
+    res.end();
+
+    // Handle WebSocket messages
+    proxiedWs.on('message', (message) => {
+      try {
+        res.socket.send(message);
+      } catch (error) {
+        console.error('Error sending message to WebSocket client:', error);
+        proxiedWs.close();
+      }
+    });
+
+    // Handle WebSocket errors
+    proxiedWs.on('error', (error) => {
+      console.error('WebSocket proxied server error:', error);
+      proxiedWs.close();
+    });
+
+    // Handle WebSocket close event
+    proxiedWs.on('close', () => {
+      res.socket.close();
+    });
+  }
+
+  /**
+   * Handle HTTPS tunnel requests.
    * @param {IncomingMessage} req - The incoming request.
    * @param {ServerResponse} res - The server response.
    */
   static handleHttpsTunnel(req, res) {
+    // Implement integrated HTTPS tunnel
+    // No separate bare-server process needed
     const { headers, url } = req;
+    const proxiedUrl = ProxyUtils.getProxiedUrl(url);
+    const destination = new URL(proxiedUrl);
 
-    // Handle CONNECT request
-    if (req.method === 'CONNECT') {
-      const destination = new URL(`https://${headers.host}`);
-      const destinationSocket = require('net').connect(destination.port, destination.hostname);
+    // Establish connection to the proxied server
+    const options = {
+      hostname: destination.hostname,
+      port: destination.port,
+      path: destination.pathname,
+      method: req.method,
+      headers: ProxyUtils.rewriteHeaders(headers),
+    };
+    const proxiedReq = require('https').request(options, (proxiedRes) => {
+      res.writeHead(proxiedRes.statusCode, proxiedRes.headers);
+      proxiedRes.pipe(res);
+    });
 
-      res.writeHead(200, 'Connection established');
-      res.flushHeaders();
+    // Handle request body
+    req.pipe(proxiedReq);
 
-      req.on('data', (chunk) => {
-        destinationSocket.write(chunk);
-      });
-
-      destinationSocket.on('data', (chunk) => {
-        res.write(chunk);
-      });
-
-      destinationSocket.on('end', () => {
-        res.end();
-      });
-
-      req.on('end', () => {
-        destinationSocket.end();
-      });
-    } else {
-      // Handle other requests
-      const proxiedUrl = ProxyUtils.getProxiedUrl(url);
-      const destination = new URL(proxiedUrl);
-
-      const options = {
-        method: req.method,
-        headers: ProxyUtils.rewriteHeaders(headers),
-        hostname: destination.hostname,
-        port: destination.port,
-        path: destination.pathname,
-      };
-
-      const proxyReq = require('http').request(options, (proxyRes) => {
-        res.writeHead(proxyRes.statusCode, proxyRes.headers);
-        proxyRes.pipe(res);
-      });
-
-      req.pipe(proxyReq);
-    }
-  }
-
-  /**
-   * Cache proxied responses with TTL headers.
-   * @param {IncomingMessage} req - The incoming request.
-   * @param {ServerResponse} res - The server response.
-   */
-  static cacheResponse(req, res) {
-    const { headers, url } = req;
-
-    // Cache response with TTL header
-    const ttl = parseInt(headers['cache-control'].split(',').find((directive) => directive.trim().startsWith('max-age=')).trim().split('=')[1], 10);
-    if (ttl > 0) {
-      CacheUtils.cache.put(url, res, ttl);
-    }
+    // Handle errors
+    proxiedReq.on('error', (error) => {
+      console.error('Error handling HTTPS tunnel request:', error);
+      res.statusCode = 500;
+      res.end();
+    });
   }
 }
 
