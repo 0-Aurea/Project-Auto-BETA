@@ -109,11 +109,11 @@ class ProxyUtils {
       proxiedWs.on('message', (message) => {
         try {
           const data = JSON.parse(message);
-          if (data.type === 'candidate') {
-            const scrubbedMessage = ProxyUtils.scrubWebRTCIceCandidate(data);
-            proxiedWs.send(JSON.stringify(scrubbedMessage));
+          if (data.type === 'iceCandidate') {
+            const scrubbedData = WebRTCUtils.scrubIceCandidate(data);
+            proxiedWs.send(JSON.stringify(scrubbedData));
           } else {
-            proxiedWs.send(message);
+            ws.send(message);
           }
         } catch (error) {
           console.error('Error handling WebRTC ICE candidate:', error);
@@ -130,8 +130,8 @@ class ProxyUtils {
    * @returns {string} The proxied URL.
    */
   static getProxiedUrl(url) {
-    const encodedUrl = EncodingUtils.encodeUrl(url, EncodingUtils.getSalt());
-    return `/proxy/${encodedUrl}`;
+    const encodedUrl = EncodingUtils.encodeUrl(url, process.env.SALT);
+    return `https://${process.env.HOST}/proxy/${encodedUrl}`;
   }
 
   /**
@@ -140,37 +140,92 @@ class ProxyUtils {
    * @returns {object} The rewritten headers.
    */
   static rewriteHeaders(headers) {
-    const rewrittenHeaders = { ...headers };
+    const rewrittenHeaders = {};
 
     // Remove sensitive headers
-    delete rewrittenHeaders['sec-websocket-origin'];
-    delete rewrittenHeaders['sec-websocket-protocol'];
+    for (const key in headers) {
+      if (key.toLowerCase() !== 'origin' && key.toLowerCase() !== 'referer') {
+        rewrittenHeaders[key] = headers[key];
+      }
+    }
 
-    // Rewrite WebSocket upgrade headers
-    rewrittenHeaders['upgrade'] = 'websocket';
-    rewrittenHeaders['connection'] = 'upgrade';
+    // Rewrite Cookie header to isolate cookies per proxied origin
+    if (headers.cookie) {
+      const cookieHeader = headers.cookie;
+      const rewrittenCookieHeader = CookieScopingUtils.isolateCookies(cookieHeader);
+      rewrittenHeaders.cookie = rewrittenCookieHeader;
+    }
 
     return rewrittenHeaders;
   }
 
   /**
-   * Scrub WebRTC ICE candidate IP addresses.
-   * @param {object} candidate - The ICE candidate to scrub.
-   * @returns {object} The scrubbed ICE candidate.
+   * Handle HTTPS tunnel integration.
+   * @param {IncomingMessage} req - The incoming request.
+   * @param {ServerResponse} res - The server response.
    */
-  static scrubWebRTCIceCandidate(candidate) {
-    const scrubbedCandidate = { ...candidate };
-    scrubbedCandidate.candidate = WebRTCUtils.scrubIPAddr(scrubbedCandidate.candidate);
-    return scrubbedCandidate;
+  static handleHttpsTunnel(req, res) {
+    const { headers, url } = req;
+
+    // Handle CONNECT request
+    if (req.method === 'CONNECT') {
+      const destination = new URL(`https://${headers.host}`);
+      const destinationSocket = require('net').connect(destination.port, destination.hostname);
+
+      res.writeHead(200, 'Connection established');
+      res.flushHeaders();
+
+      req.on('data', (chunk) => {
+        destinationSocket.write(chunk);
+      });
+
+      destinationSocket.on('data', (chunk) => {
+        res.write(chunk);
+      });
+
+      destinationSocket.on('end', () => {
+        res.end();
+      });
+
+      req.on('end', () => {
+        destinationSocket.end();
+      });
+    } else {
+      // Handle other requests
+      const proxiedUrl = ProxyUtils.getProxiedUrl(url);
+      const destination = new URL(proxiedUrl);
+
+      const options = {
+        method: req.method,
+        headers: ProxyUtils.rewriteHeaders(headers),
+        hostname: destination.hostname,
+        port: destination.port,
+        path: destination.pathname,
+      };
+
+      const proxyReq = require('http').request(options, (proxyRes) => {
+        res.writeHead(proxyRes.statusCode, proxyRes.headers);
+        proxyRes.pipe(res);
+      });
+
+      req.pipe(proxyReq);
+    }
   }
 
   /**
-   * Handle WebSocket errors.
-   * @param {Error} error - The error to handle.
+   * Cache proxied responses with TTL headers.
+   * @param {IncomingMessage} req - The incoming request.
+   * @param {ServerResponse} res - The server response.
    */
-  static handleWebSocketError(error) {
-    console.error('WebSocket error:', error);
+  static cacheResponse(req, res) {
+    const { headers, url } = req;
+
+    // Cache response with TTL header
+    const ttl = parseInt(headers['cache-control'].split(',').find((directive) => directive.trim().startsWith('max-age=')).trim().split('=')[1], 10);
+    if (ttl > 0) {
+      CacheUtils.cache.put(url, res, ttl);
+    }
   }
 }
 
-module.exports = { ProxyUtils };
+module.exports = ProxyUtils;
