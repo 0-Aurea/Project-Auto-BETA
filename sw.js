@@ -109,12 +109,12 @@ class JSRewriter {
       return `window.open('${this.rewriteURL(p1)}')`;
     });
 
-    js = js.replace(this.historyPushStateRegex, () => {
-      return `history.pushState(${this.rewriteHistoryPushState()})`;
+    js = js.replace(this.historyPushStateRegex, (match) => {
+      return `history.pushState(${this.rewriteHistoryPushState(match)})`;
     });
 
-    js = js.replace(this.historyReplaceStateRegex, () => {
-      return `history.replaceState(${this.rewriteHistoryReplaceState()})`;
+    js = js.replace(this.historyReplaceStateRegex, (match) => {
+      return `history.replaceState(${this.rewriteHistoryReplaceState(match)})`;
     });
 
     return js;
@@ -129,23 +129,23 @@ class JSRewriter {
   }
 
   rewriteDynamicImport(match) {
-    return match;
+    return match.slice(7, -1);
   }
 
   rewriteRequire(match) {
-    return match;
+    return match.slice(8, -1);
   }
 
   rewriteURL(url) {
     return url;
   }
 
-  rewriteHistoryPushState() {
-    return '';
+  rewriteHistoryPushState(match) {
+    return match;
   }
 
-  rewriteHistoryReplaceState() {
-    return '';
+  rewriteHistoryReplaceState(match) {
+    return match;
   }
 }
 
@@ -215,49 +215,54 @@ class CSSRewriter {
   }
 }
 
-self.addEventListener('fetch', async (event) => {
-  event.respondWith(handleRequest(event.request));
-});
-
-async function handleRequest(request) {
+async function handleFetch(event) {
+  const request = event.request;
   const url = new URL(request.url);
+
+  if (request.method === 'GET') {
+    const response = await getResponse(request);
+    if (response) {
+      event.respondWith(response);
+      return;
+    }
+  }
+
   const salt = generateSalt();
   const encodedUrl = xorBase64Encode(url.href, salt);
-
-  const newRequest = new Request(`/${encodedUrl}`, {
+  const proxiedRequest = new Request(`/${encodedUrl}`, {
     method: request.method,
     headers: request.headers,
     body: request.body,
   });
 
-  const response = await fetch(newRequest);
-  const proxiedResponse = new Response(response.body, response);
+  const proxiedResponse = await fetch(proxiedRequest);
+  const cache = await getCache();
+  await cache.put(request, proxiedResponse.clone());
 
-  proxiedResponse.headers.set('Content-Type', 'text/html; charset=UTF-8');
-  proxiedResponse.headers.delete('Content-Security-Policy');
-  proxiedResponse.headers.delete('Strict-Transport-Security');
-  proxiedResponse.headers.delete('X-Frame-Options');
-
-  const jsRewriter = new JSRewriter();
-  const htmlRewriter = new HTMLRewriter();
-  const cssRewriter = new CSSRewriter();
-
-  const responseBody = await response.text();
-  let rewrittenBody;
-
-  if (response.headers.get('Content-Type').includes('text/html')) {
-    rewrittenBody = htmlRewriter.rewriteHTML(responseBody);
-  } else if (response.headers.get('Content-Type').includes('application/javascript')) {
-    rewrittenBody = jsRewriter.rewriteJS(responseBody);
-  } else if (response.headers.get('Content-Type').includes('text/css')) {
-    rewrittenBody = cssRewriter.rewriteCSS(responseBody);
-  } else {
-    rewrittenBody = responseBody;
-  }
-
-  proxiedResponse.body = rewrittenBody;
-
-  await putResponse(request, proxiedResponse);
-
-  return proxiedResponse;
+  event.respondWith(proxiedResponse);
 }
+
+async function handlePrefetch(event) {
+  const url = new URL(event.url);
+  const request = new Request(url.href, {
+    method: 'GET',
+  });
+
+  const response = await fetch(request);
+  const cache = await getCache();
+  await cache.put(request, response);
+}
+
+self.addEventListener('fetch', handleFetch);
+self.addEventListener('prefetch', handlePrefetch);
+
+self.addEventListener('activate', async (event) => {
+  event.waitUntil(getCache().then((cache) => cache.keys()).then((keys) => {
+    keys.forEach((key) => cache.delete(key));
+  }));
+});
+
+self.addEventListener('install', async (event) => {
+  event.waitUntil(getCache());
+});
+```
