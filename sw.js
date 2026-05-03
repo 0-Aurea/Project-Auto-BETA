@@ -109,139 +109,107 @@ class JSRewriter {
       return `window.open('${this.rewriteURL(p1)}')`;
     });
 
-    js = js.replace(this.historyPushStateRegex, () => {
-      return `history.pushState(${this.rewriteHistoryPushState()})`;
+    js = js.replace(this.historyPushStateRegex, (match) => {
+      return `history.pushState(${this.rewriteHistoryState(match)})`;
     });
 
-    js = js.replace(this.historyReplaceStateRegex, () => {
-      return `history.replaceState(${this.rewriteHistoryReplaceState()})`;
+    js = js.replace(this.historyReplaceStateRegex, (match) => {
+      return `history.replaceState(${this.rewriteHistoryState(match)})`;
     });
 
     return js;
   }
 
-  rewriteEval(evalString) {
-    try {
-      const evalFunc = new Function(`return ${evalString}`);
-      const result = evalFunc();
-      return result;
-    } catch (e) {
-      return evalString;
-    }
+  rewriteEval(match) {
+    return match.slice(5, -1);
   }
 
-  rewriteFunction(functionString) {
-    try {
-      const func = new Function(`return ${functionString}`);
-      const result = func();
-      return result;
-    } catch (e) {
-      return functionString;
-    }
+  rewriteFunction(match) {
+    return match.slice(9, -1);
   }
 
-  rewriteDynamicImport(importString) {
-    return this.rewriteURL(importString);
+  rewriteDynamicImport(match) {
+    return match;
   }
 
-  rewriteRequire(requireString) {
-    return this.rewriteURL(requireString);
+  rewriteRequire(match) {
+    return match;
   }
 
   rewriteURL(url) {
-    if (url.startsWith('http')) {
-      return url;
-    } else {
-      return xorBase64Encode(url, generateSalt());
-    }
+    return url;
   }
 
-  rewriteHistoryPushState() {
-    return `null, null, '${this.rewriteURL(window.location.href)}'`;
-  }
-
-  rewriteHistoryReplaceState() {
-    return `null, null, '${this.rewriteURL(window.location.href)}'`;
+  rewriteHistoryState(match) {
+    return match;
   }
 }
 
 class HTMLRewriter {
   constructor() {
-    this.srcRegex = /src=['"]([^'"]+)['"]/g;
-    this.hrefRegex = /href=['"]([^'"]+)['"]/g;
-    this.actionRegex = /action=['"]([^'"]+)['"]/g;
-    this.srcsetRegex = /srcset=['"]([^'"]+)['"]/g;
-    this.dataRegex = /data-([a-zA-Z0-9-]+)=['"]([^'"]+)['"]/g;
+    this.srcRegex = /src\s*=\s*['"]([^'"]+)['"]/g;
+    this.hrefRegex = /href\s*=\s*['"]([^'"]+)['"]/g;
+    this.actionRegex = /action\s*=\s*['"]([^'"]+)['"]/g;
+    this.srcsetRegex = /srcset\s*=\s*['"]([^'"]+)['"]/g;
+    this.dataRegex = /data\s*=\s*['"]([^'"]+)['"]/g;
   }
 
   rewriteHTML(html) {
     html = html.replace(this.srcRegex, (match, p1) => {
-      return `src='${this.rewriteURL(p1)}'`;
+      return `src="${this.rewriteURL(p1)}"`;
     });
 
     html = html.replace(this.hrefRegex, (match, p1) => {
-      return `href='${this.rewriteURL(p1)}'`;
+      return `href="${this.rewriteURL(p1)}"`;
     });
 
     html = html.replace(this.actionRegex, (match, p1) => {
-      return `action='${this.rewriteURL(p1)}'`;
+      return `action="${this.rewriteURL(p1)}"`;
     });
 
     html = html.replace(this.srcsetRegex, (match, p1) => {
-      return `srcset='${this.rewriteURL(p1)}'`;
+      return `srcset="${this.rewriteURL(p1)}"`;
     });
 
-    html = html.replace(this.dataRegex, (match, p1, p2) => {
-      return `data-${p1}='${this.rewriteURL(p2)}'`;
+    html = html.replace(this.dataRegex, (match, p1) => {
+      return `data="${this.rewriteURL(p1)}"`;
     });
 
     return html;
   }
 
   rewriteURL(url) {
-    if (url.startsWith('http')) {
-      return url;
-    } else {
-      return xorBase64Encode(url, generateSalt());
-    }
+    return url;
   }
 }
 
 class CSSRewriter {
   constructor() {
-    this.urlRegex = /url\(['"]([^'"]+)['"]\)/g;
+    this.urlRegex = /url\(\s*['"]([^'"]+)['"]\s*\)/g;
     this.importRegex = /@import\s+['"]([^'"]+)['"]/g;
-    this.contentRegex = /content:\s*url\(['"]([^'"]+)['"]\)/g;
+    this.contentRegex = /content:\s*url\(\s*['"]([^'"]+)['"]\s*\)/g;
   }
 
   rewriteCSS(css) {
     css = css.replace(this.urlRegex, (match, p1) => {
-      return `url('${this.rewriteURL(p1)}')`;
+      return `url(${this.rewriteURL(p1)})`;
     });
 
     css = css.replace(this.importRegex, (match, p1) => {
-      return `@import '${this.rewriteURL(p1)}'`;
+      return `@import "${this.rewriteURL(p1)}"`;
     });
 
     css = css.replace(this.contentRegex, (match, p1) => {
-      return `content: url('${this.rewriteURL(p1)}')`;
+      return `content: url(${this.rewriteURL(p1)})`;
     });
 
     return css;
   }
 
   rewriteURL(url) {
-    if (url.startsWith('http')) {
-      return url;
-    } else {
-      return xorBase64Encode(url, generateSalt());
-    }
+    return url;
   }
 }
-
-addEventListener('fetch', async (event) => {
-  event.respondWith(handleRequest(event.request));
-});
 
 async function handleRequest(request) {
   const url = new URL(request.url);
@@ -256,43 +224,56 @@ async function handleRequest(request) {
     const response = await fetch(request);
     const clonedResponse = response.clone();
 
-    if (response.ok) {
-      const ttlHeader = response.headers.get('ttl');
-      const ttl = ttlHeader ? parseInt(ttlHeader) : 60; // default to 1 minute
-      const cacheResponse = new Response(clonedResponse.body, {
+    const contentType = response.headers.get('Content-Type');
+    if (contentType && contentType.includes('text/html')) {
+      const html = await response.text();
+      const rewriter = new HTMLRewriter();
+      const rewrittenHtml = rewriter.rewriteHTML(html);
+      const newResponse = new Response(rewrittenHtml, {
         status: response.status,
         headers: response.headers,
       });
-
-      await putResponse(request, cacheResponse);
-
-      setTimeout(async () => {
-        await deleteResponse(request);
-      }, ttl * 1000);
-
-      return response;
+      await putResponse(request, newResponse);
+      return newResponse;
+    } else if (contentType && contentType.includes('application/javascript')) {
+      const js = await response.text();
+      const rewriter = new JSRewriter();
+      const rewrittenJs = rewriter.rewriteJS(js);
+      const newResponse = new Response(rewrittenJs, {
+        status: response.status,
+        headers: response.headers,
+      });
+      await putResponse(request, newResponse);
+      return newResponse;
+    } else if (contentType && contentType.includes('text/css')) {
+      const css = await response.text();
+      const rewriter = new CSSRewriter();
+      const rewrittenCss = rewriter.rewriteCSS(css);
+      const newResponse = new Response(rewrittenCss, {
+        status: response.status,
+        headers: response.headers,
+      });
+      await putResponse(request, newResponse);
+      return newResponse;
     } else {
+      await putResponse(request, response);
       return response;
     }
-  } catch (e) {
-    console.error(e);
-    return new Response('Error', { status: 500 });
+  } catch (error) {
+    console.error('Error handling request:', error);
   }
 }
 
-addEventListener('activate', async (event) => {
-  event.waitUntil(caches.keys().then((cacheNames) => {
-    return Promise.all(cacheNames.map((cacheName) => {
-      if (cacheName !== cacheName) {
-        return caches.delete(cacheName);
-      }
-    }));
+self.addEventListener('fetch', (event) => {
+  event.respondWith(handleRequest(event.request));
+});
+
+self.addEventListener('activate', async (event) => {
+  event.waitUntil(getCache().then((cache) => cache.keys()).then((keys) => {
+    return Promise.all(keys.map((key) => cache.delete(key)));
   }));
 });
 
-addEventListener('message', async (event) => {
-  if (event.data.type === 'generateSalt') {
-    generateSalt();
-  }
+self.addEventListener('install', async (event) => {
+  event.waitUntil(getCache());
 });
-self.tf = tf;
