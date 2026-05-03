@@ -173,7 +173,7 @@ app.use(cacheResponse);
 app.use(prefetchHints);
 
 const proxy = createProxyMiddleware({
-  target: 'https://example.com',
+  target: 'https://example.com', // Everything goes to example.com right now, not impresive.  Must be dynamic on the actual implementation of index.js for the website.
   changeOrigin: true,
   pathRewrite: { '^/api': '' },
 });
