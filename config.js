@@ -21,15 +21,29 @@ const TLS_PROTOCOLS = ['TLSv1.2', 'TLSv1.3'];
 const WEBSOCKET_TIMEOUT = 30 * 1000; // 30 seconds
 const WEBSOCKET_KEEP_ALIVE_INTERVAL = 10 * 1000; // 10 seconds
 
+// Cookie scoping configuration
+const COOKIE_SCOPING_ENABLED = true;
+const COOKIE_STORAGE_KEY = 'nexus-cookies';
+
 // Header rewriting rules
 const HEADER_REWRITE_RULES = {
   'Content-Security-Policy': (value) => value.replace('default-src', 'script-src \'self\''),
   'X-Frame-Options': (value) => value.replace('SAMEORIGIN', '*'),
+  'Strict-Transport-Security': (value) => '',
+  'X-Content-Type-Options': (value) => value.replace('nosniff', ''),
 };
 
 // Integrated HTTPS tunnel and WebSocket settings
 const INTEGRATED_HTTPS_TUNNEL = true;
 const WEBSOCKET_UPGRADE_PROXYING = true;
+
+// Cache API settings
+const CACHE_TTL_HEADERS = ['Cache-Control', 'Expires'];
+const CACHE_REVALIDATE_THRESHOLD = 5 * 60 * 1000; // 5 minutes
+
+// Prefetch hints settings
+const PREFETCH_HINTS_ENABLED = true;
+const PREFETCH_HINTS_CACHE_AGE = 24 * 60 * 60 * 1000; // 24 hours
 
 module.exports = {
   CACHE_NAME,
@@ -50,7 +64,13 @@ module.exports = {
   TLS_PROTOCOLS,
   WEBSOCKET_TIMEOUT,
   WEBSOCKET_KEEP_ALIVE_INTERVAL,
+  COOKIE_SCOPING_ENABLED,
+  COOKIE_STORAGE_KEY,
   HEADER_REWRITE_RULES,
   INTEGRATED_HTTPS_TUNNEL,
   WEBSOCKET_UPGRADE_PROXYING,
+  CACHE_TTL_HEADERS,
+  CACHE_REVALIDATE_THRESHOLD,
+  PREFETCH_HINTS_ENABLED,
+  PREFETCH_HINTS_CACHE_AGE,
 };
