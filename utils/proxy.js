@@ -21,7 +21,7 @@ class ProxyUtils {
    * @param {Server} server - The HTTP server instance.
    */
   static init(server) {
-    ProxyUtils.wss = new WebSocket.Server({ server });
+    ProxyUtils.wss = new WebSocket.Server({ server, perMessageDeflate: false });
 
     ProxyUtils.wss.on('connection', (ws, req) => {
       const { headers, url } = req;
@@ -34,16 +34,25 @@ class ProxyUtils {
       // Establish connection to the proxied WebSocket server
       const proxiedWs = new WebSocket(destination.href, {
         headers: destinationHeaders,
+        perMessageDeflate: false,
       });
 
       // Handle messages from the client
       ws.on('message', (message) => {
-        proxiedWs.send(message);
+        try {
+          proxiedWs.send(message);
+        } catch (error) {
+          console.error('Error sending message to proxied WebSocket server:', error);
+          ws.terminate();
+          proxiedWs.close();
+        }
       });
 
       // Handle errors
       ws.on('error', (error) => {
         console.error('WebSocket client error:', error);
+        ws.terminate();
+        proxiedWs.close();
       });
 
       // Handle close event
@@ -53,12 +62,20 @@ class ProxyUtils {
 
       // Handle messages from the proxied WebSocket server
       proxiedWs.on('message', (message) => {
-        ws.send(message);
+        try {
+          ws.send(message);
+        } catch (error) {
+          console.error('Error sending message to WebSocket client:', error);
+          ws.terminate();
+          proxiedWs.close();
+        }
       });
 
       // Handle errors
       proxiedWs.on('error', (error) => {
         console.error('WebSocket proxied server error:', error);
+        ws.terminate();
+        proxiedWs.close();
       });
 
       // Handle close event
@@ -68,7 +85,13 @@ class ProxyUtils {
 
       // Handle WebSocket ping
       ws.on('ping', () => {
-        proxiedWs.ping();
+        try {
+          proxiedWs.ping();
+        } catch (error) {
+          console.error('Error sending ping to proxied WebSocket server:', error);
+          ws.terminate();
+          proxiedWs.close();
+        }
       });
 
       // Handle WebSocket pong
@@ -80,7 +103,7 @@ class ProxyUtils {
       let timeoutId = setTimeout(() => {
         ws.terminate();
         proxiedWs.close();
-      }, 30000); // 30 seconds
+      }, 60000); // 1 minute
 
       // Reset timeout on message
       ws.on('message', () => {
@@ -88,7 +111,7 @@ class ProxyUtils {
         timeoutId = setTimeout(() => {
           ws.terminate();
           proxiedWs.close();
-        }, 30000);
+        }, 60000);
       });
 
       // Reset timeout on proxied message
@@ -97,7 +120,7 @@ class ProxyUtils {
         timeoutId = setTimeout(() => {
           ws.terminate();
           proxiedWs.close();
-        }, 30000);
+        }, 60000);
       });
     });
   }
@@ -110,7 +133,7 @@ class ProxyUtils {
   static getProxiedUrl(url) {
     const salt = EncodingUtils.getSalt();
     const encodedUrl = EncodingUtils.encodeUrl(url, salt);
-    return `/${encodedUrl}`;
+    return `ws://${encodedUrl}`;
   }
 
   /**
@@ -119,70 +142,36 @@ class ProxyUtils {
    * @returns {object} The rewritten headers.
    */
   static rewriteHeaders(headers) {
-    const rewrittenHeaders = {};
+    const rewrittenHeaders = { ...headers };
 
     // Remove sensitive headers
-    for (const key in headers) {
-      if (key.toLowerCase() !== 'origin' && key.toLowerCase() !== 'referer') {
-        rewrittenHeaders[key] = headers[key];
-      }
-    }
+    delete rewrittenHeaders['sec-websocket-protocol'];
+    delete rewrittenHeaders['sec-websocket-extensions'];
 
-    // Add or modify headers as needed
-    rewrittenHeaders['sec-websocket-protocol'] = headers['sec-websocket-protocol'];
+    // Rewrite origin header
+    rewrittenHeaders['origin'] = 'https://' + new URL(headers['origin']).hostname;
 
     return rewrittenHeaders;
   }
 
   /**
-   * Handle HTTPS CONNECT tunneling.
-   * @param {IncomingMessage} req - The incoming request.
-   * @param {ServerResponse} res - The server response.
-   */
-  static handleHttpsConnect(req, res) {
-    const { headers, socket } = req;
-
-    // Establish connection to the proxied server
-    const destination = new URL(`https://${headers['host']}`);
-    const options = {
-      hostname: destination.hostname,
-      port: destination.port,
-      secure: true,
-    };
-
-    const proxiedSocket = require('https').createConnection(options, () => {
-      // Send CONNECT response
-      res.writeHead(200, {
-        'Content-Length': 0,
-      });
-      res.end();
-
-      // Pipe data between sockets
-      socket.pipe(proxiedSocket);
-      proxiedSocket.pipe(socket);
-    });
-
-    proxiedSocket.on('error', (error) => {
-      console.error('HTTPS CONNECT error:', error);
-      socket.destroy();
-    });
-
-    socket.on('error', (error) => {
-      console.error('HTTPS CONNECT socket error:', error);
-      proxiedSocket.destroy();
-    });
-  }
-
-  /**
-   * Handle WebSocket upgrade requests.
+   * Handle WebSocket upgrade request and establish a proxied connection.
    * @param {IncomingMessage} req - The incoming request.
    * @param {ServerResponse} res - The server response.
    */
   static handleWebSocketUpgrade(req, res) {
-    if (req.headers['upgrade'] === 'websocket') {
+    const { headers, url } = req;
+
+    // Check if the request is a WebSocket upgrade request
+    if (headers['upgrade'] === 'websocket') {
+      // Handle WebSocket upgrade
       ProxyUtils.wss.handleUpgrade(req, res, (ws) => {
         ProxyUtils.wss.emit('connection', ws, req);
       });
+    } else {
+      // Handle other requests
+      res.writeHead(400);
+      res.end('Bad Request');
     }
   }
 }
