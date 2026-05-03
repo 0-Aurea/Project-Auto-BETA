@@ -109,84 +109,196 @@ class JSRewriter {
       return `window.open('${this.rewriteURL(p1)}')`;
     });
 
-    js = js.replace(this.historyPushStateRegex, (match) => {
-      return `history.pushState(${this.rewriteHistoryState(match)})`;
+    js = js.replace(this.historyPushStateRegex, () => {
+      return `history.pushState(${this.rewriteHistoryPushState()})`;
     });
 
-    js = js.replace(this.historyReplaceStateRegex, (match) => {
-      return `history.replaceState(${this.rewriteHistoryState(match)})`;
+    js = js.replace(this.historyReplaceStateRegex, () => {
+      return `history.replaceState(${this.rewriteHistoryReplaceState()})`;
     });
 
     return js;
   }
 
-  rewriteEval(evalStr) {
-    return this.rewriteCode(evalStr.slice(5, -1));
+  rewriteEval(match) {
+    return match.slice(5, -1);
   }
 
-  rewriteFunction(funcStr) {
-    const funcArgs = funcStr.slice(9, -1).split(',').map(arg => arg.trim());
-    const funcBody = funcArgs.pop();
-    return `${funcArgs.join(', ')}, ${this.rewriteCode(funcBody)}`;
+  rewriteFunction(match) {
+    return match.slice(9, -1);
   }
 
-  rewriteDynamicImport(importStr) {
-    return this.rewriteURL(importStr.slice(7, -1));
+  rewriteDynamicImport(match) {
+    return match;
   }
 
-  rewriteRequire(requireStr) {
-    return this.rewriteURL(requireStr.slice(8, -1));
+  rewriteRequire(match) {
+    return match;
   }
 
   rewriteURL(url) {
-    const salt = rotatingSalt[rotatingSalt.length - 1];
-    return xorBase64Encode(url, salt);
+    return url;
   }
 
-  rewriteCode(code) {
-    return code.replace(/['"]?(\/[^'"]+)['"]?/g, (match, p1) => {
-      return `'${this.rewriteURL(p1)}'`;
+  rewriteHistoryPushState() {
+    return '';
+  }
+
+  rewriteHistoryReplaceState() {
+    return '';
+  }
+}
+
+class BrotliGzipPipeline {
+  constructor() {
+    this.brotliDecoder = new BrotliDecoder();
+    this.gzipDecoder = new Zlib.Gunzip();
+  }
+
+  async decompress(response) {
+    const contentEncoding = response.headers.get('content-encoding');
+    if (contentEncoding === 'br') {
+      return await this.brotliDecompress(response);
+    } else if (contentEncoding === 'gzip') {
+      return await this.gzipDecompress(response);
+    }
+    return response;
+  }
+
+  async brotliDecompress(response) {
+    const arrayBuffer = await response.arrayBuffer();
+    const decompressedArrayBuffer = await this.brotliDecoder.decode(arrayBuffer);
+    return new Response(decompressedArrayBuffer, {
+      headers: response.headers,
     });
   }
 
-  rewriteHistoryState(stateStr) {
-    return stateStr.replace(/['"]?(\/[^'"]+)['"]?/g, (match, p1) => {
-      return `'${this.rewriteURL(p1)}'`;
+  async gzipDecompress(response) {
+    const arrayBuffer = await response.arrayBuffer();
+    const decompressedArrayBuffer = await this.gzipDecoder.decode(arrayBuffer);
+    return new Response(decompressedArrayBuffer, {
+      headers: response.headers,
+    });
+  }
+
+  async reCompress(response) {
+    const contentEncoding = response.headers.get('content-encoding');
+    if (contentEncoding === 'br') {
+      return await this.brotliRecompress(response);
+    } else if (contentEncoding === 'gzip') {
+      return await this.gzipRecompress(response);
+    }
+    return response;
+  }
+
+  async brotliRecompress(response) {
+    const arrayBuffer = await response.arrayBuffer();
+    const compressedArrayBuffer = await this.brotliEncoder.encode(arrayBuffer);
+    return new Response(compressedArrayBuffer, {
+      headers: response.headers,
+    });
+  }
+
+  async gzipRecompress(response) {
+    const arrayBuffer = await response.arrayBuffer();
+    const compressedArrayBuffer = await this.gzipEncoder.encode(arrayBuffer);
+    return new Response(compressedArrayBuffer, {
+      headers: response.headers,
     });
   }
 }
 
-const jsRewriter = new JSRewriter();
-
-self.addEventListener('fetch', async (event) => {
+addEventListener('fetch', async (event) => {
   event.respondWith(handleRequest(event.request));
 });
 
 async function handleRequest(request) {
   const cache = await getCache();
-  const cachedResponse = await cache.match(request);
-  if (cachedResponse) {
-    return cachedResponse;
+  const response = await cache.match(request);
+  if (response) {
+    return response;
   }
 
-  try {
-    const response = await fetch(request);
-    const responseClone = response.clone();
-    const js = await responseClone.text();
-    const rewrittenJs = jsRewriter.rewriteJS(js);
-    const rewrittenResponse = new Response(rewrittenJs, responseClone);
-    await putResponse(request, rewrittenResponse);
-    return rewrittenResponse;
-  } catch (error) {
-    console.error('Error handling request:', error);
-    return new Response('Error handling request', { status: 500 });
+  const proxiedResponse = await fetch(request);
+  const decompressedResponse = await new BrotliGzipPipeline().decompress(proxiedResponse);
+  const recompressedResponse = await new BrotliGzipPipeline().reCompress(decompressedResponse);
+
+  await cache.put(request, recompressedResponse.clone());
+  return recompressedResponse;
+}
+
+class BrotliDecoder {
+  async decode(arrayBuffer) {
+    return new Promise((resolve, reject) => {
+      const decompressed = brotliDecompressSync(arrayBuffer);
+      resolve(decompressed);
+    });
   }
 }
 
-self.addEventListener('activate', async (event) => {
-  event.waitUntil(getCache().then(cache => cache.keys().then(requests => Promise.all(requests.map(request => cache.delete(request)))));
-});
+function brotliDecompressSync(arrayBuffer) {
+  // brotli decompression implementation
+  // This implementation uses the pako library
+  const pako = require('pako');
+  return pako.inflate(arrayBuffer, { to: 'Uint8Array' });
+}
 
-self.addEventListener('install', async (event) => {
-  event.waitUntil(getCache());
-});
+class Zlib {
+  static Gunzip() {
+    return new Zlib.GunzipClass();
+  }
+
+  static async gunzip(arrayBuffer) {
+    return new Promise((resolve, reject) => {
+      const zlib = require('zlib');
+      zlib.gunzip(arrayBuffer, (err, decompressed) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(decompressed);
+        }
+      });
+    });
+  }
+}
+
+class ZlibGunzipClass {
+  async decode(arrayBuffer) {
+    return Zlib.gunzip(arrayBuffer);
+  }
+}
+
+const brotliEncoder = new BrotliEncoder();
+
+class BrotliEncoder {
+  async encode(arrayBuffer) {
+    return new Promise((resolve, reject) => {
+      const compressed = brotliCompressSync(arrayBuffer);
+      resolve(compressed);
+    });
+  }
+}
+
+function brotliCompressSync(arrayBuffer) {
+  // brotli compression implementation
+  // This implementation uses the pako library
+  const pako = require('pako');
+  return pako.deflate(arrayBuffer, { to: 'Uint8Array' });
+}
+
+const gzipEncoder = new GzipEncoder();
+
+class GzipEncoder {
+  async encode(arrayBuffer) {
+    return new Promise((resolve, reject) => {
+      const zlib = require('zlib');
+      zlib.gzip(arrayBuffer, (err, compressed) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(compressed);
+        }
+      });
+    });
+  }
+}
