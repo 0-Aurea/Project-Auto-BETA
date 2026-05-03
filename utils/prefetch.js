@@ -1,5 +1,6 @@
 const { URL } = require('url');
 const { CacheUtils } = require('./cache');
+const { HTMLRewriterUtils } = require('./htmlRewriter');
 
 /**
  * Prefetch utility class for handling prefetch hints and cache ahead.
@@ -8,7 +9,7 @@ class PrefetchUtils {
   /**
    * Regular expression to match prefetch links.
    */
-  static PREFETCH_REGEX = /<link\s+rel\s*=\s*["'](prefetch|preload)["'].*?>/gi;
+  static PREFETCH_REGEX = /<link\s+rel\s*=\s*["'](prefetch|preload)["'][^>]*href\s*=\s*["'](.*?)["']/gi;
 
   /**
    * Cache instance.
@@ -22,9 +23,9 @@ class PrefetchUtils {
    */
   static async prefetch(url) {
     try {
-      const response = await fetch(url);
+      const response = await globalThis.fetch(url);
       if (response.ok) {
-        await CacheUtils.cache.put(url, response.clone());
+        await PrefetchUtils.cache.put(url, response.clone());
       }
     } catch (error) {
       globalThis.console.error(`Error prefetching ${url}:`, error);
@@ -38,12 +39,10 @@ class PrefetchUtils {
    * @returns {Promise<void>}
    */
   static async extractAndPrefetch(html, baseUrl) {
-    const prefetchLinks = html.match(PrefetchUtils.PREFETCH_REGEX);
-    if (prefetchLinks) {
-      for (const link of prefetchLinks) {
-        const url = new URL(link, baseUrl).href;
-        await PrefetchUtils.prefetch(url);
-      }
+    let match;
+    while ((match = PrefetchUtils.PREFETCH_REGEX.exec(html)) !== null) {
+      const url = new URL(match[2], baseUrl).href;
+      await PrefetchUtils.prefetch(url);
     }
   }
 
@@ -56,6 +55,38 @@ class PrefetchUtils {
   static async handlePrefetchHints(html, baseUrl) {
     await PrefetchUtils.extractAndPrefetch(html, baseUrl);
     return html;
+  }
+
+  /**
+   * Parses HTML and extracts prefetch links, handling relative URLs and caching responses.
+   * @param {string} html - The HTML string to parse.
+   * @param {string} baseUrl - The base URL to resolve relative prefetch links against.
+   * @returns {Promise<void>}
+   */
+  static async parseAndPrefetch(html, baseUrl) {
+    const doc = new globalThis.DOMParser().parseFromString(html, 'text/html');
+    const prefetchLinks = doc.querySelectorAll('link[rel="prefetch"], link[rel="preload"]');
+    for (const link of prefetchLinks) {
+      const url = new URL(link.href, baseUrl).href;
+      await PrefetchUtils.prefetch(url);
+    }
+  }
+
+  /**
+   * Rewrites HTML to remove prefetch hints and handle caching.
+   * @param {string} html - The HTML string to rewrite.
+   * @param {string} baseUrl - The base URL to resolve relative prefetch links against.
+   * @returns {Promise<string>} The rewritten HTML string with prefetch hints removed.
+   */
+  static async rewriteAndCache(html, baseUrl) {
+    const doc = new globalThis.DOMParser().parseFromString(html, 'text/html');
+    const prefetchLinks = doc.querySelectorAll('link[rel="prefetch"], link[rel="preload"]');
+    for (const link of prefetchLinks) {
+      link.remove();
+    }
+    const rewrittenHtml = doc.documentElement.outerHTML;
+    await PrefetchUtils.parseAndPrefetch(rewrittenHtml, baseUrl);
+    return rewrittenHtml;
   }
 }
 
