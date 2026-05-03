@@ -116,103 +116,111 @@ function compressBody(req, res, next) {
   }
 }
 
-app.use(helmet());
-app.use(cookieParser());
-app.use(rewriteHeaders);
-app.use(cookieScope);
+function handleWebSocketUpgrade(req, res, next) {
+  const websocketKey = req.headers['sec-websocket-key'];
+  if (websocketKey) {
+    const websocketAccept = require('crypto').createHash('sha1').update(websocketKey + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+    res.writeHead(101, {
+      'Upgrade': 'websocket',
+      'Connection': 'Upgrade',
+      'Sec-WebSocket-Accept': websocketAccept,
+      'Sec-WebSocket-Protocol': req.headers['sec-websocket-protocol']
+    });
 
-app.use((req, res, next) => {
-  if (req.path.startsWith('/proxy/')) {
-    handleEncodedUrl(req, res, next);
+    const targetHost = req.headers['x-target-host'];
+    const targetPort = req.headers['x-target-port'];
+
+    const targetSocket = new WebSocket(`ws://${targetHost}:${targetPort}`);
+
+    req.on('close', () => {
+      targetSocket.close();
+    });
+
+    req.on('error', (err) => {
+      targetSocket.close();
+      next(err);
+    });
+
+    targetSocket.on('message', (message) => {
+      res.send(message);
+    });
+
+    targetSocket.on('close', () => {
+      req.destroy();
+    });
+
+    targetSocket.on('error', (err) => {
+      req.destroy();
+      next(err);
+    });
+
+    res.on('data', (data) => {
+      targetSocket.send(data);
+    });
   } else {
     next();
   }
-});
+}
 
-app.use('/proxy', createProxyMiddleware({
-  target: 'https://example.com',
-  changeOrigin: true,
-  pathRewrite: { '^/proxy': '' },
-  onProxyReq: (proxyReq, req, res) => {
-    proxyReq.headers['x-forwarded-for'] = req.ip;
-    delete proxyReq.headers['content-security-policy'];
-    delete proxyReq.headers['strict-transport-security'];
-    delete proxyReq.headers['x-frame-options'];
-  },
-  onProxyRes: (proxyRes, req, res) => {
-    delete proxyRes.headers['content-security-policy'];
-    delete proxyRes.headers['strict-transport-security'];
-    delete proxyRes.headers['x-frame-options'];
-    const contentEncoding = proxyRes.headers['content-encoding'];
-    if (contentEncoding) {
-      const buffer = [];
-      proxyRes.on('data', (chunk) => {
-        buffer.push(chunk);
-      });
-      proxyRes.on('end', () => {
-        const body = Buffer.concat(buffer);
-        if (contentEncoding.includes('gzip')) {
-          zlib.unzip(body, (err, decompressedBody) => {
-            if (err) {
-              res.status(500).send('Error decompressing body');
-            } else {
-              req.body = decompressedBody;
-              compressBody(req, res, next);
-            }
-          });
-        } else if (contentEncoding.includes('br')) {
-          brotli.decompress(body, (err, decompressedBody) => {
-            if (err) {
-              res.status(500).send('Error decompressing body');
-            } else {
-              req.body = decompressedBody;
-              compressBody(req, res, next);
-            }
-          });
-        } else {
-          req.body = body;
-          compressBody(req, res, next);
+function scrubWebRTCIceCandidates(req, res, next) {
+  if (req.headers['content-type'] === 'application/json') {
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk;
+    });
+    req.on('end', () => {
+      try {
+        const jsonData = JSON.parse(body);
+        if (jsonData.type === 'candidate') {
+          delete jsonData.candidate;
+          jsonData.sdpMLineIndex = 0;
+          jsonData.sdpMid = null;
         }
-      });
-    } else {
-      res.set("Content-Type", proxyRes.headers['content-type']);
-      res.set("Content-Length", proxyRes.headers['content-length']);
-      proxyRes.pipe(res);
+        res.send(JSON.stringify(jsonData));
+      } catch (err) {
+        next(err);
+      }
+    });
+  } else {
+    next();
+  }
+}
+
+app.use(handleEncodedUrl);
+app.use(rewriteHeaders);
+app.use(cookieParser());
+app.use(decompressBody);
+
+app.use('/websocket', handleWebSocketUpgrade);
+
+app.use(scrubWebRTCIceCandidates);
+
+app.use((req, res, next) => {
+  createProxyMiddleware({
+    target: req.url,
+    changeOrigin: true,
+    pathRewrite: { '^/': '' },
+    onProxyReq: (proxyReq, req, res) => {
+      proxyReq.headers['x-target-host'] = req.headers.host;
+      proxyReq.headers['x-target-port'] = req.headers['x-target-port'];
     }
-  }
-}));
-
-app.get('/.well-known/keybase.txt', (req, res) => {
-  res.send('https://example.com/.well-known/keybase.txt');
-});
-
-wss.on('connection', (ws, req) => {
-  const { hostname, pathname } = url.parse(req.url, true);
-  const target = `https://${hostname}${pathname}`;
-
-  const encodedUrl = req.path.substring(1);
-  try {
-    const decodedUrl = decodeUrlUtil(encodedUrl, rotatingSalt);
-    const { hostname: targetHostname, pathname: targetPathname } = url.parse(decodedUrl, true);
-    const wsTarget = `wss://${targetHostname}${targetPathname}`;
-    const wsProxy = new WebSocket(wsTarget);
-    ws.on('message', (message) => {
-      wsProxy.send(message);
-    });
-    wsProxy.on('message', (message) => {
-      ws.send(message);
-    });
-    ws.on('close', () => {
-      wsProxy.close();
-    });
-    wsProxy.on('close', () => {
-      ws.close();
-    });
-  } catch (error) {
-    ws.close();
-  }
+  })(req, res, next);
 });
 
 httpsServer.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
+  console.log(`Server started on port ${port}`);
+});
+
+wss.on('connection', (ws) => {
+  ws.on('message', (message) => {
+    console.log(`Received message: ${message}`);
+  });
+
+  ws.on('close', () => {
+    console.log('Client disconnected');
+  });
+
+  ws.on('error', (err) => {
+    console.error('Error occurred', err);
+  });
 });
