@@ -74,23 +74,21 @@ const UI_FONT_SIZE = process.env.UI_FONT_SIZE || 14;
 const UI_FONT_FAMILY = process.env.UI_FONT_FAMILY || 'Arial, sans-serif';
 
 // QUIC protocol and HTTP/3 configuration
-const QUIC_ENABLED = process.env.QUIC_ENABLED || false;
-const QUIC_PORT = process.env.QUIC_PORT || 443;
-const QUIC_PROTOCOL_VERSION = process.env.QUIC_PROTOCOL_VERSION || 'draft-29';
+const QUIC_ENABLED = false;
+const QUIC_PORT = 443;
+const QUIC_PROTOCOL_VERSION = 'draft-29';
+const HTTP3_ENABLED = false;
+const HTTP3_PORT = 443;
 
-const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
-const LOG_FILE = process.env.LOG_FILE || 'nexus.log';
+// Service Worker configuration
+const SERVICE_WORKER_SCOPE = '/';
+const SERVICE_WORKER_FILE = 'sw.js';
 
-const METRICS_ENABLED = true;
-const METRICS_PORT = process.env.METRICS_PORT || 9090;
+// SSL/TLS certificate configuration
+const SSL_CERT_RELOAD_INTERVAL = 60 * 60 * 1000; // 1 hour
 
-const HEALTH_CHECK_INTERVAL = 60 * 1000; // 1 minute
-const HEALTH_CHECK_TIMEOUT = 10 * 1000; // 10 seconds
-
-const CACHE_CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hour
-const CACHE_CLEANUP_THRESHOLD = 80; // percentage of cache size
-
-module.exports = {
+// Export configuration
+export {
   CACHE_NAME,
   VERSION,
   SALT_ROTATION_INTERVAL,
@@ -145,12 +143,9 @@ module.exports = {
   QUIC_ENABLED,
   QUIC_PORT,
   QUIC_PROTOCOL_VERSION,
-  LOG_LEVEL,
-  LOG_FILE,
-  METRICS_ENABLED,
-  METRICS_PORT,
-  HEALTH_CHECK_INTERVAL,
-  HEALTH_CHECK_TIMEOUT,
-  CACHE_CLEANUP_INTERVAL,
-  CACHE_CLEANUP_THRESHOLD,
+  HTTP3_ENABLED,
+  HTTP3_PORT,
+  SERVICE_WORKER_SCOPE,
+  SERVICE_WORKER_FILE,
+  SSL_CERT_RELOAD_INTERVAL,
 };
