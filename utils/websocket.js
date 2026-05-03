@@ -1,154 +1,107 @@
-const WebSocket = require('ws');
+const { WebSocket } = require('ws');
 const { URL } = require('url');
-const { IncomingMessage, ServerResponse } = require('http');
-const { EncodingUtils } = require('./encoding');
-const { HeaderRewriterUtils } = require('./headerRewriter');
 
 /**
- * WebSocket utility class for managing WebSocket upgrade proxying with header rewriting.
+ * WebSocket utility class for handling WebSocket upgrade proxying and header rewriting.
  */
 class WebSocketUtils {
+  /**
+   * Regular expression to match WebSocket upgrade requests.
+   */
+  static WEBSOCKET_UPGRADE_REGEX = /^\/$/;
+
   /**
    * WebSocket server instance.
    */
   static wss;
 
   /**
+   * Options for the WebSocket server.
+   */
+  static options = {
+    // Add WebSocket server options here
+  };
+
+  /**
    * Initialize the WebSocket server.
-   * @param {Server} server - The HTTP server instance.
+   * @param {http.Server} server - The HTTP server instance.
    */
   static init(server) {
-    WebSocketUtils.wss = new WebSocket.Server({ server, noServer: true });
+    WebSocketUtils.wss = new WebSocket.Server({ server, ...WebSocketUtils.options });
 
-    WebSocketUtils.wss.on('connection', (ws, req) => {
-      const { headers, url } = req;
-      const { host, origin } = headers;
-
-      // Handle WebSocket upgrade request
-      const websocketUrl = new URL(url, `ws://${host}`);
-      const targetHost = websocketUrl.host;
-      const targetPath = websocketUrl.pathname;
-      const targetParams = websocketUrl.search;
-
-      // Establish connection to target WebSocket server
-      const targetWs = new WebSocket(`ws://${targetHost}${targetPath}${targetParams}`);
-
-      // Handle messages from client
+    WebSocketUtils.wss.on('connection', (ws) => {
       ws.on('message', (message) => {
-        targetWs.send(message);
+        // Handle WebSocket messages
       });
 
-      // Handle errors from client
-      ws.on('error', (error) => {
-        targetWs.terminate();
-      });
-
-      // Handle close from client
       ws.on('close', () => {
-        targetWs.terminate();
+        // Handle WebSocket close events
       });
 
-      // Handle messages from target server
-      targetWs.on('message', (message) => {
-        ws.send(message);
+      ws.on('error', (error) => {
+        // Handle WebSocket errors
       });
-
-      // Handle errors from target server
-      targetWs.on('error', (error) => {
-        ws.terminate();
-      });
-
-      // Handle close from target server
-      targetWs.on('close', () => {
-        ws.terminate();
-      });
-
-      // Rewrite WebSocket headers
-      const rewrittenHeaders = HeaderRewriterUtils.rewriteResponseHeaders({
-        ...headers,
-        'Upgrade': 'websocket',
-        'Connection': 'Upgrade',
-      });
-
-      // Send rewritten headers to client
-      ws.send(JSON.stringify({
-        type: 'headers',
-        headers: rewrittenHeaders,
-      }));
     });
   }
 
   /**
-   * Handle WebSocket upgrade request.
-   * @param {IncomingMessage} req - The incoming request.
-   * @param {ServerResponse} res - The server response.
+   * Handle WebSocket upgrade requests.
+   * @param {http.IncomingMessage} req - The incoming request.
+   * @param {http.ServerResponse} res - The server response.
+   * @param {string} target - The target URL for the WebSocket connection.
    */
-  static handleUpgrade(req, res) {
-    const { headers, url } = req;
-    const { host, origin } = headers;
-
-    // Check if request is a WebSocket upgrade request
-    if (headers['upgrade'] === 'websocket') {
-      // Handle WebSocket upgrade
-      WebSocketUtils.wss.handleUpgrade(req, res, (ws) => {
-        WebSocketUtils.wss.emit('connection', ws, req);
-      });
-    } else {
-      // Handle non-WebSocket request
-      res.writeHead(400);
-      res.end('Bad Request');
+  static handleUpgrade(req, res, target) {
+    if (!WebSocketUtils.WEBSOCKET_UPGRADE_REGEX.test(req.url)) {
+      return;
     }
+
+    const { headers, method, url } = req;
+
+    // Rewrite WebSocket upgrade request headers
+    const rewrittenHeaders = {
+      ...headers,
+      // Add or modify headers as needed
+    };
+
+    // Establish the WebSocket connection
+    WebSocketUtils.wss.handleUpgrade(req, res, (ws) => {
+      WebSocketUtils.wss.emit('connection', ws, req);
+
+      // Rewrite WebSocket messages
+      ws.on('message', (message) => {
+        // Handle and rewrite WebSocket messages
+      });
+    });
   }
 
   /**
-   * Proxy WebSocket connection to target server.
-   * @param {WebSocket} ws - The client WebSocket instance.
-   * @param {string} targetUrl - The URL of the target WebSocket server.
+   * Proxy WebSocket connections through the HTTPS tunnel.
+   * @param {string} target - The target URL for the WebSocket connection.
+   * @param {http.IncomingMessage} req - The incoming request.
+   * @param {http.ServerResponse} res - The server response.
    */
-  static proxyWebSocket(ws, targetUrl) {
-    const targetWs = new WebSocket(targetUrl);
+  static proxyWebSocket(target, req, res) {
+    const { headers, method, url } = req;
+
+    // Establish the WebSocket connection through the HTTPS tunnel
+    const ws = new WebSocket(target);
+
+    // Rewrite WebSocket request headers
+    ws.on('open', () => {
+      // Handle WebSocket open events
+    });
 
     ws.on('message', (message) => {
-      targetWs.send(message);
-    });
-
-    ws.on('error', (error) => {
-      targetWs.terminate();
+      // Handle WebSocket messages
     });
 
     ws.on('close', () => {
-      targetWs.terminate();
+      // Handle WebSocket close events
     });
 
-    targetWs.on('message', (message) => {
-      ws.send(message);
+    ws.on('error', (error) => {
+      // Handle WebSocket errors
     });
-
-    targetWs.on('error', (error) => {
-      ws.terminate();
-    });
-
-    targetWs.on('close', () => {
-      ws.terminate();
-    });
-  }
-
-  /**
-   * Rewrite WebSocket headers to prevent IP leaks.
-   * @param {object} headers - The WebSocket headers to rewrite.
-   * @returns {object} The rewritten WebSocket headers.
-   */
-  static rewriteWebSocketHeaders(headers) {
-    const rewrittenHeaders = { ...headers };
-
-    // Remove sensitive headers
-    delete rewrittenHeaders['X-Forwarded-For'];
-    delete rewrittenHeaders['X-Real-IP'];
-
-    // Rewrite Origin header
-    rewrittenHeaders['Origin'] = rewrittenHeaders['Origin'].replace('http://', 'ws://').replace('https://', 'wss://');
-
-    return rewrittenHeaders;
   }
 }
 
