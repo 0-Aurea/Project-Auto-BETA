@@ -106,25 +106,23 @@ class EncodingUtils {
   }
 
   /**
-   * Generates a random salt and updates the current salt and last rotation timestamp.
-   * @returns {Buffer} The new salt.
+   * Generates a random salt.
+   * @returns {Buffer} A random salt.
    */
-  static rotateSalt() {
-    EncodingUtils.salt = crypto.randomBytes(EncodingUtils.SALT_SIZE);
-    EncodingUtils.lastSaltRotation = Date.now();
-    return EncodingUtils.salt;
+  static generateRandomSalt() {
+    return crypto.randomBytes(EncodingUtils.SALT_SIZE);
   }
 
   /**
-   * Validates a URL for encoding and decoding.
-   * @param {string} url The URL to validate.
-   * @returns {boolean} True if the URL is valid, false otherwise.
+   * Validates an encoded URL.
+   * @param {string} encodedStr The encoded URL to validate.
+   * @returns {boolean} True if the encoded URL is valid, false otherwise.
    */
-  static isValidUrl(url) {
+  static isValidEncodedUrl(encodedStr) {
     try {
-      const result = new URL(url);
-      return result.protocol && result.host;
-    } catch {
+      EncodingUtils.base64UrlDecode(encodedStr);
+      return true;
+    } catch (error) {
       return false;
     }
   }
