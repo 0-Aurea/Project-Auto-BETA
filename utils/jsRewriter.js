@@ -79,7 +79,7 @@ class JSRewriterUtils {
     });
 
     jsString = jsString.replace(JSRewriterUtils.WINDOW_LOCATION_OPEN_REGEX, (match, funcName, arg) => {
-      if (funcName.includes('location')) {
+      if (funcName === 'window.location') {
         return `window.location = ${JSRewriterUtils.encode(arg, origin)}`;
       } else {
         return `window.open(${JSRewriterUtils.encode(arg, origin)})`;
@@ -91,49 +91,50 @@ class JSRewriterUtils {
     });
 
     jsString = jsString.replace(JSRewriterUtils.WEBRTC_GET_USER_MEDIA_REGEX, (match) => {
-      return `/* WebRTC blocked */ ${match}`;
+      return '/* WebRTC getUserMedia and navigator.mediaDevices calls are blocked */ null';
     });
 
     return jsString;
   }
 
   /**
-   * Encodes a string using XOR + base64 URL encoding with a rotating salt.
-   * @param {string} str - The string to encode.
+   * Encodes a URL string using a rotating salt.
+   * @param {string} urlString - The URL string to encode.
    * @param {string} origin - The origin URL.
-   * @returns {string} The encoded string.
+   * @returns {string} The encoded URL string.
    */
-  static encode(str, origin) {
+  static encode(urlString, origin) {
     const encoder = new TextEncoder();
-    const strBytes = encoder.encode(str);
-    const originBytes = encoder.encode(origin);
-    const salt = originBytes[originBytes.length - 1];
-    const encodedBytes = new Uint8Array(strBytes.length);
+    const urlBytes = encoder.encode(urlString);
+    const saltBytes = encoder.encode(origin);
+    const encodedBytes = new Uint8Array(urlBytes.length);
 
-    for (let i = 0; i < strBytes.length; i++) {
-      encodedBytes[i] = strBytes[i] ^ salt;
+    for (let i = 0; i < urlBytes.length; i++) {
+      encodedBytes[i] = urlBytes[i] ^ saltBytes[i % saltBytes.length];
     }
 
-    const encodedStr = btoa(String.fromCharCode(...encodedBytes));
-    return encodedStr.replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    const encodedString = btoa(String.fromCharCode(...encodedBytes));
+    return encodedString.replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
   }
 
   /**
-   * Decodes a string using XOR + base64 URL decoding with a rotating salt.
-   * @param {string} encodedStr - The encoded string.
+   * Decodes a URL string using a rotating salt.
+   * @param {string} encodedString - The encoded URL string.
    * @param {string} origin - The origin URL.
-   * @returns {string} The decoded string.
+   * @returns {string} The decoded URL string.
    */
-  static decode(encodedStr, origin) {
+  static decode(encodedString, origin) {
     const decoder = new TextDecoder();
-    const originBytes = new TextEncoder().encode(origin);
-    const salt = originBytes[originBytes.length - 1];
-    encodedStr = encodedStr.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(encodedStr.length / 4) * 4, '=');
-    const encodedBytes = new Uint8Array(atob(encodedStr).split('').map(c => c.charCodeAt(0)));
-    const decodedBytes = new Uint8Array(encodedBytes.length);
+    const saltBytes = new TextEncoder().encode(origin);
+    const encodedBytes = new Uint8Array(atob(encodedString.replace('-', '+').replace('_', '/')).length);
 
     for (let i = 0; i < encodedBytes.length; i++) {
-      decodedBytes[i] = encodedBytes[i] ^ salt;
+      encodedBytes[i] = encodedString.charCodeAt(i);
+    }
+
+    const decodedBytes = new Uint8Array(encodedBytes.length);
+    for (let i = 0; i < encodedBytes.length; i++) {
+      decodedBytes[i] = encodedBytes[i] ^ saltBytes[i % saltBytes.length];
     }
 
     return decoder.decode(decodedBytes);
