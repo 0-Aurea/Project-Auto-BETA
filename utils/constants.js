@@ -1,0 +1,29 @@
+const CACHE_NAME = 'nexus-cache';
+const VERSION = '1.0.0';
+const SALT_ROTATION_INTERVAL = 60 * 1000; // 1 minute
+const ENCODING_MODES = ['base64', 'xor'];
+const DEFAULT_ENCODING_MODE = ENCODING_MODES[0];
+const MAX_CACHE_AGE = 24 * 60 * 60 * 1000; // 24 hours
+const WEBSOCKET_TIMEOUT = 30 * 1000; // 30 seconds
+const HOSTS_BLOCKLIST = [];
+const AD_BLOCK_FILTER_LIST = [];
+const COOKIE_SAME_SITE_ATTRIBUTE = 'Strict';
+const COOKIE_SECURE_ATTRIBUTE = true;
+const COOKIE_HTTP_ONLY_ATTRIBUTE = true;
+const X_FRAME_OPTIONS = 'SAMEORIGIN';
+const CONTENT_SECURITY_POLICY = "default-src 'self';";
+const STRICT_TRANSPORT_SECURITY = 'max-age=63072000; includeSubDomains; preload';
+const X_CONTENT_TYPE_OPTIONS = 'nosniff';
+const X_XSS_PROTECTION = '1; mode=block';
+const REFERER_POLICY = 'no-referrer';
+const CACHE_STORE_NAME = 'nexus-cache-store';
+const ENCODING_SALT_LENGTH = 16;
+const LOG_LEVEL = 'info';
+const LOG_PREFIX = '[Nexus] ';
+const SERVICE_WORKER_SCOPE = '/';
+const PROXY_URL_PREFIX = '/proxy/';
+const PROXY_BYPASS_HEADER = 'X-Nexus-Bypass';
+const PROXY_CACHE_CONTROL_HEADER = 'X-Nexus-Cache-Control';
+const PROXY_RETRY_AFTER_HEADER = 'X-Nexus-Retry-After';
+const PROXY_TEMPORARY_BAN_HEADER = 'X-Nexus-Temporary-Ban';
+const PROXY_PERMANENT_BAN_HEADER = 'X-Nexus-Permanent-Ban';
