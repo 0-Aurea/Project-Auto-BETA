@@ -1,4 +1,4 @@
-const { JSDOM } = require('jsdom');
+const { URL } = require('url');
 
 /**
  * JS rewriter utility class for handling eval(), Function(), dynamic import(), new Worker(), importScripts(),
@@ -41,6 +41,16 @@ class JSRewriterUtils {
   static HISTORY_PUSH_STATE_REGEX = /(history\.pushState|history\.replaceState)\s*\(\s*.*?\s*\)/g;
 
   /**
+   * Regular expression to match WebRTC getUserMedia and navigator.mediaDevices calls.
+   */
+  static WEBRTC_GET_USER_MEDIA_REGEX = /(getUserMedia|navigator\.mediaDevices\.getUserMedia)\s*\(\s*.*?\s*\)/g;
+
+  /**
+   * Encoding character set for URL encoding.
+   */
+  static ENCODING_CHARSET = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+
+  /**
    * Rewrites a JS string by handling eval(), Function(), dynamic import(), new Worker(), importScripts(),
    * document.domain mutations, window.location, window.open, and history.pushState/replaceState.
    * @param {string} jsString - The JS string to rewrite.
@@ -76,51 +86,64 @@ class JSRewriterUtils {
       return `${funcName}(...arguments)`;
     });
 
+    jsString = jsString.replace(JSRewriterUtils.WEBRTC_GET_USER_MEDIA_REGEX, () => {
+      return 'null';
+    });
+
     return jsString;
   }
 
   /**
-   * Encodes a URL string using the XOR + base64 URL encoding scheme with a rotating salt.
-   * @param {string} urlString - The URL string to encode.
+   * Encodes a URL string using a simple XOR cipher with base64 encoding.
+   * @param {string} str - The string to encode.
    * @param {string} origin - The origin URL.
-   * @returns {string} The encoded URL string.
+   * @returns {string} The encoded string.
    */
-  static encode(urlString, origin) {
+  static encode(str, origin) {
     const encoder = new TextEncoder();
-    const urlBytes = encoder.encode(urlString);
-    const saltBytes = encoder.encode(origin);
-    const encodedBytes = new Uint8Array(urlBytes.length);
+    const data = encoder.encode(str);
+    const encodedData = new Uint8Array(data.length);
 
-    for (let i = 0; i < urlBytes.length; i++) {
-      encodedBytes[i] = urlBytes[i] ^ saltBytes[i % saltBytes.length];
+    for (let i = 0; i < data.length; i++) {
+      encodedData[i] = data[i] ^ JSRewriterUtils.getSalt(origin)[i % JSRewriterUtils.getSalt(origin).length];
     }
 
-    const encodedString = btoa(String.fromCharCode(...encodedBytes));
-    return encodedString.replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    const encodedStr = btoa(String.fromCharCode(...encodedData));
+    return encodedStr.replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
   }
 
   /**
-   * Decodes a URL string using the XOR + base64 URL decoding scheme with a rotating salt.
-   * @param {string} encodedString - The encoded URL string.
+   * Decodes a URL string using a simple XOR cipher with base64 decoding.
+   * @param {string} str - The string to decode.
    * @param {string} origin - The origin URL.
-   * @returns {string} The decoded URL string.
+   * @returns {string} The decoded string.
    */
-  static decode(encodedString, origin) {
+  static decode(str, origin) {
     const decoder = new TextDecoder();
-    const saltBytes = new TextEncoder().encode(origin);
-    const encodedBytes = new Uint8Array(atob(encodedString.replace('-', '+').replace('_', '/')).length);
+    const encodedStr = str.replace(/-/g, '+').replace(/_/g, '/').padEnd((str.length + 3) & ~3, '=');
+    const encodedData = new Uint8Array(atob(encodedStr).length);
 
-    for (let i = 0; i < encodedBytes.length; i++) {
-      encodedBytes[i] = encodedString.charCodeAt(i);
+    for (let i = 0; i < encodedData.length; i++) {
+      encodedData[i] = encodedStr.charCodeAt(i);
     }
 
-    const decodedBytes = new Uint8Array(encodedBytes.length);
+    const decodedData = new Uint8Array(encodedData.length);
 
-    for (let i = 0; i < encodedBytes.length; i++) {
-      decodedBytes[i] = encodedBytes[i] ^ saltBytes[i % saltBytes.length];
+    for (let i = 0; i < encodedData.length; i++) {
+      decodedData[i] = encodedData[i] ^ JSRewriterUtils.getSalt(origin)[i % JSRewriterUtils.getSalt(origin).length];
     }
 
-    return decoder.decode(decodedBytes);
+    return decoder.decode(decodedData);
+  }
+
+  /**
+   * Generates a salt value based on the origin URL.
+   * @param {string} origin - The origin URL.
+   * @returns {Uint8Array} The salt value.
+   */
+  static getSalt(origin) {
+    const encoder = new TextEncoder();
+    return encoder.encode(origin);
   }
 }
 
