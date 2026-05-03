@@ -9,7 +9,6 @@ const cookieParser = require('cookie-parser');
 const { encodeUrl, decodeUrl: decodeUrlUtil } = require('./utils/encoding');
 const zlib = require('zlib');
 const brotli = require('iltorb');
-const { QUIC } = require('quic');
 
 const app = express();
 const port = 8080;
@@ -18,14 +17,9 @@ const options = {
   key: fs.readFileSync('server.key'),
   cert: fs.readFileSync('server.crt'),
   allowHTTP2: true,
-  quic: {
-    maxPacketSize: 65535,
-    maxStreams: 100,
-  },
 };
 
 const httpsServer = https.createServer(options, app);
-const quicServer = new QUIC.Server(options.quic, app);
 
 const wss = new WebSocket.Server({ server: httpsServer });
 
@@ -63,6 +57,7 @@ function handleEncodedUrl(req, res, next) {
   try {
     const decodedUrl = decodeUrlUtil(encodedUrl, rotatingSalt);
     req.url = decodedUrl;
+    req.path = decodedUrl;
     next();
   } catch (error) {
     res.status(400).send('Invalid encoded URL');
@@ -128,32 +123,14 @@ function compressBody(req, res, next) {
   }
 }
 
-function handleWebSocket(req, res, next) {
-  if (req.headers['upgrade'] === 'websocket') {
-    const websocketUrl = req.url;
-    const websocketReq = {
-      ...req,
-      url: websocketUrl,
-    };
-    wss.handleUpgrade(req, res, (ws) => {
-      wss.emit('connection', ws, websocketReq);
-    });
-  } else {
-    next();
-  }
-}
-
 app.use(handleEncodedUrl);
 app.use(rewriteHeaders);
 app.use(cookieScope);
 app.use(decompressBody);
-app.use(compressBody);
-app.use(handleWebSocket);
 
 const proxy = createProxyMiddleware({
   target: 'http://localhost:8081',
   changeOrigin: true,
-  pathRewrite: { '^/': '/' },
   onProxyReq: (proxyReq, req, res) => {
     proxyReq.headers['content-length'] = req.body.length;
   },
@@ -161,38 +138,31 @@ const proxy = createProxyMiddleware({
 
 app.use(proxy);
 
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).send('Internal Server Error');
+});
+
 httpsServer.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
 
-quicServer.listen(port, () => {
-  console.log(`QUIC server listening on port ${port}`);
-});
-
-wss.on('connection', (ws, req) => {
+wss.on('connection', (ws) => {
   ws.on('message', (message) => {
     console.log(`Received message: ${message}`);
   });
 
   ws.on('close', () => {
-    console.log('WebSocket connection closed');
-  });
-
-  ws.on('error', (error) => {
-    console.error('WebSocket error:', error);
+    console.log('Client disconnected');
   });
 });
 
 process.on('SIGINT', () => {
   httpsServer.close();
-  quicServer.close();
-  wss.close();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
   httpsServer.close();
-  quicServer.close();
-  wss.close();
   process.exit(0);
 });
