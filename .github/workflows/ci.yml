@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build-and-test:
@@ -28,6 +31,14 @@ jobs:
 
       - name: Automated fetch tests
         run: npm run fetch-tests
+
+      - name: Test WebSocket functionality
+        run: |
+          npm run test-websocket
+
+      - name: Test WebRTC functionality
+        run: |
+          npm run test-webrtc
 
       - name: Build and package
         run: npm run build
