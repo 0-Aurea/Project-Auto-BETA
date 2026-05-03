@@ -72,6 +72,23 @@ const UI_THEME = 'dark';
 const UI_FONT_SIZE = 14;
 const UI_FONT_FAMILY = 'Arial, sans-serif';
 
+// QUIC protocol and HTTP/3 configuration
+const QUIC_ENABLED = true;
+const QUIC_PORT = 443;
+const QUIC_PROTOCOL_VERSION = 'draft-29';
+const QUIC_SPINNING_BIT = true;
+
+const HTTP3_ENABLED = true;
+const HTTP3_PORT = 443;
+const HTTP3_PROTOCOL_VERSION = 'HTTP/3';
+
+const QUIC_HEADER_REWRITE_RULES = {
+  'Content-Security-Policy': (value) => value.replace('default-src', 'script-src \'self\''),
+  'X-Frame-Options': (value) => value.replace('SAMEORIGIN', '*'),
+  'Strict-Transport-Security': (value) => '',
+  'X-Content-Type-Options': (value) => value.replace('nosniff', ''),
+};
+
 module.exports = {
   CACHE_NAME,
   VERSION,
@@ -123,4 +140,12 @@ module.exports = {
   UI_THEME,
   UI_FONT_SIZE,
   UI_FONT_FAMILY,
+  QUIC_ENABLED,
+  QUIC_PORT,
+  QUIC_PROTOCOL_VERSION,
+  QUIC_SPINNING_BIT,
+  HTTP3_ENABLED,
+  HTTP3_PORT,
+  HTTP3_PROTOCOL_VERSION,
+  QUIC_HEADER_REWRITE_RULES,
 };
