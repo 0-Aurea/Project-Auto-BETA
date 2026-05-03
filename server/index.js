@@ -107,7 +107,7 @@ function compressBody(req, res, next) {
       }
     });
   } else if (encoding === 'br') {
-    brotli.compress(req.body, { mode: 0 }, (err, buffer) => {
+    brotli.compress(req.body, (err, buffer) => {
       if (err) {
         next(err);
       } else {
@@ -121,55 +121,88 @@ function compressBody(req, res, next) {
   }
 }
 
-function handleWebSocket(req, res, next) {
+function handleWebSocketUpgrade(req, res, next) {
   if (req.headers['upgrade'] === 'websocket') {
-    const websocketUrl = req.url;
-    const websocketReq = {
-      url: websocketUrl,
-      headers: req.headers
-    };
-    wss.handleUpgrade(req, res, (ws) => {
-      wss.emit('connection', ws, websocketReq);
+    const websocketKey = req.headers['sec-websocket-key'];
+    const websocketAccept = require('crypto').createHash('sha1').update(websocketKey + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+    res.writeHead(101, {
+      'Upgrade': 'websocket',
+      'Connection': 'Upgrade',
+      'Sec-WebSocket-Accept': websocketAccept
+    });
+    const websocket = new WebSocket(req.socket, req.headers['sec-websocket-protocol']);
+    websocket.on('message', (message) => {
+      console.log(`Received message: ${message}`);
+    });
+    websocket.on('close', () => {
+      console.log('WebSocket connection closed');
+    });
+    websocket.on('error', (error) => {
+      console.log(`WebSocket error: ${error}`);
     });
   } else {
     next();
   }
 }
 
-app.use(handleEncodedUrl);
+function scrubWebRTCICECandidates(req, res, next) {
+  if (req.headers['content-type'] === 'application/json') {
+    try {
+      const payload = JSON.parse(req.body);
+      if (payload.type === 'icecandidate') {
+        const candidate = payload.candidate;
+        if (candidate) {
+          const scrubbedCandidate = candidate.replace(/a=ssrc:(\d+)/g, 'a=ssrc:0');
+          payload.candidate = scrubbedCandidate;
+          req.body = JSON.stringify(payload);
+        }
+      }
+    } catch (error) {
+      console.log(`Error parsing JSON: ${error}`);
+    }
+  }
+  next();
+}
+
 app.use(rewriteHeaders);
 app.use(cookieScope);
+app.use(handleEncodedUrl);
 app.use(decompressBody);
+app.use(scrubWebRTCICECandidates);
 
-const proxy = createProxyMiddleware({
-  target: 'http://localhost:8081',
+app.use((req, res, next) => {
+  if (req.url.startsWith('/websocket')) {
+    handleWebSocketUpgrade(req, res, next);
+  } else {
+    next();
+  }
+});
+
+app.use(createProxyMiddleware({
+  target: 'https://example.com',
   changeOrigin: true,
+  pathRewrite: { '^/': '' },
   onProxyReq: (proxyReq, req, res) => {
     proxyReq.headers['content-length'] = req.body.length;
   },
   onProxyRes: (proxyRes, req, res) => {
     res.set("Content-Length", proxyRes.headers['content-length']);
   }
-});
-
-app.use(proxy);
-app.use(compressBody);
-app.use(handleWebSocket);
+}));
 
 httpsServer.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
 
-wss.on('connection', (ws, req) => {
+wss.on('connection', (ws) => {
+  console.log('WebSocket connection established');
   ws.on('message', (message) => {
-    console.log(`Received message => ${message}`);
+    console.log(`Received message: ${message}`);
   });
-
   ws.on('close', () => {
-    console.log('Client disconnected');
+    console.log('WebSocket connection closed');
   });
-
   ws.on('error', (error) => {
-    console.log(`Error occurred => ${error}`);
+    console.log(`WebSocket error: ${error}`);
   });
 });
