@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const express = require('express');
 const WebSocket = require('ws');
 const { URL } = require('url');
+const https = require('https');
 
 class ProxyEngine {
   constructor() {
@@ -14,6 +15,18 @@ class ProxyEngine {
     setInterval(() => {
       this.rotateSalt();
     }, this.saltRotationInterval);
+
+    this.app.use((req, res, next) => {
+      if (req.url.startsWith('/')) {
+        this.handleRequest(req, res);
+      } else {
+        next();
+      }
+    });
+
+    this.wss.on('connection', (ws, req) => {
+      this.handleWebSocket(req, ws);
+    });
   }
 
   rotateSalt() {
@@ -41,19 +54,29 @@ class ProxyEngine {
     return this.xorEncode(data, salt);
   }
 
+  encodePath(path, salt) {
+    const pathBuffer = Buffer.from(path);
+    const encodedPath = this.xorEncode(pathBuffer, salt);
+    return this.base64Encode(encodedPath);
+  }
+
+  decodePath(encodedPath, salt) {
+    const encodedPathBuffer = this.base64Decode(encodedPath);
+    return this.xorDecode(encodedPathBuffer, salt).toString();
+  }
+
   async handleRequest(req, res) {
     const url = new URL(req.url, 'http://example.com');
     const path = url.pathname;
     const encodedPath = this.encodePath(path, this.salt);
 
-    req.url = `/${encodedPath}`;
     req.headers['x-nexus-salt'] = this.encodedSalt;
 
-    const targetHost = 'https://' + url.host;
+    const targetHost = url.host;
     const targetReq = {
       method: req.method,
       headers: req.headers,
-      url: targetHost + path,
+      url: `https://${targetHost}${path}`,
     };
 
     const targetRes = await this.forwardRequest(targetReq, req.body);
@@ -74,10 +97,12 @@ class ProxyEngine {
       const options = {
         method: req.method,
         headers: req.headers,
-        url: req.url,
+        hostname: new URL(req.url).hostname,
+        port: 443,
+        path: new URL(req.url).pathname,
       };
 
-      const targetReq = require('https').request(options, (targetRes) => {
+      const targetReq = https.request(options, (targetRes) => {
         let body = '';
         targetRes.on('data', (chunk) => {
           body += chunk;
@@ -101,67 +126,46 @@ class ProxyEngine {
     });
   }
 
-  handleWebSocket(req, socket, head) {
+  handleWebSocket(req, socket) {
     const url = new URL(req.url, 'http://example.com');
     const path = url.pathname;
-    const encodedPath = this.encodePath(path, this.salt);
 
-    req.url = `/${encodedPath}`;
-
-    const targetHost = 'wss://' + url.host;
+    const targetHost = url.host;
     const targetReq = {
       method: req.method,
       headers: req.headers,
-      url: targetHost + path,
+      url: `wss://${targetHost}${path}`,
     };
 
-    const wss = new WebSocket(targetHost + path, {
+    const wss = new WebSocket(`wss://${targetHost}${path}`, {
       headers: targetReq.headers,
     });
 
     wss.on('open', () => {
-      socket.pipe(wss);
-      wss.pipe(socket);
+      socket.on('message', (message) => {
+        wss.send(message);
+      });
+
+      wss.on('message', (message) => {
+        socket.send(message);
+      });
+
+      wss.on('close', () => {
+        socket.close();
+      });
+
+      wss.on('error', (err) => {
+        socket.emit('error', err);
+      });
     });
 
-    wss.on('error', (err) => {
-      console.error(err);
+    socket.on('close', () => {
+      wss.close();
     });
 
     socket.on('error', (err) => {
-      console.error(err);
+      wss.emit('error', err);
     });
-  }
-
-  encodePath(path, salt) {
-    const encodedPath = this.xorEncode(Buffer.from(path), salt);
-    return this.base64Encode(encodedPath);
-  }
-
-  decodePath(encodedPath) {
-    const decodedPath = this.base64Decode(encodedPath);
-    return this.xorDecode(decodedPath, this.salt).toString();
-  }
-
-  init() {
-    this.app.use((req, res, next) => {
-      if (req.url.startsWith('/')) {
-        this.handleRequest(req, res);
-      } else {
-        next();
-      }
-    });
-
-    this.app.get('/.well-known/nexus-salt', (req, res) => {
-      res.set("Content-Type", "text/plain");
-      res.send(this.encodedSalt);
-    });
-
-    this.wss.on('connection', (ws, req) => {
-      this.handleWebSocket(req, ws._socket, ws._socket);
-    });
-
-    return this.app;
   }
 }
 
