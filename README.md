@@ -58,14 +58,14 @@ Nexus is a self-hosted web proxy designed to be objectively better than Titanium
                   v
           +---------------+
           |  Service Worker  |
-          |  (Cache API)     |
+          |  (Nexus Proxy)  |
           +---------------+
                   |
                   |
                   v
           +---------------+
           |  Express Server  |
-          |  (HTTPS Tunnel)  |
+          |  (Node.js)       |
           +---------------+
                   |
                   |
@@ -79,69 +79,44 @@ Nexus is a self-hosted web proxy designed to be objectively better than Titanium
 
 ### Prerequisites
 
-* Node.js (>= 16.0.0)
-* npm (>= 8.0.0)
-* Docker (optional)
+* Node.js (v16 or higher)
+* npm (v8 or higher)
+* A compatible web browser
 
 ### Installation
 
 1. Clone the repository: `git clone https://github.com/your-username/Nexus-Proxy.git`
-2. Install dependencies: `npm install`
-3. Start the proxy: `npm start`
+2. Navigate to the repository: `cd Nexus-Proxy`
+3. Install dependencies: `npm install`
+4. Start the server: `npm start`
 
-### Docker Setup
+### Configuration
 
-1. Build the Docker image: `docker build -t nexus-proxy .`
-2. Run the Docker container: `docker run -p 8080:8080 nexus-proxy`
+* Edit the `config.json` file to customize settings, such as the proxy port and salt.
 
-## Configuration Options
+## Usage
 
-### Caching
-
-* **Cache TTL**: Set the time-to-live (TTL) for cached responses in hours (default: 1 hour). Configure in `config.json`:
-```json
-{
-  "cache": {
-    "ttl": 1
-  }
-}
-```
-* **Cache Size**: Set the maximum size of the cache in megabytes (default: 100 MB). Configure in `config.json`:
-```json
-{
-  "cache": {
-    "size": 100
-  }
-}
-```
-* **Cache Enabled**: Enable or disable caching (default: enabled). Configure in `config.json`:
-```json
-{
-  "cache": {
-    "enabled": true
-  }
-}
-```
-
-### Performance
-
-* **Brotli Compression**: Enable or disable Brotli compression (default: enabled). Configure in `config.json`:
-```json
-{
-  "performance": {
-    "brotli": true
-  }
-}
-```
+1. Open a web browser and navigate to `http://localhost:8080` (or the port specified in `config.json`).
+2. Enter a URL in the search bar to proxy the request.
 
 ## Contributing
 
-Contributions are welcome! Please submit pull requests to the main branch. Ensure that all tests pass and code is formatted according to the project's ESLint and Prettier configurations.
+Contributions are welcome! Please submit a pull request with your changes and a brief description.
 
 ## License
 
-Nexus Proxy is licensed under the MIT License. See LICENSE for details.
+Nexus Proxy is licensed under the MIT License.
 
 ## Acknowledgements
 
-Special thanks to the developers of Ultraviolet for their work on the original proxy technology. Nexus aims to build upon and improve these concepts to provide a more secure and feature-rich proxy solution.
+Special thanks to the developers of Ultraviolet for their work on the original proxy.
+
+## Known Issues
+
+* Some websites may not work properly due to aggressive rewriting.
+* WebRTC leaks may still occur in certain scenarios.
+
+## Future Development
+
+* Implement additional features, such as DNS encryption and tor integration.
+* Improve compatibility with websites that use complex JavaScript.
