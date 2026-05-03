@@ -10,12 +10,13 @@ const { encodeUrl, decodeUrl: decodeUrlUtil } = require('./utils/encoding');
 const zlib = require('zlib');
 const brotli = require('iltorb');
 const config = require('./lib/config');
+const TLSHandler = require('./lib/TLSHandler');
 
 const app = express();
 const serverConfig = config.server;
 const port = serverConfig.port;
 
-const options = {
+const tlsHandler = new TLSHandler({
   key: fs.readFileSync(serverConfig.https.key),
   cert: fs.readFileSync(serverConfig.https.cert),
   allowHTTP2: serverConfig.https.allowHTTP2,
@@ -23,9 +24,9 @@ const options = {
     requestCert: false,
     rejectUnauthorized: false,
   },
-};
+});
 
-const httpsServer = https.createServer(options, app);
+const httpsServer = https.createServer(tlsHandler.options, app);
 
 const wss = new WebSocket.Server({ server: httpsServer });
 
@@ -42,7 +43,7 @@ function rewriteHeaders(req, res, next) {
   res.header('Cache-Control', 'no-cache');
   res.header('Pragma', 'no-cache');
   res.header('Expires', 0);
-  res.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  // res.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   res.header('Content-Security-Policy', "default-src 'self'; script-src 'self' https://cdn.example.com; object-src 'none'");
   res.header('X-Frame-Options', 'DENY');
   res.header('X-Content-Type-Options', 'nosniff');
@@ -98,89 +99,61 @@ function decompressBody(req, res, next) {
           next();
         }
       });
-    } else {
-      next();
     }
   } else {
     next();
   }
 }
 
-function compressBody(req, res, next) {
-  const encoding = req.query.encoding;
-  if (encoding === 'gzip') {
-    zlib.gzip(req.body, (err, buffer) => {
-      if (err) {
-        next(err);
-      } else {
-        res.set("Content-Encoding", "gzip");
-        res.set("Content-Length", buffer.length);
-        res.send(buffer);
-      }
-    });
-  } else if (encoding === 'br') {
-    brotli.compress(req.body, (err, buffer) => {
-      if (err) {
-        next(err);
-      } else {
-        res.set("Content-Encoding", "br");
-        res.set("Content-Length", buffer.length);
-        res.send(buffer);
-      }
-    });
-  } else {
-    next();
-  }
-}
-
-app.use(handleEncodedUrl);
 app.use(rewriteHeaders);
 app.use(cookieScope);
+app.use(handleEncodedUrl);
 app.use(decompressBody);
 
-const proxy = createProxyMiddleware({
+const proxyOptions = {
   target: 'http://localhost:8081',
   changeOrigin: true,
+  pathRewrite: { '^/': '' },
   onProxyReq: (proxyReq, req, res) => {
-    proxyReq.headers['content-length'] = req.body.length;
+    proxyReq.headers['content-encoding'] = req.headers['content-encoding'];
   },
   onProxyRes: (proxyRes, req, res) => {
-    res.set("Content-Type", proxyRes.headers['content-type']);
-    res.set("Content-Length", proxyRes.headers['content-length']);
+    proxyRes.headers['content-encoding'] = req.headers['content-encoding'];
   },
-});
+};
+
+const proxy = createProxyMiddleware(proxyOptions);
 
 app.use(proxy);
 
-app.use(compressBody);
-
 wss.on('connection', (ws, req) => {
   const { hostname, port } = url.parse(req.url, true);
-  const target = `ws://${hostname}:${port}`;
-  const wsTarget = new WebSocket(target);
+  const target = `${hostname}:${port}`;
+
+  const wsProxy = new WebSocket(target);
 
   ws.on('message', (message) => {
-    wsTarget.send(message);
+    wsProxy.send(message);
   });
 
-  wsTarget.on('message', (message) => {
+  wsProxy.on('message', (message) => {
     ws.send(message);
   });
 
   ws.on('close', () => {
-    wsTarget.close();
+    wsProxy.close();
   });
 
-  wsTarget.on('close', () => {
+  wsProxy.on('close', () => {
     ws.close();
   });
 
   ws.on('error', (error) => {
-    console.error(error);
+    console.error('WebSocket error:', error);
   });
 
-  wsTarget.on('error', (error) => {
-    console.error(error);
+  wsProxy.on('error', (error) => {
+    console.error('WebSocket proxy error:', error);
   });
 });
 
@@ -196,4 +169,10 @@ process.on('SIGINT', () => {
 process.on('SIGTERM', () => {
   httpsServer.close();
   process.exit(0);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+  httpsServer.close();
+  process.exit(1);
 });
