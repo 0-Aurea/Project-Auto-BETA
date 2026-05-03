@@ -4,7 +4,7 @@ const { Buffer } = require('buffer');
 
 /**
  * Cache utility class for managing the Service Worker Cache API with TTL headers,
- * Brotli/gzip decompression + re-compression pipeline.
+ * Brotli/gzip decompression + re-compression pipeline, and prefetch hints.
  */
 class CacheUtils {
   /**
@@ -90,116 +90,75 @@ class CacheUtils {
     if (cachedResponse) {
       const cachedBody = await cachedResponse.arrayBuffer();
       const decompressedBody = await CacheUtils.decompressBody(cachedBody, cachedResponse.headers.get('content-encoding'));
+      const response = new Response(decompressedBody, cachedResponse);
 
-      return new Response(decompressedBody, cachedResponse);
+      return response;
     }
 
     return null;
   }
 
   /**
-   * Delete a cached response.
-   * @param {Request} request - The request to delete.
+   * Prefetch and cache a response.
+   * @param {Request} request - The request to prefetch.
+   * @param {number} ttl - The time to live in seconds.
    * @returns {Promise<void>}
    */
-  static async deleteCachedResponse(request) {
-    if (!CacheUtils.cache) {
-      throw new Error('Cache instance not initialized');
+  static async prefetchResponse(request, ttl) {
+    try {
+      const response = await fetch(request);
+      await CacheUtils.cacheResponse(request, response, ttl);
+    } catch (error) {
+      globalThis.console.error(`Error prefetching response: ${error}`);
     }
-
-    await CacheUtils.cache.delete(request);
   }
 
   /**
-   * Clear all cached responses.
+   * Handle prefetch hints.
+   * @param {HTMLDocument} document - The HTML document to parse.
+   * @param {number} ttl - The time to live in seconds.
    * @returns {Promise<void>}
    */
-  static async clearCache() {
-    if (!CacheUtils.cache) {
-      throw new Error('Cache instance not initialized');
-    }
+  static async handlePrefetchHints(document, ttl) {
+    const prefetchLinks = document.querySelectorAll('link[rel="prefetch"], link[rel="preload"]');
 
-    await CacheUtils.cache.keys().then(keys => Promise.all(keys.map(key => CacheUtils.cache.delete(key))));
+    for (const link of prefetchLinks) {
+      const href = link.getAttribute('href');
+      if (href) {
+        const request = new Request(href);
+        await CacheUtils.prefetchResponse(request, ttl);
+      }
+    }
   }
 
   /**
-   * Check if a request is cacheable.
-   * @param {Request} request - The request to check.
-   * @returns {boolean} True if the request is cacheable, false otherwise.
+   * Re-compress a response body.
+   * @param {Buffer} body - The response body to re-compress.
+   * @param {string} algorithm - The compression algorithm to use.
+   * @returns {Promise<Buffer>} The re-compressed response body.
    */
-  static isCacheableRequest(request) {
-    // Check if the request method is cacheable
-    if (request.method !== 'GET' && request.method !== 'HEAD') {
-      return false;
-    }
-
-    // Check if the request has a cacheable URL
-    if (request.url.startsWith('https://') || request.url.startsWith('http://')) {
-      return true;
-    }
-
-    return false;
-  }
-
-  /**
-   * Decompress response body.
-   * @param {ArrayBuffer} body - The response body to decompress.
-   * @param {string} contentEncoding - The content encoding of the response body.
-   * @returns {Promise<Uint8Array>} The decompressed response body.
-   */
-  static async decompressBody(body, contentEncoding) {
-    if (!contentEncoding || !CacheUtils.COMPRESSION_ALGORITHMS[contentEncoding]) {
-      return new Uint8Array(body);
-    }
-
-    const decompressionAlgorithm = CacheUtils.COMPRESSION_ALGORITHMS[contentEncoding];
-    const decompressedBody = await decompress(body, decompressionAlgorithm);
-
-    return decompressedBody;
-  }
-
-  /**
-   * Re-compress response body.
-   * @param {Uint8Array} body - The response body to re-compress.
-   * @param {string} contentEncoding - The content encoding to use for re-compression.
-   * @returns {Promise<Uint8Array>} The re-compressed response body.
-   */
-  static async recompressBody(body, contentEncoding) {
-    if (!contentEncoding || !CacheUtils.COMPRESSION_ALGORITHMS[contentEncoding]) {
-      return body;
-    }
-
-    const compressionAlgorithm = CacheUtils.COMPRESSION_ALGORITHMS[contentEncoding];
-    const reCompressedBody = await compress(body, compressionAlgorithm);
+  static async recompressBody(body, algorithm) {
+    const compressionCodec = new CompressionCodec(algorithm);
+    const reCompressedBody = await compressionCodec.compress(body);
 
     return reCompressedBody;
   }
+
+  /**
+   * Decompress a response body.
+   * @param {Buffer} body - The response body to decompress.
+   * @param {string} algorithm - The compression algorithm to use.
+   * @returns {Promise<Buffer>} The decompressed response body.
+   */
+  static async decompressBody(body, algorithm) {
+    if (!algorithm) {
+      return body;
+    }
+
+    const decompressedBody = await decompress(body, algorithm);
+
+    return decompressedBody;
+  }
 }
 
-async function compress(body, algorithm) {
-  return new Promise((resolve, reject) => {
-    const encoder = new CompressionCodec(algorithm);
-    encoder.compress(body, (err, compressed) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(compressed);
-      }
-    });
-  });
-}
-
-async function decompress(body, algorithm) {
-  return new Promise((resolve, reject) => {
-    const decoder = new CompressionCodec(algorithm);
-    decoder.decompress(body, (err, decompressed) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(decompressed);
-      }
-    });
-  });
-}
-
-module.exports = CacheUtils;
+export default CacheUtils;
