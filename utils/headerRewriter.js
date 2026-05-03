@@ -1,68 +1,74 @@
 const { URL } = require('url');
 
 /**
- * Header rewriter utility class for managing request and response header rewriting.
+ * Header rewriting utility class for stripping CSP, HSTS, and X-Frame-Options headers.
  */
 class HeaderRewriterUtils {
   /**
-   * Regular expression to match hop-by-hop headers.
+   * List of headers to strip for better compatibility.
    */
-  static HOP_BY_HOP_HEADERS_REGEX = /(?:connection|keep-alive|proxy-authenticate|proxy-authorization|te|trailers|transfer-encoding|upgrade|via|warning)\b/i;
+  static HEADERS_TO_STRIP = [
+    'Content-Security-Policy',
+    'Content-Security-Policy-Report-Only',
+    'Strict-Transport-Security',
+    'X-Frame-Options',
+    'X-Content-Type-Options',
+  ];
 
   /**
-   * Regular expression to match sensitive headers.
+   * Regular expression to match header names.
    */
-  static SENSITIVE_HEADERS_REGEX = /(?:set-cookie|cookie|authorization|www-authenticate)\b/i;
+  static HEADER_NAME_REGEX = /^([A-Za-z-]+):/;
 
   /**
-   * Rewrites response headers to ensure optimal anonymity.
-   * @param {ServerResponse} response - The response object.
+   * Rewrite response headers to strip CSP, HSTS, and X-Frame-Options headers.
+   * @param {object} headers - The response headers to rewrite.
+   * @returns {object} The rewritten response headers.
    */
-  static rewriteResponseHeaders(response) {
-    // Remove hop-by-hop headers
-    response.headers = Object.fromEntries(Object.entries(response.headers).filter(([key]) => !HeaderRewriterUtils.HOP_BY_HOP_HEADERS_REGEX.test(key)));
+  static rewriteResponseHeaders(headers) {
+    const rewrittenHeaders = {};
 
-    // Remove sensitive headers
-    response.headers = Object.fromEntries(Object.entries(response.headers).filter(([key]) => !HeaderRewriterUtils.SENSITIVE_HEADERS_REGEX.test(key)));
+    for (const [headerName, headerValue] of Object.entries(headers)) {
+      if (!HeaderRewriterUtils.HEADERS_TO_STRIP.includes(headerName)) {
+        rewrittenHeaders[headerName] = headerValue;
+      }
+    }
 
-    // Strip CSP and HSTS headers
-    response.headers['content-security-policy'] = '';
-    response.headers['strict-transport-security'] = '';
-
-    // Disable caching
-    response.headers['cache-control'] = 'no-cache, no-store, must-revalidate';
-
-    // Disable frame busting
-    response.headers['x-frame-options'] = '';
-
-    // Disable MIME-sniffing
-    response.headers['x-content-type-options'] = 'nosniff';
+    return rewrittenHeaders;
   }
 
   /**
-   * Rewrites request headers to ensure optimal anonymity.
-   * @param {IncomingMessage} request - The request object.
+   * Rewrite request headers to remove sensitive information.
+   * @param {object} headers - The request headers to rewrite.
+   * @returns {object} The rewritten request headers.
    */
-  static rewriteRequestHeaders(request) {
-    // Remove sensitive headers
-    request.headers = Object.fromEntries(Object.entries(request.headers).filter(([key]) => !HeaderRewriterUtils.SENSITIVE_HEADERS_REGEX.test(key)));
+  static rewriteRequestHeaders(headers) {
+    const rewrittenHeaders = {};
 
-    // Remove referer header
-    delete request.headers.referer;
+    for (const [headerName, headerValue] of Object.entries(headers)) {
+      if (headerName.toLowerCase() !== 'referer') {
+        rewrittenHeaders[headerName] = headerValue;
+      } else {
+        const refererUrl = new URL(headerValue);
+        rewrittenHeaders[headerName] = `${refererUrl.protocol}//${refererUrl.host}`;
+      }
+    }
 
+    return rewrittenHeaders;
   }
 
   /**
-   * Rewrites WebSocket upgrade headers.
-   * @param {Object} headers - The WebSocket upgrade headers.
+   * Strip sensitive headers from a response object.
+   * @param {object} response - The response object to strip headers from.
+   * @returns {object} The response object with sensitive headers stripped.
    */
-  static rewriteWebSocketHeaders(headers) {
-    // Remove hop-by-hop headers
-    headers = Object.fromEntries(Object.entries(headers).filter(([key]) => !HeaderRewriterUtils.HOP_BY_HOP_HEADERS_REGEX.test(key)));
+  static stripSensitiveHeaders(response) {
+    if (response.headers) {
+      response.headers = HeaderRewriterUtils.rewriteResponseHeaders(response.headers);
+    }
 
-    // Remove sensitive headers
-    headers = Object.fromEntries(Object.entries(headers).filter(([key]) => !HeaderRewriterUtils.SENSITIVE_HEADERS_REGEX.test(key)));
+    return response;
   }
 }
 
-module.exports = { HeaderRewriterUtils };
+module.exports = HeaderRewriterUtils;
