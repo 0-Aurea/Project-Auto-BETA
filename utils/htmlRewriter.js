@@ -62,6 +62,8 @@ class HTMLRewriterUtils {
       const newBaseTag = document.createElement('base');
       newBaseTag.href = proxiedUrl;
       document.head.insertBefore(newBaseTag, document.head.firstChild);
+    } else {
+      baseTag.href = proxiedUrl;
     }
 
     // Handle src attributes
@@ -119,7 +121,13 @@ class HTMLRewriterUtils {
     if (metaRefreshMatches) {
       metaRefreshMatches.forEach((match) => {
         const contentValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
-        const rewrittenContentValue = HTMLRewriterUtils.rewriteContentValue(contentValue, proxiedUrl);
+        let rewrittenContentValue;
+        if (contentValue.includes(';')) {
+          const [, url] = contentValue.split(';');
+          rewrittenContentValue = `0;url=${HTMLRewriterUtils.rewriteAttributeValue(url.trim(), proxiedUrl)}`;
+        } else {
+          rewrittenContentValue = contentValue;
+        }
         html = html.replace(match, match.replace(contentValue, rewrittenContentValue));
       });
     }
@@ -128,57 +136,52 @@ class HTMLRewriterUtils {
     const inlineScriptStyleMatches = html.match(HTMLRewriterUtils.INLINE_SCRIPT_STYLE_REGEX);
     if (inlineScriptStyleMatches) {
       inlineScriptStyleMatches.forEach((match) => {
-        const rewrittenMatch = HTMLRewriterUtils.rewriteInlineScriptStyle(match, proxiedUrl);
+        const tagName = match.replace(/<(\w+).*?>.*?<\/\1>/, '$1');
+        let rewrittenMatch = match;
+        if (tagName === 'script') {
+          rewrittenMatch = HTMLRewriterUtils.rewriteScriptContent(match);
+        } else if (tagName === 'style') {
+          rewrittenMatch = HTMLRewriterUtils.rewriteStyleContent(match);
+        }
         html = html.replace(match, rewrittenMatch);
       });
     }
+
+    // Remove nonce attributes
+    html = html.replace(/\snonce\s*=\s*["'][^"']*["']/gi, '');
 
     return html;
   }
 
   /**
-   * Rewrites an attribute value by prepending the proxied URL.
+   * Rewrites an attribute value by prepending the proxied URL if it's a relative URL.
    * @param {string} attributeValue - The attribute value to rewrite.
    * @param {string} proxiedUrl - The URL of the proxied request.
    * @returns {string} The rewritten attribute value.
    */
   static rewriteAttributeValue(attributeValue, proxiedUrl) {
-    if (attributeValue.startsWith('http')) {
-      return attributeValue;
-    }
-    return `${proxiedUrl}/${attributeValue}`;
+    const url = new URL(attributeValue, proxiedUrl);
+    return url.href;
   }
 
   /**
-   * Rewrites a content value for <meta http-equiv="refresh"> tags.
-   * @param {string} contentValue - The content value to rewrite.
-   * @param {string} proxiedUrl - The URL of the proxied request.
-   * @returns {string} The rewritten content value.
+   * Rewrites the content of a <script> block.
+   * @param {string} scriptContent - The content of the <script> block.
+   * @returns {string} The rewritten content.
    */
-  static rewriteContentValue(contentValue, proxiedUrl) {
-    if (contentValue.startsWith('http')) {
-      return contentValue;
-    }
-    return `${contentValue.replace(/url=/, `${proxiedUrl}/`)}`;
+  static rewriteScriptContent(scriptContent) {
+    // Implement script content rewriting logic here
+    return scriptContent;
   }
 
   /**
-   * Rewrites an inline <script> or <style> block.
-   * @param {string} match - The inline <script> or <style> block to rewrite.
-   * @param {string} proxiedUrl - The URL of the proxied request.
-   * @returns {string} The rewritten inline <script> or <style> block.
+   * Rewrites the content of a <style> block.
+   * @param {string} styleContent - The content of the <style> block.
+   * @returns {string} The rewritten content.
    */
-  static rewriteInlineScriptStyle(match, proxiedUrl) {
-    return match.replace(/url\(/g, `url(${proxiedUrl}/`);
-  }
-
-  /**
-   * Strips nonce values from inline <script> and <style> blocks.
-   * @param {string} html - The HTML content to strip nonce values from.
-   * @returns {string} The HTML content with nonce values stripped.
-   */
-  static stripNonce(html) {
-    return html.replace(/nonce\s*=\s*["'][^"']*["']/gi, '');
+  static rewriteStyleContent(styleContent) {
+    // Implement style content rewriting logic here
+    return styleContent;
   }
 }
 
