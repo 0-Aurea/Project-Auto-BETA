@@ -5,6 +5,9 @@ const { EncodingUtils } = require('./encoding');
 const { CacheUtils } = require('./cache');
 const { CookieScopingUtils } = require('./cookieScoping');
 const { WebRTCUtils } = require('./webrtc');
+const { JSRewriterUtils } = require('./jsRewriter');
+const { CssRewriterUtils } = require('./cssRewriter');
+const { HTMLRewriterUtils } = require('./htmlRewriter');
 
 /**
  * Proxy utility class for managing full request/response header rewriting,
@@ -108,13 +111,12 @@ class ProxyUtils {
       // Handle WebRTC ICE candidate scrubbing
       proxiedWs.on('message', (message) => {
         try {
-          const data = JSON.parse(message);
-          if (data.type === 'iceCandidate') {
-            const scrubbedCandidate = WebRTCUtils.scrubIceCandidate(data.candidate);
-            data.candidate = scrubbedCandidate;
-            proxiedWs.send(JSON.stringify(data));
+          const messageData = JSON.parse(message);
+          if (messageData.type === 'iceCandidate') {
+            const scrubbedMessage = WebRTCUtils.scrubIceCandidate(messageData);
+            proxiedWs.send(JSON.stringify(scrubbedMessage));
           } else {
-            ws.send(message);
+            proxiedWs.send(message);
           }
         } catch (error) {
           console.error('Error handling WebRTC ICE candidate:', error);
@@ -132,7 +134,7 @@ class ProxyUtils {
    */
   static getProxiedUrl(url) {
     // Implement XOR + base64 URL encoding with a rotating salt
-    const encodedUrl = EncodingUtils.encodeUrl(url, ' rotating-salt ');
+    const encodedUrl = EncodingUtils.encodeUrl(url);
     return `/proxy/${encodedUrl}`;
   }
 
@@ -152,86 +154,91 @@ class ProxyUtils {
   }
 
   /**
-   * Handle WebSocket upgrade requests.
-   * @param {IncomingMessage} req - The incoming request.
-   * @param {ServerResponse} res - The server response.
+   * Handle a proxied request.
+   * @param {IncomingMessage} req - The proxied request.
+   * @param {ServerResponse} res - The response to send back to the client.
    */
-  static handleWebSocketUpgrade(req, res) {
-    // Implement WebSocket upgrade proxying
-    const { headers, url } = req;
-    const proxiedUrl = ProxyUtils.getProxiedUrl(url);
-    const destination = new URL(proxiedUrl);
-    const destinationHeaders = ProxyUtils.rewriteHeaders(headers);
+  static handleProxiedRequest(req, res) {
+    // Implement request/response caching with TTL headers
+    const cacheKey = req.url;
+    const cachedResponse = CacheUtils.get(cacheKey);
+    if (cachedResponse) {
+      res.writeHead(cachedResponse.status, cachedResponse.headers);
+      res.end(cachedResponse.body);
+    } else {
+      // Forward the request to the proxied server
+      const proxiedReq = EncodingUtils.getProxiedRequest(req);
+      const proxiedRes = EncodingUtils.getProxiedResponse(res);
 
-    // Establish connection to the proxied WebSocket server
-    const proxiedWs = new WebSocket(destination.href, {
-      headers: destinationHeaders,
-      perMessageDeflate: false,
-    });
+      // Handle dynamic JS imports, eval(), and WebSocket upgrades
+      if (proxiedReq.headers['upgrade'] === 'websocket') {
+        // Handle WebSocket upgrade request
+        ProxyUtils.handleWebSocketUpgrade(proxiedReq, proxiedRes);
+      } else {
+        // Handle HTTP request
+        const response = EncodingUtils.forwardRequest(proxiedReq);
+        response.then((response) => {
+          // Rewrite the response headers and body
+          const rewrittenResponse = ProxyUtils.rewriteResponse(response);
+          res.writeHead(rewrittenResponse.status, rewrittenResponse.headers);
+          res.end(rewrittenResponse.body);
 
-    // Handle WebSocket upgrade response
-    res.writeHead(101, {
-      'Upgrade': 'WebSocket',
-      'Connection': 'Upgrade',
-      ...destinationHeaders,
-    });
-    res.end();
-
-    // Handle WebSocket messages
-    proxiedWs.on('message', (message) => {
-      try {
-        res.socket.send(message);
-      } catch (error) {
-        console.error('Error sending message to WebSocket client:', error);
-        proxiedWs.close();
+          // Cache the response
+          CacheUtils.set(cacheKey, rewrittenResponse);
+        }).catch((error) => {
+          console.error('Error handling proxied request:', error);
+          res.writeHead(500);
+          res.end('Internal Server Error');
+        });
       }
-    });
-
-    // Handle WebSocket errors
-    proxiedWs.on('error', (error) => {
-      console.error('WebSocket proxied server error:', error);
-      proxiedWs.close();
-    });
-
-    // Handle WebSocket close event
-    proxiedWs.on('close', () => {
-      res.socket.close();
-    });
+    }
   }
 
   /**
-   * Handle HTTPS tunnel requests.
-   * @param {IncomingMessage} req - The incoming request.
-   * @param {ServerResponse} res - The server response.
+   * Rewrite a response.
+   * @param {ServerResponse} response - The response to rewrite.
+   * @returns {ServerResponse} The rewritten response.
    */
-  static handleHttpsTunnel(req, res) {
-    // Implement integrated HTTPS tunnel
-    // No separate bare-server process needed
-    const { headers, url } = req;
-    const proxiedUrl = ProxyUtils.getProxiedUrl(url);
-    const destination = new URL(proxiedUrl);
+  static rewriteResponse(response) {
+    // Implement response rewriting
+    // Handle HTML, JS, and CSS rewriting
+    const rewrittenResponse = { ...response };
+    rewrittenResponse.headers['content-type'] = 'text/html; charset=UTF-8';
 
-    // Establish connection to the proxied server
-    const options = {
-      hostname: destination.hostname,
-      port: destination.port,
-      path: destination.pathname,
-      method: req.method,
-      headers: ProxyUtils.rewriteHeaders(headers),
-    };
-    const proxiedReq = require('https').request(options, (proxiedRes) => {
-      res.writeHead(proxiedRes.statusCode, proxiedRes.headers);
-      proxiedRes.pipe(res);
+    // Handle HTML rewriting
+    if (response.headers['content-type'] === 'text/html') {
+      const htmlRewriter = new HTMLRewriterUtils();
+      rewrittenResponse.body = htmlRewriter.rewrite(response.body);
+    }
+
+    // Handle JS rewriting
+    if (response.headers['content-type'] === 'application/javascript') {
+      const jsRewriter = new JSRewriterUtils();
+      rewrittenResponse.body = jsRewriter.rewrite(response.body);
+    }
+
+    // Handle CSS rewriting
+    if (response.headers['content-type'] === 'text/css') {
+      const cssRewriter = new CssRewriterUtils();
+      rewrittenResponse.body = cssRewriter.rewrite(response.body);
+    }
+
+    return rewrittenResponse;
+  }
+
+  /**
+   * Handle a WebSocket upgrade request.
+   * @param {IncomingMessage} req - The WebSocket upgrade request.
+   * @param {ServerResponse} res - The response to send back to the client.
+   */
+  static handleWebSocketUpgrade(req, res) {
+    // Implement WebSocket upgrade proxying
+    const ws = new WebSocket(req.url);
+    req.on('data', (data) => {
+      ws.send(data);
     });
-
-    // Handle request body
-    req.pipe(proxiedReq);
-
-    // Handle errors
-    proxiedReq.on('error', (error) => {
-      console.error('Error handling HTTPS tunnel request:', error);
-      res.statusCode = 500;
-      res.end();
+    ws.on('data', (data) => {
+      res.write(data);
     });
   }
 }
