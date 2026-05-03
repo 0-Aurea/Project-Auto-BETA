@@ -11,6 +11,26 @@ const BOOKMARKS_STORAGE_KEY = 'nexus-bookmarks';
 const PROXY_HISTORY_STORAGE_KEY = 'nexus-proxy-history';
 const SETTINGS_STORAGE_KEY = 'nexus-settings';
 
+// HTTPS tunnel configuration
+const SSL_CERT_FILE = 'path/to/ssl/cert.crt';
+const SSL_KEY_FILE = 'path/to/ssl/key.key';
+const HTTPS_PORT = 443;
+const TLS_PROTOCOLS = ['TLSv1.2', 'TLSv1.3'];
+
+// WebSocket configuration
+const WEBSOCKET_TIMEOUT = 30 * 1000; // 30 seconds
+const WEBSOCKET_KEEP_ALIVE_INTERVAL = 10 * 1000; // 10 seconds
+
+// Header rewriting rules
+const HEADER_REWRITE_RULES = {
+  'Content-Security-Policy': (value) => value.replace('default-src', 'script-src \'self\''),
+  'X-Frame-Options': (value) => value.replace('SAMEORIGIN', '*'),
+};
+
+// Integrated HTTPS tunnel and WebSocket settings
+const INTEGRATED_HTTPS_TUNNEL = true;
+const WEBSOCKET_UPGRADE_PROXYING = true;
+
 module.exports = {
   CACHE_NAME,
   VERSION,
@@ -23,5 +43,14 @@ module.exports = {
   HOSTS_FILE_URL,
   BOOKMARKS_STORAGE_KEY,
   PROXY_HISTORY_STORAGE_KEY,
-  SETTINGS_STORAGE_KEY
+  SETTINGS_STORAGE_KEY,
+  SSL_CERT_FILE,
+  SSL_KEY_FILE,
+  HTTPS_PORT,
+  TLS_PROTOCOLS,
+  WEBSOCKET_TIMEOUT,
+  WEBSOCKET_KEEP_ALIVE_INTERVAL,
+  HEADER_REWRITE_RULES,
+  INTEGRATED_HTTPS_TUNNEL,
+  WEBSOCKET_UPGRADE_PROXYING,
 };
