@@ -5,6 +5,9 @@ const { URL } = require('url');
 const https = require('https');
 const fs = require('fs');
 const { JSDOM } = require('jsdom');
+const { promisify } = require('util');
+const zlib = require('zlib');
+const brotli = require('iltorb');
 
 class ProxyEngine {
   constructor() {
@@ -106,70 +109,22 @@ class ProxyEngine {
       responseBody = await this.rewriteCss(responseBody, targetHost);
     }
 
+    if (targetRes.headers['content-encoding'] && targetRes.headers['content-encoding'].includes('gzip')) {
+      responseBody = zlib.gunzipSync(responseBody);
+    } else if (targetRes.headers['content-encoding'] && targetRes.headers['content-encoding'].includes('br')) {
+      responseBody = brotli.decompressSync(responseBody);
+    }
+
     res.writeHead(targetRes.statusCode, responseHeaders);
     res.end(responseBody);
   }
 
-  async rewriteHtml(html, targetHost) {
-    const dom = new JSDOM(html);
-    const document = dom.window.document;
-
-    // Handle HTML elements
-    const elements = document.querySelectorAll('script, style, iframe, img, link, form');
-    elements.forEach((element) => {
-      if (element.src) {
-        element.src = this.rewriteUrl(element.src, targetHost);
-      }
-      if (element.href) {
-        element.href = this.rewriteUrl(element.href, targetHost);
-      }
-      if (element.action) {
-        element.action = this.rewriteUrl(element.action, targetHost);
-      }
-    });
-
-    // Handle meta tags
-    const metaTags = document.querySelectorAll('meta');
-    metaTags.forEach((metaTag) => {
-      if (metaTag.httpEquiv === 'refresh') {
-        const content = metaTag.content;
-        const urlMatch = content.match(/url=([^;]+)/);
-        if (urlMatch) {
-          const url = urlMatch[1];
-          metaTag.content = `url=${this.rewriteUrl(url, targetHost)}`;
-        }
-      }
-    });
-
-    return dom.serialize();
-  }
-
-  async rewriteJs(js, targetHost) {
-    // Implement JS rewriting logic here
-    return js;
-  }
-
-  async rewriteCss(css, targetHost) {
-    // Implement CSS rewriting logic here
-    return css;
-  }
-
-  rewriteUrl(url, targetHost) {
-    const absoluteUrl = new URL(url, `https://${targetHost}`);
-    return absoluteUrl.href;
-  }
-
   async forwardRequest(req) {
     return new Promise((resolve, reject) => {
-      const options = {
+      const targetReq = https.request(req.url, {
         method: req.method,
         headers: req.headers,
-        hostname: new URL(req.url).hostname,
-        port: 443,
-        path: new URL(req.url).pathname,
-      };
-
-      const targetReq = https.request(options, (targetRes) => {
+      }, (targetRes) => {
         let body = '';
         targetRes.on('data', (chunk) => {
           body += chunk;
@@ -183,8 +138,8 @@ class ProxyEngine {
         });
       });
 
-      targetReq.on('error', (error) => {
-        reject(error);
+      targetReq.on('error', (err) => {
+        reject(err);
       });
 
       if (req.body) {
@@ -192,6 +147,61 @@ class ProxyEngine {
       }
       targetReq.end();
     });
+  }
+
+  async rewriteHtml(html, targetHost) {
+    const dom = new JSDOM(html);
+    const document = dom.window.document;
+
+    // Handle HTML elements
+    const scripts = document.querySelectorAll('script');
+    scripts.forEach((script) => {
+      if (script.src) {
+        script.src = this.rewriteUrl(script.src, targetHost);
+      }
+      if (script.innerHTML) {
+        script.innerHTML = this.rewriteJs(script.innerHTML, targetHost);
+      }
+    });
+
+    const links = document.querySelectorAll('link');
+    links.forEach((link) => {
+      if (link.href) {
+        link.href = this.rewriteUrl(link.href, targetHost);
+      }
+    });
+
+    const images = document.querySelectorAll('img');
+    images.forEach((image) => {
+      if (image.src) {
+        image.src = this.rewriteUrl(image.src, targetHost);
+      }
+    });
+
+    return dom.serialize();
+  }
+
+  async rewriteJs(js, targetHost) {
+    // Smarter JS rewriter: handle eval(), Function(), dynamic import(),
+    // new Worker(), importScripts(), document.domain mutations,
+    // window.location, window.open, history.pushState/replaceState
+
+    // For simplicity, this example just rewrites URLs
+    return js.replace(/https?:\/\/[^)]+/g, (match) => {
+      return this.rewriteUrl(match, targetHost);
+    });
+  }
+
+  async rewriteCss(css, targetHost) {
+    // Handle CSS url(), @import, content: url(...)
+    return css.replace(/url\(([^)]+)\)/g, (match, url) => {
+      return `url(${this.rewriteUrl(url, targetHost)})`;
+    });
+  }
+
+  rewriteUrl(url, targetHost) {
+    const absoluteUrl = new URL(url, `https://${targetHost}`);
+    return absoluteUrl.href;
   }
 
   handleWebSocket(req, ws) {
@@ -206,12 +216,12 @@ class ProxyEngine {
       ws.send(message);
     });
 
-    targetWs.on('error', (error) => {
-      console.error(error);
+    ws.on('close', () => {
+      targetWs.close();
     });
 
-    ws.on('error', (error) => {
-      console.error(error);
+    targetWs.on('close', () => {
+      ws.close();
     });
   }
 }
