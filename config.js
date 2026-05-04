@@ -95,8 +95,10 @@ module.exports = {
     MAX_AGE: MAX_CACHE_AGE,
     TTL: 604800000 // 7 days default
   },
-  SERVICE_WORKER: {
-    CACHE_NAME,
-    VERSION
+  SERVICE: {
+    WORKER: {
+      CACHE_API: true,
+      MEMORY: 100 * 1024 * 1024 // 100MB
+    }
   }
 };
