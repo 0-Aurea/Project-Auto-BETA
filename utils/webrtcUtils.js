@@ -15,6 +15,21 @@ class WebRTCUtils {
   static ICE_CANDIDATE_IPV6_REGEX = /(?:candidate:)?([0-9a-fA-F:]+\/)?([0-9a-fA-F:]+)/g;
 
   /**
+   * Regular expression to match WebRTC SDP (Session Description Protocol) strings.
+   */
+  static SDP_REGEX = /sdp:\s*(.*)/g;
+
+  /**
+   * Placeholder IP address for scrubbed ICE candidates.
+   */
+  static PLACEHOLDER_IP = '0.0.0.0';
+
+  /**
+   * Placeholder IPv6 address for scrubbed ICE candidates.
+   */
+  static PLACEHOLDER_IPV6 = '::';
+
+  /**
    * Scrub WebRTC ICE candidate IP addresses to prevent IP leaks.
    * @param {string} iceCandidate - The ICE candidate string.
    * @returns {string} The scrubbed ICE candidate string.
@@ -23,11 +38,28 @@ class WebRTCUtils {
     return iceCandidate
       .replace(WebRTCUtils.ICE_CANDIDATE_IP_REGEX, (match, ip) => {
         // Replace IP address with a placeholder
-        return match.replace(ip, '0.0.0.0');
+        return match.replace(ip, WebRTCUtils.PLACEHOLDER_IP);
       })
       .replace(WebRTCUtils.ICE_CANDIDATE_IPV6_REGEX, (match, prefix, ip) => {
         // Replace IPv6 address with a placeholder
-        return match.replace(ip, '::');
+        return match.replace(ip, WebRTCUtils.PLACEHOLDER_IPV6);
+      });
+  }
+
+  /**
+   * Scrub WebRTC SDP strings to prevent IP leaks.
+   * @param {string} sdp - The SDP string.
+   * @returns {string} The scrubbed SDP string.
+   */
+  static scrubSdp(sdp) {
+    return sdp
+      .replace(WebRTCUtils.ICE_CANDIDATE_IP_REGEX, (match, ip) => {
+        // Replace IP address with a placeholder
+        return match.replace(ip, WebRTCUtils.PLACEHOLDER_IP);
+      })
+      .replace(WebRTCUtils.ICE_CANDIDATE_IPV6_REGEX, (match, prefix, ip) => {
+        // Replace IPv6 address with a placeholder
+        return match.replace(ip, WebRTCUtils.PLACEHOLDER_IPV6);
       });
   }
 
@@ -57,7 +89,11 @@ class WebRTCUtils {
    */
   static async setLocalDescription(peerConnection, description) {
     try {
-      await peerConnection.setLocalDescription(description);
+      const scrubbedDescription = new RTCSessionDescription({
+        type: description.type,
+        sdp: WebRTCUtils.scrubSdp(description.sdp),
+      });
+      await peerConnection.setLocalDescription(scrubbedDescription);
     } catch (error) {
       globalThis.console.error('Error setting local description:', error);
     }
@@ -71,7 +107,11 @@ class WebRTCUtils {
    */
   static async setRemoteDescription(peerConnection, description) {
     try {
-      await peerConnection.setRemoteDescription(description);
+      const scrubbedDescription = new RTCSessionDescription({
+        type: description.type,
+        sdp: WebRTCUtils.scrubSdp(description.sdp),
+      });
+      await peerConnection.setRemoteDescription(scrubbedDescription);
     } catch (error) {
       globalThis.console.error('Error setting remote description:', error);
     }
@@ -94,11 +134,11 @@ class WebRTCUtils {
   /**
    * Close a peer connection and handle errors.
    * @param {RTCPeerConnection} peerConnection - The peer connection.
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  static closePeerConnection(peerConnection) {
+  static async closePeerConnection(peerConnection) {
     try {
-      peerConnection.close();
+      await peerConnection.close();
     } catch (error) {
       globalThis.console.error('Error closing peer connection:', error);
     }
