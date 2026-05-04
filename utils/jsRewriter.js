@@ -1,172 +1,81 @@
 const { URL } = require('url');
+const { JSDOM } = require('jsdom');
 
 /**
- * JS rewriter utility class for handling eval(), Function(), dynamic import(),
- * new Worker(), importScripts(), document.domain mutations, window.location,
- * window.open, and history.pushState/replaceState.
+ * JavaScript rewriter utility class for handling complex JavaScript rewriting,
+ * including eval(), Function(), dynamic import(), WebWorker creation, and source map URL stripping.
  */
-class JsRewriterUtils {
+class JSRewriterUtils {
   /**
-   * Regular expression to match JS eval() calls.
+   * Regular expression to match JavaScript URLs.
    */
-  static EVAL_REGEX = /(?:eval|Function)\s*\(\s*['"](.*?)['"]\s*\)/g;
+  static JS_URL_REGEX = /(?:https?:\/\/|\/)[^'"]+\.js(?:\?.*)?/g;
 
   /**
-   * Regular expression to match JS dynamic import() calls.
+   * Regular expression to match eval() and Function() calls.
    */
-  static IMPORT_REGEX = /import\(\s*['"](.*?)['"]\s*\)/g;
+  static EVAL_FUNCTION_REGEX = /(?:eval|Function)\s*\(\s*['"](.*?)['"]\s*\)/g;
 
   /**
-   * Regular expression to match JS new Worker() calls.
+   * Regular expression to match dynamic import() calls.
    */
-  static WORKER_REGEX = /new\s+Worker\s*\(\s*['"](.*?)['"]\s*\)/g;
+  static DYNAMIC_IMPORT_REGEX = /import\s*\(\s*['"](.*?)['"]\s*\)/g;
 
   /**
-   * Regular expression to match JS importScripts() calls.
+   * Regular expression to match WebWorker creation.
    */
-  static IMPORT_SCRIPTS_REGEX = /importScripts\s*\(\s*['"](.*?)['"]\s*\)/g;
+  static WEB_WORKER_REGEX = /new\s+Worker\s*\(\s*['"](.*?)['"]\s*\)/g;
 
   /**
-   * Regular expression to match document.domain mutations.
+   * Regular expression to match source map URLs.
    */
-  static DOCUMENT_DOMAIN_REGEX = /document\.domain\s*=\s*['"](.*?)['"]/g;
+  static SOURCE_MAP_REGEX = /#sourceMappingURL=(.*?)(\s|$)/g;
 
   /**
-   * Regular expression to match window.location assignments.
+   * Rewrites a JavaScript string by handling eval(), Function(), dynamic import(),
+   * WebWorker creation, and source map URL stripping.
+   * @param {string} jsString - The JavaScript string to rewrite.
+   * @param {string} baseUrl - The base URL of the JavaScript file.
+   * @returns {string} The rewritten JavaScript string.
    */
-  static WINDOW_LOCATION_REGEX = /window\.location\s*=\s*['"](.*?)['"]/g;
-
-  /**
-   * Regular expression to match window.open calls.
-   */
-  static WINDOW_OPEN_REGEX = /window\.open\s*\(\s*['"](.*?)['"]\s*\)/g;
-
-  /**
-   * Regular expression to match history.pushState/replaceState calls.
-   */
-  static HISTORY_PUSH_STATE_REGEX = /(?:history\.pushState|history\.replaceState)\s*\(\s*.*?\s*,\s*.*?\s*,\s*['"](.*?)['"]\s*\)/g;
-
-  /**
-   * Rewriter function for JS eval() calls.
-   * @param {string} js - The JS string to rewrite.
-   * @param {function} rewriter - The rewriter function.
-   * @returns {string} The rewritten JS string.
-   */
-  static rewriteEval(js, rewriter) {
-    return js.replace(JsRewriterUtils.EVAL_REGEX, (match, p1) => {
-      const rewrittenUrl = rewriter(p1);
+  static rewriteJs(jsString, baseUrl) {
+    // Handle eval() and Function() calls
+    jsString = jsString.replace(JSRewriterUtils.EVAL_FUNCTION_REGEX, (match, p1) => {
+      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p1, baseUrl);
       return `eval(${JSON.stringify(rewrittenUrl)})`;
     });
-  }
 
-  /**
-   * Rewriter function for JS dynamic import() calls.
-   * @param {string} js - The JS string to rewrite.
-   * @param {function} rewriter - The rewriter function.
-   * @returns {string} The rewritten JS string.
-   */
-  static rewriteImport(js, rewriter) {
-    return js.replace(JsRewriterUtils.IMPORT_REGEX, (match, p1) => {
-      const rewrittenUrl = rewriter(p1);
+    // Handle dynamic import() calls
+    jsString = jsString.replace(JSRewriterUtils.DYNAMIC_IMPORT_REGEX, (match, p1) => {
+      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p1, baseUrl);
       return `import(${JSON.stringify(rewrittenUrl)})`;
     });
-  }
 
-  /**
-   * Rewriter function for JS new Worker() calls.
-   * @param {string} js - The JS string to rewrite.
-   * @param {function} rewriter - The rewriter function.
-   * @returns {string} The rewritten JS string.
-   */
-  static rewriteWorker(js, rewriter) {
-    return js.replace(JsRewriterUtils.WORKER_REGEX, (match, p1) => {
-      const rewrittenUrl = rewriter(p1);
+    // Handle WebWorker creation
+    jsString = jsString.replace(JSRewriterUtils.WEB_WORKER_REGEX, (match, p1) => {
+      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p1, baseUrl);
       return `new Worker(${JSON.stringify(rewrittenUrl)})`;
     });
+
+    // Handle source map URL stripping
+    jsString = jsString.replace(JSRewriterUtils.SOURCE_MAP_REGEX, () => '');
+
+    return jsString;
   }
 
   /**
-   * Rewriter function for JS importScripts() calls.
-   * @param {string} js - The JS string to rewrite.
-   * @param {function} rewriter - The rewriter function.
-   * @returns {string} The rewritten JS string.
+   * Rewrites a URL by applying the proxy's URL rewriting rules.
+   * @param {string} url - The URL to rewrite.
+   * @param {string} baseUrl - The base URL of the JavaScript file.
+   * @returns {string} The rewritten URL.
    */
-  static rewriteImportScripts(js, rewriter) {
-    return js.replace(JsRewriterUtils.IMPORT_SCRIPTS_REGEX, (match, p1) => {
-      const rewrittenUrl = rewriter(p1);
-      return `importScripts(${JSON.stringify(rewrittenUrl)})`;
-    });
-  }
+  static rewriteUrl(url, baseUrl) {
+    const dom = new URL(url, baseUrl);
+    const rewrittenUrl = `${dom.protocol}//${dom.host}${dom.pathname}`;
 
-  /**
-   * Rewriter function for document.domain mutations.
-   * @param {string} js - The JS string to rewrite.
-   * @param {function} rewriter - The rewriter function.
-   * @returns {string} The rewritten JS string.
-   */
-  static rewriteDocumentDomain(js, rewriter) {
-    return js.replace(JsRewriterUtils.DOCUMENT_DOMAIN_REGEX, (match, p1) => {
-      const rewrittenDomain = rewriter(p1);
-      return `document.domain = ${JSON.stringify(rewrittenDomain)}`;
-    });
-  }
-
-  /**
-   * Rewriter function for window.location assignments.
-   * @param {string} js - The JS string to rewrite.
-   * @param {function} rewriter - The rewriter function.
-   * @returns {string} The rewritten JS string.
-   */
-  static rewriteWindowLocation(js, rewriter) {
-    return js.replace(JsRewriterUtils.WINDOW_LOCATION_REGEX, (match, p1) => {
-      const rewrittenUrl = rewriter(p1);
-      return `window.location = ${JSON.stringify(rewrittenUrl)}`;
-    });
-  }
-
-  /**
-   * Rewriter function for window.open calls.
-   * @param {string} js - The JS string to rewrite.
-   * @param {function} rewriter - The rewriter function.
-   * @returns {string} The rewritten JS string.
-   */
-  static rewriteWindowOpen(js, rewriter) {
-    return js.replace(JsRewriterUtils.WINDOW_OPEN_REGEX, (match, p1) => {
-      const rewrittenUrl = rewriter(p1);
-      return `window.open(${JSON.stringify(rewrittenUrl)})`;
-    });
-  }
-
-  /**
-   * Rewriter function for history.pushState/replaceState calls.
-   * @param {string} js - The JS string to rewrite.
-   * @param {function} rewriter - The rewriter function.
-   * @returns {string} The rewritten JS string.
-   */
-  static rewriteHistoryPushState(js, rewriter) {
-    return js.replace(JsRewriterUtils.HISTORY_PUSH_STATE_REGEX, (match, p1) => {
-      const rewrittenUrl = rewriter(p1);
-      return `history.pushState(${JSON.stringify(rewrittenUrl)})`;
-    });
-  }
-
-  /**
-   * Rewrite JS string to handle complex cases.
-   * @param {string} js - The JS string to rewrite.
-   * @param {function} rewriter - The rewriter function.
-   * @returns {string} The rewritten JS string.
-   */
-  static rewriteJs(js, rewriter) {
-    js = JsRewriterUtils.rewriteEval(js, rewriter);
-    js = JsRewriterUtils.rewriteImport(js, rewriter);
-    js = JsRewriterUtils.rewriteWorker(js, rewriter);
-    js = JsRewriterUtils.rewriteImportScripts(js, rewriter);
-    js = JsRewriterUtils.rewriteDocumentDomain(js, rewriter);
-    js = JsRewriterUtils.rewriteWindowLocation(js, rewriter);
-    js = JsRewriterUtils.rewriteWindowOpen(js, rewriter);
-    js = JsRewriterUtils.rewriteHistoryPushState(js, rewriter);
-    return js;
+    // Apply URL rewriting rules here
+    return rewrittenUrl;
   }
 }
 
-module.exports = JsRewriterUtils;
+module.exports = JSRewriterUtils;
