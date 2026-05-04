@@ -90,70 +90,57 @@ class WebSocketProxyUtils {
   static rewriteMessage(message, headers, origin) {
     // Isolate cookies per proxied origin
     const cookieHeader = headers['cookie'];
-    if (cookieHeader) {
-      const scopedCookieHeader = CookieScopingUtils.scopeCookies(cookieHeader, origin);
-      headers['cookie'] = scopedCookieHeader;
-    }
+    const isolatedCookieHeader = CookieScopingUtils.isolateCookies(cookieHeader, origin);
 
-    // Perform header rewriting
-    const rewrittenHeaders = this.rewriteHeaders(headers, origin);
+    // Remove sensitive headers
+    const filteredHeaders = EncodingUtils.filterHeaders(headers, REQUEST_HEADER_REWRITE_LIST);
 
-    // No need to rewrite the message body for WebSocket messages
-    return message;
+    // Rewrite headers
+    const rewrittenHeaders = {
+      ...filteredHeaders,
+      'Cookie': isolatedCookieHeader,
+    };
+
+    // Inject rewritten headers into WebSocket message
+    const rewrittenMessage = EncodingUtils.injectHeaders(message, rewrittenHeaders);
+
+    return rewrittenMessage;
   }
 
   /**
-   * Rewrite WebSocket request and response headers.
-   * @param {object} headers - The WebSocket request or response headers.
+   * Rewrite WebSocket request headers.
+   * @param {object} headers - The WebSocket request headers.
    * @param {string} origin - The origin of the WebSocket request.
-   * @returns {object} The rewritten WebSocket headers.
+   * @returns {object} The rewritten WebSocket request headers.
    */
   static rewriteHeaders(headers, origin) {
-    const rewrittenHeaders = {};
+    // Remove sensitive headers
+    const filteredHeaders = EncodingUtils.filterHeaders(headers, REQUEST_HEADER_REWRITE_LIST);
 
-    // Iterate over each header
-    for (const [header, value] of Object.entries(headers)) {
-      // Check if the header needs to be rewritten
-      if (REQUEST_HEADER_REWRITE_LIST.includes(header)) {
-        // Perform header rewriting
-        rewrittenHeaders[header] = this.rewriteHeader(header, value, origin);
-      } else {
-        rewrittenHeaders[header] = value;
-      }
-    }
+    // Isolate cookies per proxied origin
+    const cookieHeader = headers['cookie'];
+    const isolatedCookieHeader = CookieScopingUtils.isolateCookies(cookieHeader, origin);
 
-    // Remove any sensitive headers
-    for (const header of RESPONSE_HEADER_REWRITE_LIST) {
-      delete rewrittenHeaders[header];
-    }
+    // Add proxied headers
+    const rewrittenHeaders = {
+      ...filteredHeaders,
+      'Cookie': isolatedCookieHeader,
+      'Origin': origin,
+    };
 
     return rewrittenHeaders;
   }
 
   /**
-   * Rewrite a single WebSocket header.
-   * @param {string} header - The header to rewrite.
-   * @param {string} value - The header value.
-   * @param {string} origin - The origin of the WebSocket request.
-   * @returns {string} The rewritten header value.
+   * Handle WebSocket upgrade proxying.
+   * @param {object} req - The WebSocket upgrade request.
+   * @param {object} res - The WebSocket upgrade response.
    */
-  static rewriteHeader(header, value, origin) {
-    switch (header) {
-      case 'origin':
-        return origin;
-      case 'host':
-        return new URL(origin).hostname;
-      default:
-        return value;
-    }
-  }
-
-  /**
-   * Handle WebSocket errors.
-   * @param {Error} error - The WebSocket error.
-   */
-  static handleError(error) {
-    console.error('WebSocket error:', error);
+  static handleUpgrade(req, res) {
+    // Perform WebSocket upgrade
+    this.wss.handleUpgrade(req, res, (ws) => {
+      this.wss.emit('connection', ws, req);
+    });
   }
 }
 
