@@ -10,8 +10,11 @@ import LRU from 'lru-cache';
 import crypto from 'crypto';
 import tls from 'tls';
 import { ProxyHistory } from './ProxyHistory.js';
+import { JSRewriter } from './rewriters/JSRewriter.js';
+import { HTMLRewriter } from './rewriters/HTMLRewriter.js';
+import { CSSRewriter } from './rewriters/CSSRewriter.js';
 
-const pipeline = promisify(require('stream').pipeline');
+const pipeline = promisify(require('stream').pipeline);
 
 /**
  * ProxyEngine class to handle proxying requests and WebSocket upgrades.
@@ -27,6 +30,8 @@ class ProxyEngine {
       maxAge: 1000 * 60 * 60 // 1 hour
     });
     this.jsRewriter = new JSRewriter();
+    this.htmlRewriter = new HTMLRewriter();
+    this.cssRewriter = new CSSRewriter();
     this.rtcPeerConnections = new Map();
     this.proxyHistory = new ProxyHistory();
 
@@ -61,6 +66,12 @@ class ProxyEngine {
       return;
     }
 
+    // Check if the request is a search request
+    if (reqUrl.startsWith(`${URL_PREFIX}/search`)) {
+      await this.handleSearchRequest(req, res);
+      return;
+    }
+
     // Rewrite the request URL
     const rewrittenUrl = this.rewriteUrl(reqUrl);
 
@@ -92,117 +103,125 @@ class ProxyEngine {
       delete rewrittenHeaders['proxy-authorization'];
       delete rewrittenHeaders['te'];
       delete rewrittenHeaders['trailers'];
-      delete rewrittenHeaders['upgrade'];
-
-      // Rewrite the response content
-      let rewrittenContent = response.data;
-      if (response.headers['content-type'] && response.headers['content-type'].includes('text/html')) {
-        rewrittenContent = this.jsRewriter.rewriteHtml(rewrittenContent, rewrittenUrl);
-      }
 
       // Cache the response
+      const cacheKey = rewrittenUrl;
       const cacheEntry = {
         status: response.status,
         headers: rewrittenHeaders,
-        data: rewrittenContent,
+        data: response.data,
       };
-      this.cache.set(rewrittenUrl, cacheEntry);
+      this.cache.set(cacheKey, cacheEntry);
 
       // Send the response
       res.writeHead(response.status, rewrittenHeaders);
-      res.end(rewrittenContent);
+      res.end(response.data);
 
-      // Add entry to proxy history
+      // Add to proxy history
       this.proxyHistory.addEntry(req, cacheEntry);
     } catch (error) {
-      console.error('Error proxying request:', error);
+      console.error(`Error proxying request: ${error}`);
       res.statusCode = 500;
       res.end('Internal Server Error');
     }
   }
 
   /**
-   * Handles WebSocket upgrades.
+   * Handles search requests.
    * @param {object} req - The incoming request object.
-   * @param {object} socket - The WebSocket socket object.
-   * @param {object} head - The WebSocket upgrade head object.
+   * @param {object} res - The outgoing response object.
    */
-  handleWebSocket(req, socket, head) {
-    const { headers, url: reqUrl } = req;
-
-    // Rewrite the request URL
-    const rewrittenUrl = this.rewriteUrl(reqUrl);
-
-    // Handle WebSocket upgrade
-    const ws = new WebSocket(rewrittenUrl, {
-      headers: this.rewriteHeaders(headers),
-    });
-
-    // Handle WebSocket messages
-    ws.on('message', (message) => {
-      this.handleWebSocketMessage(message, req, socket);
-    });
-
-    // Handle WebSocket errors
-    ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
-    });
-
-    // Handle WebSocket close
-    ws.on('close', () => {
-      this.handleWebSocketClose(req, socket);
-    });
-
-    // Add WebSocket client to map
-    this.wsClients.set(reqUrl, ws);
+  async handleSearchRequest(req, res) {
+    const { query } = req.url.split('?')[1];
+    const searchResults = await this.performSearch(query);
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(searchResults);
   }
 
   /**
-   * Handles WebSocket messages.
-   * @param {string} message - The WebSocket message.
-   * @param {object} req - The incoming request object.
-   * @param {object} socket - The WebSocket socket object.
+   * Performs a search using the specified query.
+   * @param {string} query - The search query.
+   * @returns {string} The search results HTML.
    */
-  handleWebSocketMessage(message, req, socket) {
-    const { headers, url: reqUrl } = req;
-
-    // Rewrite the WebSocket message
-    const rewrittenMessage = this.jsRewriter.rewriteWebSocketMessage(message, reqUrl);
-
-    // Send the rewritten message to the WebSocket client
-    this.wsClients.get(reqUrl).send(rewrittenMessage);
-  }
-
-  /**
-   * Handles WebSocket close.
-   * @param {object} req - The incoming request object.
-   * @param {object} socket - The WebSocket socket object.
-   */
-  handleWebSocketClose(req, socket) {
-    const { url: reqUrl } = req;
-
-    // Remove WebSocket client from map
-    this.wsClients.delete(reqUrl);
+  async performSearch(query) {
+    // Implement search logic here
+    // For example, using Google Custom Search API
+    const apiKey = 'YOUR_API_KEY';
+    const cseId = 'YOUR_CSE_ID';
+    const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cseId}&q=${query}`;
+    const response = await axios.get(url);
+    const searchResults = response.data.items;
+    const html = `
+      <html>
+        <body>
+          <h1>Search Results</h1>
+          <ul>
+            ${searchResults.map((result) => `
+              <li>
+                <a href="${result.link}">${result.title}</a>
+                <p>${result.snippet}</p>
+              </li>
+            `).join('')}
+          </ul>
+        </body>
+      </html>
+    `;
+    return html;
   }
 
   /**
    * Rewrites the request URL.
-   * @param {string} reqUrl - The incoming request URL.
+   * @param {string} url - The original URL.
    * @returns {string} The rewritten URL.
    */
-  rewriteUrl(reqUrl) {
+  rewriteUrl(url) {
     // Implement URL rewriting logic here
-    return reqUrl;
+    // For example, using XOR + base64 encoding
+    const encodedUrl = EncodingUtils.encode(url);
+    return `${URL_PREFIX}/${encodedUrl}`;
   }
 
   /**
    * Rewrites the request headers.
-   * @param {object} headers - The incoming request headers.
+   * @param {object} headers - The original headers.
    * @returns {object} The rewritten headers.
    */
   rewriteHeaders(headers) {
     // Implement header rewriting logic here
-    return headers;
+    // For example, removing sensitive headers
+    const rewrittenHeaders = { ...headers };
+    delete rewrittenHeaders['authorization'];
+    delete rewrittenHeaders['cookie'];
+    return rewrittenHeaders;
+  }
+
+  /**
+   * Handles WebSocket connections.
+   * @param {object} ws - The WebSocket object.
+   * @param {object} req - The incoming request object.
+   */
+  handleWebSocketConnection(ws, req) {
+    // Implement WebSocket connection handling logic here
+  }
+
+  /**
+   * Handles WebSocket upgrades.
+   * @param {object} req - The incoming request object.
+   * @param {object} socket - The socket object.
+   * @param {object} head - The head object.
+   */
+  handleWebSocket(req, socket, head) {
+    // Implement WebSocket upgrade handling logic here
+  }
+
+  /**
+   * Handles WebRTC ICE candidate scrubbing.
+   * @param {object} req - The incoming request object.
+   * @param {object} socket - The socket object.
+   * @param {object} head - The head object.
+   */
+  handleWebRTC(req, socket, head) {
+    // Implement WebRTC ICE candidate scrubbing logic here
   }
 }
 
