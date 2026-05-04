@@ -24,8 +24,22 @@ class CacheManager {
     const cachedResponse = await CacheManager.cache.match(key);
     if (!cachedResponse) return false;
     const headers = cachedResponse.headers;
-    const cacheAge = parseInt(headers.get('age'), 10);
-    const ttl = cacheAge ? cacheAge : CacheManager.MAX_CACHE_AGE;
+    const cacheControl = headers.get('cache-control');
+    let ttl = CacheManager.MAX_CACHE_AGE;
+
+    if (cacheControl) {
+      const cacheControlDirectives = cacheControl.split(',').map((directive) => directive.trim());
+      for (const directive of cacheControlDirectives) {
+        if (directive.startsWith('max-age=')) {
+          const maxAge = parseInt(directive.substring(8), 10);
+          if (!isNaN(maxAge)) {
+            ttl = maxAge * 1000;
+          }
+          break;
+        }
+      }
+    }
+
     return Date.now() - cachedResponse.timestamp <= ttl;
   }
 
@@ -72,6 +86,48 @@ class CacheManager {
         await CacheManager.removeCacheEntry(key);
       }
     });
+  }
+
+  /**
+   * Prefetches a cache entry.
+   * @param {string} key - The cache key.
+   * @param {string} url - The URL to prefetch.
+   * @returns {Promise<void>}
+   */
+  static async prefetchCacheEntry(key, url) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        await CacheManager.storeCacheEntry(key, response.clone());
+      }
+    } catch (error) {
+      globalThis.console.error(`Error prefetching cache entry: ${error}`);
+    }
+  }
+
+  /**
+   * Parses cache control headers to determine the TTL.
+   * @param {Headers} headers - The response headers.
+   * @returns {number} The TTL in milliseconds.
+   */
+  static parseCacheControl(headers) {
+    const cacheControl = headers.get('cache-control');
+    let ttl = CacheManager.MAX_CACHE_AGE;
+
+    if (cacheControl) {
+      const cacheControlDirectives = cacheControl.split(',').map((directive) => directive.trim());
+      for (const directive of cacheControlDirectives) {
+        if (directive.startsWith('max-age=')) {
+          const maxAge = parseInt(directive.substring(8), 10);
+          if (!isNaN(maxAge)) {
+            ttl = maxAge * 1000;
+          }
+          break;
+        }
+      }
+    }
+
+    return ttl;
   }
 }
 
