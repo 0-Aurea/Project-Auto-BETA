@@ -1,139 +1,78 @@
-const { caches } = globalThis;
-const { URL } = require('url');
-const { CACHE_NAME, MAX_CACHE_AGE, PREFETCH_THRESHOLD } = require('./constants');
-const { performance } = require('perf_hooks');
+const { CacheAPI } = require('sw-cache-api');
+const { MAX_CACHE_AGE, CACHE_NAME } = require('./constants');
 
 /**
- * Cache manager utility class for handling Service Worker Cache API operations.
+ * Cache Manager utility class for handling cache storage, retrieval, and eviction.
  */
 class CacheManager {
   /**
-   * Cache instance.
+   * Cache storage instance.
    */
-  static cache;
+  static cache = new CacheAPI(CACHE_NAME);
 
   /**
-   * Initialize the cache manager.
+   * Cache entry TTL (time to live) in milliseconds.
    */
-  static async init() {
-    CacheManager.cache = await caches.open(CACHE_NAME);
+  static MAX_CACHE_AGE = MAX_CACHE_AGE;
+
+  /**
+   * Checks if a cache entry exists and is valid.
+   * @param {string} key - The cache key.
+   * @returns {Promise<boolean>} True if the cache entry exists and is valid, false otherwise.
+   */
+  static async isValidCacheEntry(key) {
+    const cachedResponse = await CacheManager.cache.match(key);
+    if (!cachedResponse) return false;
+    const headers = cachedResponse.headers;
+    const cacheAge = parseInt(headers.get('age'), 10);
+    const ttl = cacheAge ? cacheAge : CacheManager.MAX_CACHE_AGE;
+    return Date.now() - cachedResponse.timestamp <= ttl;
   }
 
   /**
-   * Checks if a response is cacheable.
-   * @param {Response} response - The response to check.
-   * @returns {boolean} True if the response is cacheable, false otherwise.
+   * Retrieves a cache entry.
+   * @param {string} key - The cache key.
+   * @returns {Promise<Response>} The cached Response object, or undefined if not found.
    */
-  static isCacheableResponse(response) {
-    return response.url.startsWith('https://') && response.status >= 200 && response.status < 300;
-  }
-
-  /**
-   * Caches a response with a TTL header and optional re-compression.
-   * @param {Request} request - The request associated with the response.
-   * @param {Response} response - The response to cache.
-   * @param {boolean} reCompress - Whether to re-compress the response body.
-   * @returns {Promise<void>} A promise that resolves when the response is cached.
-   */
-  static async cacheResponse(request, response, reCompress = false) {
-    if (!CacheManager.isCacheableResponse(response)) return;
-
-    let cacheEntry;
-    if (reCompress) {
-      const contentEncoding = response.headers.get('content-encoding');
-      if (contentEncoding === 'br') {
-        const decompressedBody = await response.text();
-        cacheEntry = new Response(decompressedBody, {
-          ...response,
-          headers: {
-            ...response.headers,
-            'content-encoding': 'gzip',
-          },
-        });
-      } else if (contentEncoding === 'gzip') {
-        const decompressedBody = await response.text();
-        cacheEntry = new Response(decompressedBody, {
-          ...response,
-          headers: {
-            ...response.headers,
-            'content-encoding': 'br',
-          },
-        });
-      } else {
-        cacheEntry = new Response(response.body, response);
-      }
+  static async getCacheEntry(key) {
+    if (await CacheManager.isValidCacheEntry(key)) {
+      return CacheManager.cache.match(key);
     } else {
-      cacheEntry = new Response(response.body, response);
+      await CacheManager.removeCacheEntry(key);
+      return undefined;
     }
-
-    const ttl = response.headers.get('cache-control')?.includes('max-age') ? 
-      parseInt(response.headers.get('cache-control').split('max-age=')[1].split(',')[0]) : MAX_CACHE_AGE;
-    cacheEntry.headers.set('Cache-Control', `public, max-age=${ttl}`);
-
-    await CacheManager.cache.put(request, cacheEntry);
   }
 
   /**
-   * Retrieves a cached response.
-   * @param {Request} request - The request to retrieve the cached response for.
-   * @returns {Promise<Response|null>} A promise that resolves with the cached response or null if not found.
+   * Stores a cache entry.
+   * @param {string} key - The cache key.
+   * @param {Response} response - The Response object to cache.
+   * @returns {Promise<void>}
    */
-  static async getCachedResponse(request) {
-    const cachedResponse = await CacheManager.cache.match(request);
-    return cachedResponse;
+  static async storeCacheEntry(key, response) {
+    await CacheManager.cache.put(key, response);
   }
 
   /**
-   * Removes a cached response.
-   * @param {Request} request - The request to remove the cached response for.
-   * @returns {Promise<void>} A promise that resolves when the cached response is removed.
+   * Removes a cache entry.
+   * @param {string} key - The cache key.
+   * @returns {Promise<void>}
    */
-  static async removeCachedResponse(request) {
-    await CacheManager.cache.delete(request);
+  static async removeCacheEntry(key) {
+    await CacheManager.cache.delete(key);
   }
 
   /**
-   * Checks if the cache has reached its maximum size.
-   * @returns {Promise<boolean>} A promise that resolves with true if the cache is full, false otherwise.
+   * Clears all cache entries.
+   * @returns {Promise<void>}
    */
-  static async isCacheFull() {
-    const cache = await CacheManager.cache.keys();
-    const cacheSize = Array.from(cache).length;
-    return cacheSize >= 1000; // arbitrary cache size limit
-  }
-
-  /**
-   * Evicts the least recently used cache entry.
-   * @returns {Promise<void>} A promise that resolves when the cache entry is evicted.
-   */
-  static async evictLRUCacheEntry() {
-    const cache = await CacheManager.cache.keys();
-    const cacheEntries = Array.from(cache);
-    cacheEntries.sort((a, b) => a.timestamp - b.timestamp);
-    const lruEntry = cacheEntries[0];
-    await CacheManager.cache.delete(lruEntry.request);
-  }
-
-  /**
-   * Periodically cleans up the cache by removing expired and invalid entries.
-   * @returns {Promise<void>} A promise that resolves when the cache cleanup is complete.
-   */
-  static async cleanupCache() {
-    const cache = await CacheManager.cache.keys();
-    const cacheEntries = Array.from(cache);
-    const now = performance.now();
-    for (const entry of cacheEntries) {
-      const response = await CacheManager.cache.match(entry.request);
-      if (response && response.headers.get('cache-control')?.includes('expired')) {
-        await CacheManager.cache.delete(entry.request);
-      } else if (response && response.headers.get('cache-control')?.includes('max-age')) {
-        const ttl = parseInt(response.headers.get('cache-control').split('max-age=')[1].split(',')[0]);
-        if (now > entry.timestamp + ttl * 1000) {
-          await CacheManager.cache.delete(entry.request);
-        }
+  static async clearCache() {
+    await CacheManager.cache.keys().then(async (keys) => {
+      for (const key of keys) {
+        await CacheManager.removeCacheEntry(key);
       }
-    }
+    });
   }
 }
 
-module.exports = CacheManager;
+module.exports = { CacheManager };
