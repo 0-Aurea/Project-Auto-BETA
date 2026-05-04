@@ -5,13 +5,22 @@ const SearchBar = () => {
   const [focused, setFocused] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchHistory, setSearchHistory] = useState(() => {
+    const storedHistory = localStorage.getItem('searchHistory');
+    return storedHistory ? JSON.parse(storedHistory) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
+  }, [searchHistory]);
 
   const handleSearch = (event) => {
     event.preventDefault();
     const searchValue = searchQuery.trim();
     if (searchValue) {
-      // Implement search logic here
-      console.log(`Searching for: ${searchValue}`);
+      const updatedHistory = [...searchHistory, searchValue];
+      setSearchHistory(updatedHistory);
+      setSearchQuery('');
       // Call the proxy service to handle the search query
       fetch('/proxy', {
         method: 'POST',
@@ -64,6 +73,10 @@ const SearchBar = () => {
     setShowSuggestions(false);
   };
 
+  const handleHistoryClick = (historyItem) => {
+    setSearchQuery(historyItem);
+  };
+
   return (
     <div className="search-bar">
       <form onSubmit={handleSearch}>
@@ -82,6 +95,15 @@ const SearchBar = () => {
             {suggestions.map((suggestion, index) => (
               <li key={index} onClick={() => handleSuggestionClick(suggestion)}>
                 {suggestion}
+              </li>
+            ))}
+          </ul>
+        )}
+        {searchHistory.length > 0 && (
+          <ul className="search-history">
+            {searchHistory.map((historyItem, index) => (
+              <li key={index} onClick={() => handleHistoryClick(historyItem)}>
+                {historyItem}
               </li>
             ))}
           </ul>
