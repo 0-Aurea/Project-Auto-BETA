@@ -1,202 +1,92 @@
-import { WebSocket } from 'ws';
-import { http, URL } from 'http';
-import { LRU } from 'lru-cache';
-import { crypto } from 'crypto';
-import { EncodingUtils } from '../utils/encodingUtils.js';
-import { URL_PREFIX, DEFAULT_ENCODING, SALT_LENGTH, cache, rotatingSalt, wss, server, app } from '../config/constants.js';
-
 class ProxyEngine {
   /**
-   * Creates a new ProxyEngine instance.
+   * WebRTC ICE candidate scrubbing to prevent IP leaks.
    */
-  constructor() {
-    this.wss = wss;
-    this.cache = cache;
-    this EncodingUtils = EncodingUtils;
-    this.server = server;
-    this.app = app;
-  }
+  async scrubWebRTCIceCandidates(request, response) {
+    // Check if the request is a WebRTC ICE candidate
+    if (request.headers['content-type'] === 'application/candidate') {
+      // Parse the ICE candidate
+      const candidate = await this.parseICECandidate(request);
 
-  /**
-   * Handles WebSocket upgrade requests and establishes a proxied WebSocket connection.
-   * @param {http.IncomingMessage} req - The incoming request.
-   * @param {http.ServerResponse} res - The server response.
-   */
-  handleWebSocketUpgrade(req, res) {
-    const { headers, url: requestUrl } = req;
-    const { host, origin } = headers;
-    const { pathname } = new URL(requestUrl, 'http://example.com');
+      // Scrub the ICE candidate to remove IP information
+      const scrubbedCandidate = this.scrubICECandidate(candidate);
 
-    // Check if the request is a WebSocket upgrade request
-    if (headers['upgrade'] === 'websocket') {
-      // Extract the WebSocket key
-      const webSocketKey = headers['sec-websocket-key'];
-
-      // Generate a response to the WebSocket upgrade request
-      res.writeHead(101, {
-        'Upgrade': 'websocket',
-        'Connection': 'Upgrade',
-        'Sec-WebSocket-Accept': this.generateWebSocketAccept(webSocketKey),
+      // Rewrite the ICE candidate
+      response.writeHead(200, {
+        'Content-Type': 'application/candidate',
       });
-
-      // Establish a proxied WebSocket connection
-      this.proxyWebSocket(req, res, host, origin, pathname);
+      response.end(scrubbedCandidate);
     } else {
-      res.writeHead(400);
-      res.end('Bad Request');
+      // If not a WebRTC ICE candidate, proceed with normal proxying
+      await this.proxyRequest(request, response);
     }
   }
 
   /**
-   * Generates the Sec-WebSocket-Accept header value.
-   * @param {string} webSocketKey - The WebSocket key.
-   * @returns {string} The Sec-WebSocket-Accept header value.
+   * Parse the WebRTC ICE candidate.
+   * @param {object} request - The request object.
+   * @returns {object} The parsed ICE candidate.
    */
-  generateWebSocketAccept(webSocketKey) {
-    const webSocketAccept = crypto.createHash('sha1');
-    webSocketAccept.update(webSocketKey + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11');
-    return webSocketAccept.digest('base64');
-  }
+  async parseICECandidate(request) {
+    const candidateBuffer = await this.streamToBuffer(request);
+    const candidate = candidateBuffer.toString();
 
-  /**
-   * Proxies a WebSocket connection.
-   * @param {http.IncomingMessage} req - The incoming request.
-   * @param {http.ServerResponse} res - The server response.
-   * @param {string} host - The host header value.
-   * @param {string} origin - The origin header value.
-   * @param {string} pathname - The pathname of the request URL.
-   */
-  proxyWebSocket(req, res, host, origin, pathname) {
-    // Create a new WebSocket connection to the target server
-    const targetWebSocket = new WebSocket(`ws://${host}${pathname}`);
-
-    // Handle WebSocket messages
-    targetWebSocket.on('message', (message) => {
-      // Rewrite the message headers
-      const rewrittenMessage = this.rewriteMessage(message, origin);
-
-      // Send the rewritten message to the client
-      res.send(rewrittenMessage);
-    });
-
-    // Handle WebSocket errors
-    targetWebSocket.on('error', (error) => {
-      console.error('WebSocket error:', error);
-    });
-
-    // Handle WebSocket close
-    targetWebSocket.on('close', () => {
-      res.end();
-    });
-
-    // Handle client messages
-    req.on('data', (message) => {
-      // Rewrite the message headers
-      const rewrittenMessage = this.rewriteMessage(message, origin);
-
-      // Send the rewritten message to the target server
-      targetWebSocket.send(rewrittenMessage);
-    });
-
-    // Handle client errors
-    req.on('error', (error) => {
-      console.error('Client error:', error);
-    });
-
-    // Handle client close
-    req.on('close', () => {
-      targetWebSocket.close();
-    });
-  }
-
-  /**
-   * Rewrites a WebSocket message.
-   * @param {string} message - The message to rewrite.
-   * @param {string} origin - The origin header value.
-   * @returns {string} The rewritten message.
-   */
-  rewriteMessage(message, origin) {
-    // Implement header rewriting logic here
-    return message;
-  }
-
-  /**
-   * Handles HTTP requests and proxies them to the target server.
-   * @param {http.IncomingMessage} req - The incoming request.
-   * @param {http.ServerResponse} res - The server response.
-   */
-  handleHttpRequest(req, res) {
-    const { headers, url: requestUrl } = req;
-    const { host, origin } = headers;
-    const { pathname } = new URL(requestUrl, 'http://example.com');
-
-    // Proxy the request to the target server
-    this.proxyHttpRequest(req, res, host, origin, pathname);
-  }
-
-  /**
-   * Proxies an HTTP request to the target server.
-   * @param {http.IncomingMessage} req - The incoming request.
-   * @param {http.ServerResponse} res - The server response.
-   * @param {string} host - The host header value.
-   * @param {string} origin - The origin header value.
-   * @param {string} pathname - The pathname of the request URL.
-   */
-  proxyHttpRequest(req, res, host, origin, pathname) {
-    // Create a new HTTP request to the target server
-    const targetReq = http.request(`http://${host}${pathname}`, {
-      method: req.method,
-      headers: this.rewriteHeaders(req.headers, origin),
-    });
-
-    // Handle target server response
-    targetReq.on('response', (targetRes) => {
-      // Rewrite the response headers
-      const rewrittenHeaders = this.rewriteHeaders(targetRes.headers, origin);
-
-      // Send the rewritten response to the client
-      res.writeHead(targetRes.statusCode, rewrittenHeaders);
-      targetRes.pipe(res);
-    });
-
-    // Handle target server errors
-    targetReq.on('error', (error) => {
-      console.error('Target server error:', error);
-    });
-
-    // Pipe the request body to the target server
-    req.pipe(targetReq);
-  }
-
-  /**
-   * Rewrites HTTP headers.
-   * @param {object} headers - The headers to rewrite.
-   * @param {string} origin - The origin header value.
-   * @returns {object} The rewritten headers.
-   */
-  rewriteHeaders(headers, origin) {
-    // Implement header rewriting logic here
-    return headers;
-  }
-
-  /**
-   * Starts the proxy server.
-   */
-  start() {
-    this.server.on('request', (req, res) => {
-      if (req.url.startsWith(URL_PREFIX)) {
-        this.handleHttpRequest(req, res);
-      } else if (req.headers['upgrade'] === 'websocket') {
-        this.handleWebSocketUpgrade(req, res);
-      } else {
-        res.writeHead(404);
-        res.end('Not Found');
+    // Parse the candidate string into an object
+    const candidateObject = {};
+    const candidateLines = candidate.split('\r\n');
+    for (const line of candidateLines) {
+      if (line.startsWith('candidate:')) {
+        const [, candidateInfo] = line.split(':');
+        const [foundation, component, protocol, priority, ip, port, , , , ,] = candidateInfo.split(' ');
+        candidateObject.foundation = foundation;
+        candidateObject.component = component;
+        candidateObject.protocol = protocol;
+        candidateObject.priority = priority;
+        candidateObject.ip = ip;
+        candidateObject.port = port;
       }
-    });
+    }
 
-    this.server.listen(8080, () => {
-      console.log('Proxy server listening on port 8080');
-    });
+    return candidateObject;
+  }
+
+  /**
+   * Scrub the WebRTC ICE candidate to remove IP information.
+   * @param {object} candidate - The ICE candidate object.
+   * @returns {string} The scrubbed ICE candidate string.
+   */
+  scrubICECandidate(candidate) {
+    // Remove IP information
+    candidate.ip = '';
+
+    // Reconstruct the candidate string
+    const scrubbedCandidateLines = [];
+    scrubbedCandidateLines.push(`candidate:${candidate.foundation} ${candidate.component} ${candidate.protocol} ${candidate.priority} 0 0 typ host`);
+    scrubbedCandidateLines.push(`end-line`);
+
+    return scrubbedCandidateLines.join('\r\n');
+  }
+
+  /**
+   * Stream the request to a buffer.
+   * @param {object} request - The request object.
+   * @returns {Buffer} The request buffer.
+   */
+  async streamToBuffer(request) {
+    const buffers = [];
+    for await (const chunk of request) {
+      buffers.push(chunk);
+    }
+    return Buffer.concat(buffers);
+  }
+
+  /**
+   * Proxy the request.
+   * @param {object} request - The request object.
+   * @param {object} response - The response object.
+   */
+  async proxyRequest(request, response) {
+    // Implement normal proxying logic here
   }
 }
 
