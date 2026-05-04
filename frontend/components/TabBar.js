@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import './TabBar.css';
 
 const TabBar = () => {
   const [tabs, setTabs] = useState([]);
@@ -6,6 +7,8 @@ const TabBar = () => {
   const [tabTitle, setTabTitle] = useState('');
   const [tabIcon, setTabIcon] = useState('');
   const [tabContent, setTabContent] = useState({});
+  const [dragging, setDragging] = useState(null);
+  const [dragoverIndex, setDragoverIndex] = useState(null);
 
   useEffect(() => {
     const storedTabs = localStorage.getItem('tabs');
@@ -97,19 +100,47 @@ const TabBar = () => {
     setActiveTab(id);
   };
 
+  const handleDragStart = (event, index) => {
+    setDragging(index);
+  };
+
+  const handleDragOver = (event, index) => {
+    event.preventDefault();
+    setDragoverIndex(index);
+  };
+
+  const handleDragEnd = () => {
+    if (dragging !== null && dragoverIndex !== null) {
+      const tabsArray = [...tabs];
+      const draggedTab = tabsArray[dragging];
+      tabsArray.splice(dragging, 1);
+      tabsArray.splice(dragoverIndex, 0, draggedTab);
+      setTabs(tabsArray);
+      setDragging(null);
+      setDragoverIndex(null);
+    }
+  };
+
   return (
     <div className="tab-bar">
-      {tabs.map((tab) => (
+      {tabs.map((tab, index) => (
         <div
           key={tab.id}
           className={`tab ${activeTab === tab.id ? 'active' : ''}`}
           onClick={() => handleTabClick(tab.id)}
+          draggable
+          onDragStart={(event) => handleDragStart(event, index)}
+          onDragOver={(event) => handleDragOver(event, index)}
+          onDragEnd={handleDragEnd}
         >
           <img src={tab.icon} alt={tab.title} />
           <span>{tab.title}</span>
           <button className="close-tab" onClick={() => removeTab(tab.id)}>
             ×
           </button>
+          {dragoverIndex === index && (
+            <div className="dragover-indicator" />
+          )}
         </div>
       ))}
       <button className="new-tab" onClick={() => addTab('', '', '', '')}>
@@ -120,13 +151,13 @@ const TabBar = () => {
           <input
             type="text"
             value={tabTitle}
-            onChange={(e) => setTabTitle(e.target.value)}
+            onChange={(event) => setTabTitle(event.target.value)}
             placeholder="Tab title"
           />
           <input
             type="text"
             value={tabIcon}
-            onChange={(e) => setTabIcon(e.target.value)}
+            onChange={(event) => setTabIcon(event.target.value)}
             placeholder="Tab icon"
           />
           <button
@@ -135,7 +166,7 @@ const TabBar = () => {
               updateTabIcon(activeTab, tabIcon)
             }
           >
-            Update Tab
+            Update
           </button>
         </div>
       )}
