@@ -8,6 +8,12 @@ self.addEventListener('fetch', async (event) => {
   event.respondWith(handleFetch(event.request));
 });
 
+self.addEventListener('message', async (event) => {
+  if (event.data.type === 'ping') {
+    event.ports[0].postMessage('pong');
+  }
+});
+
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const cacheName = 'nexus-cache';
@@ -119,103 +125,139 @@ class JSRewriter {
     });
 
     js = js.replace(this.historyPushStateRegex, (match) => {
-      return `history.pushState(${this.rewriteHistoryPushState(match)})`;
+      return `history.pushState(${this.rewriteHistoryState(match)})`;
     });
 
     js = js.replace(this.historyReplaceStateRegex, (match) => {
-      return `history.replaceState(${this.rewriteHistoryReplaceState(match)})`;
+      return `history.replaceState(${this.rewriteHistoryState(match)})`;
     });
 
     return js;
   }
 
-  rewriteEval(match) {
-    return match.slice(5, -1);
+  rewriteEval(evalStr) {
+    return this.rewriteCode(evalStr.slice(5, -1));
   }
 
-  rewriteFunction(match) {
-    return match.slice(9, -1);
+  rewriteFunction(funcStr) {
+    return this.rewriteCode(funcStr.slice(9, -1));
   }
 
-  rewriteDynamicImport(match) {
-    return match.slice(7, -1);
+  rewriteDynamicImport(importStr) {
+    return this.rewriteURL(importStr.slice(7, -1));
   }
 
-  rewriteRequire(match) {
-    return match.slice(8, -1);
+  rewriteRequire(requireStr) {
+    return this.rewriteURL(requireStr.slice(8, -1));
   }
 
   rewriteURL(url) {
-    const salt = rotatingSalt[rotatingSalt.length - 1];
+    const salt = generateSalt();
     return xorBase64Encode(url, salt);
   }
 
-  rewriteHistoryPushState(match) {
-    return match.slice(17);
+  rewriteCode(code) {
+    // Simple string replacement for demonstration purposes
+    // A more sophisticated approach would involve parsing the code
+    return code.replace(/https?:\/\/[^'"\s]+/g, (match) => {
+      return this.rewriteURL(match);
+    });
   }
 
-  rewriteHistoryReplaceState(match) {
-    return match.slice(20);
+  rewriteHistoryState(stateStr) {
+    // Simple string replacement for demonstration purposes
+    // A more sophisticated approach would involve parsing the code
+    return stateStr.replace(/https?:\/\/[^'"\s]+/g, (match) => {
+      return this.rewriteURL(match);
+    });
+  }
+}
+
+class HTMLRewriter {
+  constructor() {
+    this.srcRegex = /src\s*=\s*['"]([^'"]+)['"]/g;
+    this.hrefRegex = /href\s*=\s*['"]([^'"]+)['"]/g;
+    this.actionRegex = /action\s*=\s*['"]([^'"]+)['"]/g;
+    this.srcsetRegex = /srcset\s*=\s*['"]([^'"]+)['"]/g;
+    this.dataRegex = /data\s*=\s*['"]([^'"]+)['"]/g;
+  }
+
+  rewriteHTML(html) {
+    html = html.replace(this.srcRegex, (match, p1) => {
+      return `src="${this.rewriteURL(p1)}"`;
+    });
+
+    html = html.replace(this.hrefRegex, (match, p1) => {
+      return `href="${this.rewriteURL(p1)}"`;
+    });
+
+    html = html.replace(this.actionRegex, (match, p1) => {
+      return `action="${this.rewriteURL(p1)}"`;
+    });
+
+    html = html.replace(this.srcsetRegex, (match, p1) => {
+      return `srcset="${this.rewriteURL(p1)}"`;
+    });
+
+    html = html.replace(this.dataRegex, (match, p1) => {
+      return `data="${this.rewriteURL(p1)}"`;
+    });
+
+    return html;
+  }
+
+  rewriteURL(url) {
+    const salt = generateSalt();
+    return xorBase64Encode(url, salt);
+  }
+}
+
+class WebSocketRewriter {
+  constructor() {}
+
+  rewriteWebSocket(wsUrl) {
+    const salt = generateSalt();
+    return xorBase64Encode(wsUrl, salt);
   }
 }
 
 async function handleFetch(request) {
   const url = new URL(request.url);
-  if (url.pathname.startsWith('/_nexus/')) {
-    return handleNexusRequest(request);
-  }
+  if (url.pathname.startsWith('/proxy/')) {
+    const proxiedRequest = new Request(url.href, {
+      method: request.method,
+      headers: request.headers,
+      body: request.body,
+    });
 
-  const cache = await getCache();
-  const cachedResponse = await cache.match(request);
-  if (cachedResponse) {
-    return cachedResponse;
-  }
+    const response = await fetch(proxiedRequest);
+    const rewrittenResponse = new Response(response.body, response);
 
-  try {
-    const response = await fetch(request);
-    const clonedResponse = response.clone();
-    putResponse(request, clonedResponse);
-    return response;
-  } catch (error) {
-    return new Response('Error', { status: 500 });
-  }
-}
-
-async function handleNexusRequest(request) {
-  const url = new URL(request.url);
-  const path = url.pathname;
-
-  if (path === '/_nexus/js') {
     const jsRewriter = new JSRewriter();
-    const js = await getJSContent();
-    const rewrittenJS = jsRewriter.rewriteJS(js);
-    return new Response(rewrittenJS, { headers: { 'Content-Type': 'application/javascript' } });
-  }
+    const htmlRewriter = new HTMLRewriter();
+    const webSocketRewriter = new WebSocketRewriter();
 
-  if (path === '/_nexus/websocket') {
-    return handleWebSocketRequest(request);
-  }
+    rewrittenResponse.headers.set('Content-Type', 'text/html; charset=utf-8');
 
-  return new Response('Not Found', { status: 404 });
-}
+    let responseText = await response.text();
 
-async function getJSContent() {
-  // fetch js content from somewhere
-  return 'console.log("Hello World");';
-}
+    responseText = htmlRewriter.rewriteHTML(responseText);
+    responseText = jsRewriter.rewriteJS(responseText);
 
-async function handleWebSocketRequest(request) {
-  const url = new URL(request.url);
-  const wsUrl = url.origin.replace('http', 'ws') + url.pathname;
-  const wsRequest = new Request(wsUrl, {
-    method: 'GET',
-    headers: request.headers,
-  });
+    rewrittenResponse.body = encoder.encode(responseText);
 
-  try {
-    const wsResponse = await fetch(wsRequest);
-    return wsResponse;
-  } catch (error) {
-    return new Response('Error', { status: 500 });
+    await putResponse(request, rewrittenResponse);
+
+    return rewrittenResponse;
+  } else if (url.pathname.startsWith('/ws/')) {
+    const wsUrl = url.href.replace('/ws/', 'ws://');
+    const rewrittenWsUrl = new WebSocketRewriter().rewriteWebSocket(wsUrl);
+
+    return new Response(`window.location.href = '${rewrittenWsUrl}';`, {
+      status: 200,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
+  } else {
+    return await getResponse(request);
   }
 }
