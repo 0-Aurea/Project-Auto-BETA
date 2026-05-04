@@ -18,10 +18,20 @@ class CacheManager {
   static cacheMetadata = new Map();
 
   /**
+   * Maximum cache age in milliseconds.
+   */
+  static MAX_CACHE_AGE = 30 * 60 * 1000; // 30 minutes
+
+  /**
+   * Cache name.
+   */
+  static CACHE_NAME = 'nexus-cache';
+
+  /**
    * Initialize the cache manager.
    */
   static async init() {
-    CacheManager.cache = await caches.open(CACHE_NAME);
+    CacheManager.cache = await caches.open(CacheManager.CACHE_NAME);
   }
 
   /**
@@ -76,7 +86,7 @@ class CacheManager {
   static updateCacheMetadata(requestUrl, response) {
     const metadata = {
       timestamp: performance.now(),
-      ttl: response.headers.get('ttl') || MAX_CACHE_AGE,
+      ttl: response.headers.get('ttl') || CacheManager.MAX_CACHE_AGE,
     };
     CacheManager.cacheMetadata.set(requestUrl, metadata);
   }
@@ -104,6 +114,29 @@ class CacheManager {
       }
     });
     CacheManager.cacheMetadata.clear();
+  }
+
+  /**
+   * Check if a request is cacheable.
+   * @param {Request} request - The request to check.
+   * @returns {boolean} True if the request is cacheable, false otherwise.
+   */
+  static isCacheableRequest(request) {
+    const url = new URL(request.url);
+    return !url.pathname.includes('service-worker.js') && !url.pathname.includes('worker.js');
+  }
+
+  /**
+   * Cache a response with optional TTL.
+   * @param {Request} request - The request.
+   * @param {Response} response - The response.
+   * @param {number} [ttl=CacheManager.MAX_CACHE_AGE] - The TTL in milliseconds.
+   * @returns {Promise<void>}
+   */
+  static async cacheResponse(request, response, ttl = CacheManager.MAX_CACHE_AGE) {
+    if (!CacheManager.isCacheableRequest(request)) return;
+    response.headers.set('ttl', ttl);
+    await CacheManager.set(request.url, response);
   }
 }
 
