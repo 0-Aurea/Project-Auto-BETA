@@ -6,15 +6,32 @@ import TabBar from './components/TabBar';
 import SettingsPanel from './components/SettingsPanel';
 import ProxyHistory from './components/ProxyHistory';
 import BookmarksManager from './components/BookmarksManager';
+import { cache } from './utils/cache';
 
 const App = () => {
   return (
     <div className="app">
-      <SearchBar />
-      <TabBar />
-      <SettingsPanel />
-      <ProxyHistory />
-      <BookmarksManager />
+      <SearchBar 
+        onSearchQuery={handleSearchQuery} 
+        onSearchEngineChange={handleSearchEngineChange}
+      />
+      <TabBar 
+        onTabChange={handleTabChange} 
+        onNewTab={handleNewTab} 
+        onTabClose={handleTabClose}
+      />
+      <SettingsPanel 
+        onSettingsChange={handleSettingsChange} 
+        onAdBlockChange={handleAdBlockChange}
+      />
+      <ProxyHistory 
+        onProxyHistoryChange={handleProxyHistoryChange} 
+        onClearHistory={handleClearHistory}
+      />
+      <BookmarksManager 
+        onBookmarksChange={handleBookmarksChange} 
+        onBookmarkDelete={handleBookmarkDelete}
+      />
     </div>
   );
 };
@@ -24,6 +41,7 @@ ReactDOM.render(<App />, document.getElementById('root'));
 navigator.serviceWorker.register('sw.js')
   .then(registration => {
     console.log('Service worker registered:', registration);
+    cache.init(registration.cache);
   })
   .catch(error => {
     console.error('Service worker registration failed:', error);
@@ -32,7 +50,7 @@ navigator.serviceWorker.register('sw.js')
 window.addEventListener('message', event => {
   if (event.data.type === 'proxy-message') {
     const { tabId, message } = event.data;
-    // Handle messages from the proxy
+    handleProxyMessage(tabId, message);
   }
 });
 
@@ -103,4 +121,73 @@ function handleProxyHistoryChange(history) {
 function handleBookmarksChange(bookmarks) {
   // Handle bookmarks changes
   localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
+}
+
+function handleSearchEngineChange(searchEngine) {
+  localStorage.setItem('searchEngine', searchEngine);
+}
+
+function handleNewTab(url) {
+  // Handle new tab creation
+  const newTab = {
+    id: Date.now(),
+    url,
+    title: '',
+    icon: '',
+  };
+  const tabs = JSON.parse(localStorage.getItem('tabs') || '[]');
+  tabs.push(newTab);
+  localStorage.setItem('tabs', JSON.stringify(tabs));
+}
+
+function handleTabClose(tabId) {
+  // Handle tab closure
+  const tabs = JSON.parse(localStorage.getItem('tabs') || '[]');
+  const updatedTabs = tabs.filter(tab => tab.id !== tabId);
+  localStorage.setItem('tabs', JSON.stringify(updatedTabs));
+}
+
+function handleAdBlockChange(adBlockEnabled) {
+  localStorage.setItem('adBlockEnabled', adBlockEnabled);
+}
+
+function handleClearHistory() {
+  localStorage.removeItem('proxyHistory');
+}
+
+function handleBookmarkDelete(bookmarkId) {
+  const bookmarks = JSON.parse(localStorage.getItem('bookmarks') || '[]');
+  const updatedBookmarks = bookmarks.filter(bookmark => bookmark.id !== bookmarkId);
+  localStorage.setItem('bookmarks', JSON.stringify(updatedBookmarks));
+}
+
+function handleProxyMessage(tabId, message) {
+  // Handle messages from the proxy
+  switch (message.type) {
+    case 'tab-update':
+      handleTabUpdate(tabId, message.data);
+      break;
+    case 'settings-update':
+      handleSettingsUpdate(message.data);
+      break;
+    default:
+      console.log('Unknown message type:', message.type);
+  }
+}
+
+function handleTabUpdate(tabId, data) {
+  // Handle tab updates
+  const tabs = JSON.parse(localStorage.getItem('tabs') || '[]');
+  const updatedTabs = tabs.map(tab => {
+    if (tab.id === tabId) {
+      return { ...tab, ...data };
+    }
+    return tab;
+  });
+  localStorage.setItem('tabs', JSON.stringify(updatedTabs));
+}
+
+function handleSettingsUpdate(settings) {
+  // Handle settings updates
+  handleSettingsChange(settings);
 }
