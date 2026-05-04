@@ -103,34 +103,61 @@ class JSRewriterUtils {
 
     // Handle window.location assignments
     jsString = jsString.replace(JSRewriterUtils.WINDOW_LOCATION_REGEX, (match, p1) => {
-      return `window.location = ${JSON.stringify(UrlUtils.getHostname(baseUrl))}`;
+      return `window.location = ${JSON.stringify(UrlUtils.getUrl(baseUrl, p1))}`;
     });
 
     // Handle window.open calls
     jsString = jsString.replace(JSRewriterUtils.WINDOW_OPEN_REGEX, (match, p1) => {
-      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p1, baseUrl);
-      return `window.open(${JSON.stringify(rewrittenUrl)})`;
+      return `window.open(${JSON.stringify(UrlUtils.getUrl(baseUrl, p1))})`;
     });
 
     // Handle history.pushState and history.replaceState calls
     jsString = jsString.replace(JSRewriterUtils.HISTORY_PUSH_STATE_REGEX, (match, p1, p2, p3) => {
-      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p3, baseUrl);
-      return `${p1}(${p2}, ${JSON.stringify(rewrittenUrl)})`;
+      return `${p1}(${p2}, ${JSON.stringify(p3)})`;
     });
 
     return jsString;
   }
 
   /**
-   * Rewrites a URL by applying the proxy's URL rewriting rules.
+   * Rewrites a URL to ensure it is proxied through the Nexus proxy.
    * @param {string} url - The URL to rewrite.
    * @param {string} baseUrl - The base URL of the JavaScript file.
    * @returns {string} The rewritten URL.
    */
   static rewriteUrl(url, baseUrl) {
-    // Apply URL rewriting rules here
-    // For example, you can use the UrlUtils class to rewrite the URL
-    return UrlUtils.rewriteUrl(url, baseUrl);
+    const urlObject = new URL(url, baseUrl);
+    const rewrittenUrl = UrlUtils.getUrl(baseUrl, urlObject.href);
+    return rewrittenUrl;
+  }
+
+  /**
+   * Strips sourceMappingURL comments from a JavaScript string.
+   * @param {string} jsString - The JavaScript string to strip.
+   * @returns {string} The stripped JavaScript string.
+   */
+  static stripSourceMappingURL(jsString) {
+    return jsString.replace(JSRewriterUtils.SOURCE_MAP_REGEX, '');
+  }
+
+  /**
+   * Rewrites inline event handlers to ensure they are proxied through the Nexus proxy.
+   * @param {string} jsString - The JavaScript string to rewrite.
+   * @param {string} baseUrl - The base URL of the JavaScript file.
+   * @returns {string} The rewritten JavaScript string.
+   */
+  static rewriteInlineEventHandlers(jsString, baseUrl) {
+    const dom = new JSDOM(jsString);
+    const elements = dom.window.document.querySelectorAll('[on*=""]');
+    elements.forEach((element) => {
+      const attributeName = Array.from(element.attributes).find((attribute) => attribute.name.startsWith('on'));
+      if (attributeName) {
+        const attributeValue = element.getAttribute(attributeName.name);
+        const rewrittenAttributeValue = JSRewriterUtils.rewriteUrl(attributeValue, baseUrl);
+        element.setAttribute(attributeName.name, rewrittenAttributeValue);
+      }
+    });
+    return dom.serialize();
   }
 }
 
