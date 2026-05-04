@@ -96,81 +96,55 @@ class SecurityUtils {
     },
 
     /**
-     * Converts a CSP policy to a header string.
-     * @param {object} policy - The CSP policy.
-     * @returns {string} The CSP header string.
-     */
-    policyToHeader(policy) {
-      const header = [];
-      for (const directive in policy) {
-        header.push(`${directive} ${policy[directive].join(' ')}`);
-      }
-      return header.join('; ');
-    },
-
-    /**
      * Validates a CSP policy.
-     * @param {object} policy - The CSP policy.
+     * @param {object} policy - The CSP policy to validate.
      * @returns {boolean} True if the policy is valid, false otherwise.
      */
     validatePolicy(policy) {
-      const allowedDirectives = [
-        'default-src',
-        'script-src',
-        'style-src',
-        'object-src',
-        'frame-src',
-        'child-src',
-        'connect-src',
-        'font-src',
-        'img-src',
-        'media-src',
-        'worker-src',
-      ];
-
-      for (const directive in policy) {
-        if (!allowedDirectives.includes(directive)) {
+      const requiredDirectives = ['default-src', 'script-src', 'style-src', 'object-src', 'frame-src', 'child-src'];
+      for (const directive of requiredDirectives) {
+        if (!policy[directive]) {
           return false;
         }
-
-        for (const source of policy[directive]) {
-          if (!source.startsWith("'") && !source.startsWith('http')) {
-            return false;
-          }
-        }
       }
-
       return true;
     },
   };
 
   /**
-   * Validates and rewrites URLs to prevent SSRF attacks.
-   * @param {string} url - The URL to validate and rewrite.
-   * @param {string} baseUrl - The base URL of the proxied resource.
-   * @returns {string} The validated and rewritten URL.
+   * Validates a TLS certificate.
+   * @param {string} cert - The TLS certificate to validate.
+   * @returns {boolean} True if the certificate is valid, false otherwise.
    */
-  static validateAndRewriteUrl(url, baseUrl) {
-    const { URL } = require('url');
-    const parsedUrl = new URL(url, baseUrl);
-
-    // Check if the URL is relative
-    if (!parsedUrl.protocol) {
-      return url;
+  static validateTlsCertificate(cert) {
+    try {
+      const tls = require('tls');
+      const crypto = require('crypto');
+      const certBuffer = Buffer.from(cert, 'utf8');
+      const parsedCert = crypto.parseCert(certBuffer);
+      const now = new Date();
+      if (parsedCert.notBefore > now || parsedCert.notAfter < now) {
+        return false;
+      }
+      return true;
+    } catch (error) {
+      return false;
     }
+  }
 
-    // Check if the URL is a valid HTTP/HTTPS URL
-    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-      throw new Error('Invalid URL protocol');
+  /**
+   * Checks if a URL is secure (HTTPS).
+   * @param {string} url - The URL to check.
+   * @returns {boolean} True if the URL is secure, false otherwise.
+   */
+  static isUrlSecure(url) {
+    try {
+      const { URL } = require('url');
+      const parsedUrl = new URL(url);
+      return parsedUrl.protocol === 'https:';
+    } catch (error) {
+      return false;
     }
-
-    // Check if the URL has a valid hostname
-    if (!parsedUrl.hostname) {
-      throw new Error('Invalid URL hostname');
-    }
-
-    // Rewrite the URL to prevent SSRF attacks
-    return `${parsedUrl.protocol}://${parsedUrl.host}${parsedUrl.pathname}`;
   }
 
   /**
@@ -178,49 +152,32 @@ class SecurityUtils {
    * @returns {string} A random salt.
    */
   static generateSalt() {
-    return Math.random().toString(36).substr(2, 10);
+    const crypto = require('crypto');
+    return crypto.randomBytes(16).toString('hex');
   }
 
   /**
-   * XOR encodes a string using a salt.
+   * XOR encodes a string with a salt.
    * @param {string} str - The string to encode.
    * @param {string} salt - The salt to use.
-   * @returns {string} The XOR encoded string.
+   * @returns {string} The encoded string.
    */
   static xorEncode(str, salt) {
-    let encodedStr = '';
+    const encodedStr = [];
     for (let i = 0; i < str.length; i++) {
-      encodedStr += String.fromCharCode(str.charCodeAt(i) ^ salt.charCodeAt(i % salt.length));
+      encodedStr.push(String.fromCharCode(str.charCodeAt(i) ^ salt.charCodeAt(i % salt.length)));
     }
-    return encodedStr;
+    return encodedStr.join('');
   }
 
   /**
-   * XOR decodes a string using a salt.
+   * XOR decodes a string with a salt.
    * @param {string} str - The string to decode.
    * @param {string} salt - The salt to use.
-   * @returns {string} The XOR decoded string.
+   * @returns {string} The decoded string.
    */
   static xorDecode(str, salt) {
     return SecurityUtils.xorEncode(str, salt);
-  }
-
-  /**
-   * Base64 encodes a string.
-   * @param {string} str - The string to encode.
-   * @returns {string} The base64 encoded string.
-   */
-  static base64Encode(str) {
-    return Buffer.from(str).toString('base64');
-  }
-
-  /**
-   * Base64 decodes a string.
-   * @param {string} str - The string to decode.
-   * @returns {string} The base64 decoded string.
-   */
-  static base64Decode(str) {
-    return Buffer.from(str, 'base64').toString();
   }
 }
 
