@@ -121,53 +121,37 @@ const TabBar = () => {
     }
   };
 
+  const handleDrop = (event, index) => {
+    event.preventDefault();
+    handleDragEnd();
+  };
+
   return (
     <div className="tab-bar">
       {tabs.map((tab, index) => (
         <div
           key={tab.id}
           className={`tab ${activeTab === tab.id ? 'active' : ''}`}
-          onClick={() => handleTabClick(tab.id)}
           draggable
           onDragStart={(event) => handleDragStart(event, index)}
           onDragOver={(event) => handleDragOver(event, index)}
-          onDragEnd={handleDragEnd}
+          onDrop={(event) => handleDrop(event, index)}
         >
-          <img src={tab.icon} alt={tab.title} />
-          <span>{tab.title}</span>
+          <span className="tab-title">{tab.title}</span>
           <button className="close-tab" onClick={() => removeTab(tab.id)}>
             ×
           </button>
-          {dragoverIndex === index && (
-            <div className="dragover-indicator" />
-          )}
         </div>
       ))}
-      <button className="new-tab" onClick={() => addTab('', '', '', '')}>
+      <button className="add-tab" onClick={() => addTab('', '', '', '')}>
         +
       </button>
       {activeTab && (
         <div className="tab-content">
-          <input
-            type="text"
-            value={tabTitle}
-            onChange={(event) => setTabTitle(event.target.value)}
-            placeholder="Tab title"
+          <iframe
+            src={tabs.find((tab) => tab.id === activeTab).url}
+            title={tabs.find((tab) => tab.id === activeTab).title}
           />
-          <input
-            type="text"
-            value={tabIcon}
-            onChange={(event) => setTabIcon(event.target.value)}
-            placeholder="Tab icon"
-          />
-          <button
-            onClick={() =>
-              updateTabTitle(activeTab, tabTitle) &&
-              updateTabIcon(activeTab, tabIcon)
-            }
-          >
-            Update
-          </button>
         </div>
       )}
     </div>
