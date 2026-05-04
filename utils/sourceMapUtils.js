@@ -1,42 +1,61 @@
+const { URL } = require('url');
+
 /**
- * Source map utility class for stripping source map URLs to improve security.
+ * Source map utility class for handling source map URL stripping and management.
  */
 class SourceMapUtils {
   /**
+   * Regular expression to match source map URLs in HTTP headers.
+   */
+  static SOURCE_MAP_HEADER_REGEX = /(?:x-)?source-map|source-map|x-sourcemap|x-source-map|sourceMappingURL|source-map-url/i;
+
+  /**
    * Regular expression to match source map URLs in JavaScript files.
    */
-  static SOURCE_MAP_REGEX = /#\s*sourceMappingURL=([^\s]+)\s*$/m;
+  static SOURCE_MAP_JS_REGEX = /\/\/[#@] sourceMappingURL=([^\s]+)\s*$/m;
 
   /**
-   * Regular expression to match source map URLs in CSS files.
+   * Strips source map URLs from HTTP headers.
+   * @param {object} headers - The HTTP headers to strip.
+   * @returns {object} The modified HTTP headers.
    */
-  static CSS_SOURCE_MAP_REGEX = /\/*# sourceMappingURL=([^\s]+)\s*\*\//;
-
-  /**
-   * Strip source map URLs from JavaScript code.
-   * @param {string} code - The JavaScript code to strip.
-   * @returns {string} The JavaScript code with source map URLs stripped.
-   */
-  static stripJsSourceMap(code) {
-    return code.replace(SourceMapUtils.SOURCE_MAP_REGEX, '');
+  static stripSourceMapHeaders(headers) {
+    for (const key in headers) {
+      if (SourceMapUtils.SOURCE_MAP_HEADER_REGEX.test(key)) {
+        delete headers[key];
+      }
+    }
+    return headers;
   }
 
   /**
-   * Strip source map URLs from CSS code.
-   * @param {string} code - The CSS code to strip.
-   * @returns {string} The CSS code with source map URLs stripped.
+   * Strips source map URLs from JavaScript files.
+   * @param {string} jsCode - The JavaScript code to strip.
+   * @returns {string} The modified JavaScript code.
    */
-  static stripCssSourceMap(code) {
-    return code.replace(SourceMapUtils.CSS_SOURCE_MAP_REGEX, '');
+  static stripSourceMapJs(jsCode) {
+    return jsCode.replace(SourceMapUtils.SOURCE_MAP_JS_REGEX, '');
   }
 
   /**
-   * Check if a URL is a source map URL.
-   * @param {string} url - The URL to check.
-   * @returns {boolean} True if the URL is a source map URL, false otherwise.
+   * Extracts source map URLs from JavaScript files.
+   * @param {string} jsCode - The JavaScript code to extract from.
+   * @returns {string|null} The extracted source map URL or null if not found.
    */
-  static isSourceMapUrl(url) {
-    return url.endsWith('.map') || url.endsWith('.js.map') || url.endsWith('.css.map');
+  static extractSourceMapJs(jsCode) {
+    const match = jsCode.match(SourceMapUtils.SOURCE_MAP_JS_REGEX);
+    return match && match[1];
+  }
+
+  /**
+   * Rewrites source map URLs to ensure they are proxied through the Nexus proxy.
+   * @param {string} sourceMapUrl - The source map URL to rewrite.
+   * @param {string} baseUrl - The base URL of the proxied resource.
+   * @returns {string} The rewritten source map URL.
+   */
+  static rewriteSourceMapUrl(sourceMapUrl, baseUrl) {
+    const url = new URL(sourceMapUrl, baseUrl);
+    return url.href;
   }
 }
 
