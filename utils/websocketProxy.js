@@ -3,6 +3,7 @@ const { URL } = require('url');
 const { CookieScopingUtils } = require('./cookieScoping');
 const { Encoding } = require('./encoding');
 const { REQUEST_HEADER_REWRITE_LIST, RESPONSE_HEADER_REWRITE_LIST } = require('./constants');
+const { PerformanceMonitor } = require('./performanceMonitor');
 
 /**
  * WebSocket proxy utility class for handling WebSocket upgrade proxying with header rewriting.
@@ -25,6 +26,7 @@ class WebSocketProxyUtils {
    * @param {object} server - The HTTP server instance.
    */
   static init(server) {
+    PerformanceMonitor.startMetric('websocketProxyInit');
     this.wss = new WebSocket.Server({ server, ...this.options });
 
     this.wss.on('connection', (ws, req) => {
@@ -33,6 +35,7 @@ class WebSocketProxyUtils {
 
       // Handle WebSocket handshake
       ws.on('message', (message) => {
+        PerformanceMonitor.startMetric('websocketMessageHandling');
         // Rewrite WebSocket message headers
         const rewrittenMessage = this.rewriteMessage(message, headers, origin);
 
@@ -46,11 +49,13 @@ class WebSocketProxyUtils {
         });
 
         targetWs.on('message', (targetMessage) => {
+          PerformanceMonitor.startMetric('websocketTargetMessageHandling');
           // Rewrite target WebSocket message headers
           const rewrittenTargetMessage = this.rewriteMessage(targetMessage, headers, origin);
 
           // Forward rewritten target message to client WebSocket
           ws.send(rewrittenTargetMessage);
+          PerformanceMonitor.endMetric('websocketTargetMessageHandling');
         });
 
         targetWs.on('error', (error) => {
@@ -72,6 +77,7 @@ class WebSocketProxyUtils {
         // Handle client WebSocket closure
       });
     });
+    PerformanceMonitor.endMetric('websocketProxyInit');
   }
 
   /**
@@ -107,21 +113,13 @@ class WebSocketProxyUtils {
    * @returns {object} The rewritten WebSocket request headers.
    */
   static rewriteHeaders(headers, origin) {
-    // Isolate cookies per proxied origin
-    const cookieHeader = headers['cookie'];
-    if (cookieHeader) {
-      const rewrittenCookieHeader = CookieScopingUtils.isolateCookies(cookieHeader, origin);
-      headers['cookie'] = rewrittenCookieHeader;
-    }
-
     // Remove sensitive headers
     REQUEST_HEADER_REWRITE_LIST.forEach((header) => {
       delete headers[header];
     });
 
-    // Add proxied headers
-    headers['x-proxied'] = 'true';
-    headers['x-origin'] = origin;
+    // Add or modify headers as needed
+    headers['origin'] = origin;
 
     return headers;
   }
