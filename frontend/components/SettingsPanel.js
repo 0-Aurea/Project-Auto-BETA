@@ -4,6 +4,8 @@ const SettingsPanel = () => {
   const [encodingMode, setEncodingMode] = useState('base64');
   const [cacheEnabled, setCacheEnabled] = useState(true);
   const [adBlockEnabled, setAdBlockEnabled] = useState(true);
+  const [prefetchEnabled, setPrefetchEnabled] = useState(true);
+  const [cacheTTL, setCacheTTL] = useState(3600); // 1 hour default
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -13,6 +15,8 @@ const SettingsPanel = () => {
       setEncodingMode(settings.encodingMode);
       setCacheEnabled(settings.cacheEnabled);
       setAdBlockEnabled(settings.adBlockEnabled);
+      setPrefetchEnabled(settings.prefetchEnabled);
+      setCacheTTL(settings.cacheTTL);
     }
   }, []);
 
@@ -21,8 +25,10 @@ const SettingsPanel = () => {
       encodingMode,
       cacheEnabled,
       adBlockEnabled,
+      prefetchEnabled,
+      cacheTTL,
     }));
-  }, [encodingMode, cacheEnabled, adBlockEnabled]);
+  }, [encodingMode, cacheEnabled, adBlockEnabled, prefetchEnabled, cacheTTL]);
 
   const handleEncodingModeChange = (event) => {
     setEncodingMode(event.target.value);
@@ -36,8 +42,24 @@ const SettingsPanel = () => {
     setAdBlockEnabled(!adBlockEnabled);
   };
 
+  const handlePrefetchToggle = () => {
+    setPrefetchEnabled(!prefetchEnabled);
+  };
+
+  const handleCacheTTLChange = (event) => {
+    setCacheTTL(event.target.value);
+  };
+
   const handleSettingsToggle = () => {
     setSettingsOpen(!settingsOpen);
+  };
+
+  const handleResetSettings = () => {
+    setEncodingMode('base64');
+    setCacheEnabled(true);
+    setAdBlockEnabled(true);
+    setPrefetchEnabled(true);
+    setCacheTTL(3600);
   };
 
   return (
@@ -66,6 +88,28 @@ const SettingsPanel = () => {
             </label>
             <small>Cache helps improve performance by storing frequently accessed resources locally.</small>
           </div>
+          {cacheEnabled && (
+            <div className="settings-group">
+              <label>Cache TTL (seconds):</label>
+              <input
+                type="number"
+                value={cacheTTL}
+                onChange={handleCacheTTLChange}
+              />
+              <small>Sets the time to live for cached resources.</small>
+            </div>
+          )}
+          <div className="settings-group">
+            <label>
+              <input
+                type="checkbox"
+                checked={prefetchEnabled}
+                onChange={handlePrefetchToggle}
+              />
+              Enable Prefetch Hints
+            </label>
+            <small>Prefetch hints help improve performance by caching resources before they are requested.</small>
+          </div>
           <div className="settings-group">
             <label>
               <input
@@ -80,11 +124,7 @@ const SettingsPanel = () => {
           <div className="settings-group">
             <button
               className="reset-settings"
-              onClick={() => {
-                setEncodingMode('base64');
-                setCacheEnabled(true);
-                setAdBlockEnabled(true);
-              }}
+              onClick={handleResetSettings}
             >
               Reset Settings
             </button>
