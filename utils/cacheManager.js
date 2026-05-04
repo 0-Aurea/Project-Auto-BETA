@@ -107,7 +107,7 @@ class CacheManager {
 
   /**
    * Parses cache control headers to determine the TTL.
-   * @param {Headers} headers - The response headers.
+   * @param {object} headers - The response headers.
    * @returns {number} The TTL in milliseconds.
    */
   static parseCacheControl(headers) {
@@ -129,6 +129,42 @@ class CacheManager {
 
     return ttl;
   }
+
+  /**
+   * Handles caching for responses with varying cache control headers.
+   * @param {Response} response - The response to cache.
+   * @param {string} key - The cache key.
+   * @returns {Promise<void>}
+   */
+  static async handleResponseCaching(response, key) {
+    const ttl = CacheManager.parseCacheControl(response.headers);
+    const cacheEntry = await CacheManager.getCacheEntry(key);
+
+    if (cacheEntry) {
+      await CacheManager.removeCacheEntry(key);
+    }
+
+    const cachedResponse = new Response(response.body, response);
+    cachedResponse.timestamp = Date.now();
+    cachedResponse.ttl = ttl;
+
+    await CacheManager.storeCacheEntry(key, cachedResponse);
+  }
+
+  /**
+   * Caches a response with a TTL based on the response's cache control headers.
+   * @param {Response} response - The response to cache.
+   * @param {string} key - The cache key.
+   * @returns {Promise<void>}
+   */
+  static async cacheResponse(response, key) {
+    const ttl = CacheManager.parseCacheControl(response.headers);
+    const cachedResponse = new Response(response.body, response);
+    cachedResponse.timestamp = Date.now();
+    cachedResponse.ttl = ttl;
+
+    await CacheManager.storeCacheEntry(key, cachedResponse);
+  }
 }
 
-module.exports = { CacheManager };
+module.exports = CacheManager;
