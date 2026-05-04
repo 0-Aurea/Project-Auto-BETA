@@ -1,120 +1,99 @@
+const { URL } = require('url');
+
+/**
+ * Prefetch hints utility class for parsing <link rel="prefetch/preload"> and caching ahead.
+ */
 class PrefetchHints {
   /**
-   * Prefetch hint cache.
+   * Regular expression to match prefetch/preload links.
    */
-  static prefetchCache = new Map();
+  static PREFETCH_LINK_REGEX = /<link\s+rel\s*=\s*["'](prefetch|preload)["']\s+href\s*=\s*["'](.*?)["']/gi;
 
   /**
-   * Threshold for prefetching (in milliseconds).
+   * Cache for prefetch hints.
    */
-  static PREFETCH_THRESHOLD = 1000; // 1 second
+  static prefetchCache = {};
 
   /**
-   * Regular expression to match prefetch hints.
+   * Service worker cache instance.
    */
-  static PREFETCH_REGEX = /<link\s+rel="(?:prefetch|preload)"\s+href="([^"]+)"/gi;
+  static swCache;
 
   /**
-   * Regular expression to match prefetch hints with as attribute.
+   * Initializes the prefetch hints utility with the service worker cache instance.
+   * @param {Cache} swCache - The service worker cache instance.
    */
-  static PREFETCH_AS_REGEX = /<link\s+rel="(?:prefetch|preload)"\s+as="([^"]+)"\s+href="([^"]+)"/gi;
-
-  /**
-   * Parses prefetch hints from HTML and caches them.
-   * @param {string} html - The HTML content.
-   * @param {string} url - The URL of the HTML content.
-   * @param {string} [as] - The value of the as attribute.
-   */
-  static async parsePrefetchHints(html, url, as) {
-    const prefetchHints = [];
-    let match;
-
-    while ((match = PrefetchHints.PREFETCH_REGEX.exec(html)) !== null) {
-      const hintUrl = match[1];
-      const absoluteUrl = new URL(hintUrl, url).href;
-      prefetchHints.push({ url: absoluteUrl, as: null });
-    }
-
-    while ((match = PrefetchHints.PREFETCH_AS_REGEX.exec(html)) !== null) {
-      const hintAs = match[1];
-      const hintUrl = match[2];
-      const absoluteUrl = new URL(hintUrl, url).href;
-      if (as && hintAs === as) {
-        prefetchHints.push({ url: absoluteUrl, as: hintAs });
-      } else if (!as) {
-        prefetchHints.push({ url: absoluteUrl, as: hintAs });
-      }
-    }
-
-    // Cache prefetch hints
-    PrefetchHints.prefetchCache.set(url, prefetchHints);
-
-    // Prefetch resources
-    await Promise.all(prefetchHints.map((hint) => PrefetchHints.prefetchResource(hint.url, hint.as)));
+  static init(swCache) {
+    PrefetchHints.swCache = swCache;
   }
 
   /**
-   * Prefetches a resource.
-   * @param {string} url - The URL of the resource.
-   * @param {string} [as] - The value of the as attribute.
+   * Parses HTML for prefetch/preload links and caches ahead.
+   * @param {string} html - The HTML to parse.
+   * @param {string} url - The URL of the HTML document.
    */
-  static async prefetchResource(url, as) {
+  static parsePrefetchHints(html, url) {
+    const prefetchLinks = html.match(PrefetchHints.PREFETCH_LINK_REGEX);
+
+    if (prefetchLinks) {
+      prefetchLinks.forEach((link) => {
+        const match = link.match(PrefetchHints.PREFETCH_LINK_REGEX);
+        if (match) {
+          const rel = match[1];
+          const href = match[2];
+
+          if (rel && href) {
+            const proxiedUrl = PrefetchHints.getProxiedUrl(href, url);
+            PrefetchHints.prefetchCache[proxiedUrl] = true;
+            PrefetchHints.cacheAhead(proxiedUrl);
+          }
+        }
+      });
+    }
+  }
+
+  /**
+   * Gets the proxied URL for a given URL.
+   * @param {string} url - The URL to proxy.
+   * @param {string} referrer - The referrer URL.
+   * @returns {string} The proxied URL.
+   */
+  static getProxiedUrl(url, referrer) {
+    // Implement proxy URL logic here
+    // For demonstration purposes, assume a simple proxy URL
+    return `/proxy/${url}`;
+  }
+
+  /**
+   * Caches ahead for a given URL.
+   * @param {string} url - The URL to cache ahead.
+   */
+  static async cacheAhead(url) {
     try {
-      const requestInit = {
-        method: 'HEAD',
-      };
-
-      if (as) {
-        requestInit.headers = {
-          'Accept': getAcceptHeaderForAs(as),
-        };
-      }
-
-      const response = await globalThis.fetch(url, requestInit);
-
+      const response = await fetch(url);
       if (response.ok) {
-        // Cache response headers
-        const cacheKey = new URL(url).href;
-        const cacheEntry = {
-          headers: response.headers,
-          timestamp: Date.now(),
-          as,
-        };
-
-        // Use Cache API to cache response
-        const cache = await globalThis.caches.open('nexus-prefetch-cache');
-        await cache.put(cacheKey, new globalThis.Response('', { headers: response.headers }));
+        const cache = await PrefetchHints.swCache.open('prefetch-cache');
+        await cache.put(url, response.clone());
       }
     } catch (error) {
-      globalThis.console.error(`Error prefetching ${url}: ${error}`);
+      globalThis.console.error(`Error caching ahead: ${error}`);
     }
   }
 
   /**
-   * Checks if a prefetch hint is valid.
-   * @param {string} url - The URL of the prefetch hint.
-   * @returns {boolean} True if the prefetch hint is valid, false otherwise.
+   * Checks if a URL is cached.
+   * @param {string} url - The URL to check.
+   * @returns {boolean} True if the URL is cached, false otherwise.
    */
-  static isValidPrefetchHint(url) {
-    const cacheEntry = PrefetchHints.prefetchCache.get(url);
-    if (!cacheEntry) return false;
-    const age = (Date.now() - cacheEntry.timestamp) / 1000;
-    return age < PrefetchHints.PREFETCH_THRESHOLD;
-  }
-}
-
-function getAcceptHeaderForAs(as) {
-  switch (as) {
-    case 'script':
-      return 'text/javascript,application/javascript,application/ecmascript,application/x-ecmascript';
-    case 'style':
-      return 'text/css';
-    case 'image':
-      return 'image/*';
-    case 'font':
-      return 'font/otf,font/ttf,font/woff,font/woff2';
-    default:
-      return '*/*';
+  static async isCached(url) {
+    try {
+      const cache = await PrefetchHints.swCache.open('prefetch-cache');
+      const cachedResponse = await cache.match(url);
+      return cachedResponse !== undefined;
+    } catch (error) {
+      globalThis.console.error(`Error checking cache: ${error}`);
+      return false;
+    }
   }
 }
 
