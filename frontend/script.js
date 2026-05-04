@@ -106,35 +106,9 @@ const createTab = async (searchTerm) => {
     content: `Searching for ${searchTerm}...`,
     url: `https://www.google.com/search?q=${searchTerm}`
   };
-  try {
-    const response = await fetch(tab.url);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    const html = await response.text();
-    tab.content = html;
-  } catch (e) {
-    tab.content = `Error loading ${searchTerm}: ${e.message}`;
-  }
-  return tab;
-};
-
-// Render settings panel
-const renderSettingsPanel = () => {
-  adBlockToggle.checked = settings.adBlockEnabled;
-  cacheToggle.checked = settings.cacheEnabled;
-  encodingModeSelect.value = settings.encodingMode;
-};
-
-// Render bookmarks panel
-const renderBookmarksPanel = () => {
-  const bookmarksList = document.getElementById('bookmarks-list');
-  bookmarksList.innerHTML = '';
-  bookmarks.forEach((bookmark) => {
-    const bookmarkItem = document.createElement('li');
-    bookmarkItem.textContent = bookmark.title;
-    bookmarksList.appendChild(bookmarkItem);
-  });
+  tabs.push(tab);
+  renderTabBar();
+  switchToTab(tab);
 };
 
 // Add event listeners
@@ -146,18 +120,55 @@ bookmarksToggle.addEventListener('click', () => {
   bookmarksPanel.classList.toggle('open');
 });
 
-searchButton.addEventListener('click', async () => {
+searchButton.addEventListener('click', () => {
   const searchTerm = searchInput.value.trim();
   if (searchTerm) {
-    const tab = await createTab(searchTerm);
-    tabs.push(tab);
-    renderTabBar();
-    switchToTab(tab);
-    searchInput.value = '';
+    createTab(searchTerm);
   }
 });
 
-// Initialize
+// Initialize UI
 renderTabBar();
-renderSettingsPanel();
-renderBookmarksPanel();
+
+// Dark mode toggle
+const darkModeToggle = document.getElementById('dark-mode-toggle');
+darkModeToggle.addEventListener('click', () => {
+  document.body.classList.toggle('dark-mode');
+  localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+});
+
+// Load dark mode setting
+try {
+  const storedDarkMode = localStorage.getItem('darkMode');
+  if (storedDarkMode === 'true') {
+    document.body.classList.add('dark-mode');
+  }
+} catch (e) {
+  console.error('Error loading dark mode setting:', e);
+}
+
+// Render bookmarks panel
+const renderBookmarksPanel = () => {
+  bookmarksPanel.innerHTML = '';
+  bookmarks.forEach((bookmark) => {
+    const bookmarkElement = document.createElement('div');
+    bookmarkElement.textContent = bookmark.title;
+    bookmarksPanel.appendChild(bookmarkElement);
+  });
+};
+
+// Add bookmark
+const addBookmark = (tab) => {
+  const bookmark = {
+    title: tab.title,
+    url: tab.url
+  };
+  bookmarks.push(bookmark);
+  renderBookmarksPanel();
+};
+
+// Remove bookmark
+const removeBookmark = (bookmark) => {
+  bookmarks = bookmarks.filter((b) => b !== bookmark);
+  renderBookmarksPanel();
+};
