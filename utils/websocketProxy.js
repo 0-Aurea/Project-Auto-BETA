@@ -1,7 +1,7 @@
 const WebSocket = require('ws');
 const { URL } = require('url');
 const { CookieScopingUtils } = require('./cookieScoping');
-const { Encoding } = require('./encoding');
+const { EncodingUtils } = require('./encodingUtils');
 const { REQUEST_HEADER_REWRITE_LIST, RESPONSE_HEADER_REWRITE_LIST } = require('./constants');
 const { PerformanceMonitor } = require('./performanceMonitor');
 
@@ -91,37 +91,61 @@ class WebSocketProxyUtils {
     // Isolate cookies per proxied origin
     const cookieHeader = headers['cookie'];
     if (cookieHeader) {
-      const rewrittenCookieHeader = CookieScopingUtils.isolateCookies(cookieHeader, origin);
-      headers['cookie'] = rewrittenCookieHeader;
+      const scopedCookieHeader = CookieScopingUtils.scopeCookies(cookieHeader, origin);
+      headers['cookie'] = scopedCookieHeader;
     }
 
-    // Remove sensitive headers
-    REQUEST_HEADER_REWRITE_LIST.forEach((header) => {
-      delete headers[header];
-    });
+    // Perform header rewriting
+    const rewrittenHeaders = this.rewriteHeaders(headers, origin);
 
-    // Encode URL using current salt
-    const encodedOrigin = Encoding.encodeUrl(origin);
-
+    // No need to rewrite the message body for WebSocket messages
     return message;
   }
 
   /**
-   * Rewrite WebSocket request headers.
-   * @param {object} headers - The WebSocket request headers.
+   * Rewrite WebSocket request and response headers.
+   * @param {object} headers - The WebSocket request or response headers.
    * @param {string} origin - The origin of the WebSocket request.
-   * @returns {object} The rewritten WebSocket request headers.
+   * @returns {object} The rewritten WebSocket headers.
    */
   static rewriteHeaders(headers, origin) {
-    // Remove sensitive headers
-    REQUEST_HEADER_REWRITE_LIST.forEach((header) => {
-      delete headers[header];
-    });
+    const rewrittenHeaders = {};
 
-    // Add or modify headers as needed
-    headers['origin'] = origin;
+    // Iterate over each header
+    for (const [header, value] of Object.entries(headers)) {
+      // Check if the header needs to be rewritten
+      if (REQUEST_HEADER_REWRITE_LIST.includes(header)) {
+        // Perform header rewriting
+        rewrittenHeaders[header] = this.rewriteHeader(header, value, origin);
+      } else {
+        rewrittenHeaders[header] = value;
+      }
+    }
 
-    return headers;
+    // Remove any sensitive headers
+    for (const header of RESPONSE_HEADER_REWRITE_LIST) {
+      delete rewrittenHeaders[header];
+    }
+
+    return rewrittenHeaders;
+  }
+
+  /**
+   * Rewrite a single WebSocket header.
+   * @param {string} header - The header to rewrite.
+   * @param {string} value - The header value.
+   * @param {string} origin - The origin of the WebSocket request.
+   * @returns {string} The rewritten header value.
+   */
+  static rewriteHeader(header, value, origin) {
+    switch (header) {
+      case 'origin':
+        return origin;
+      case 'host':
+        return new URL(origin).hostname;
+      default:
+        return value;
+    }
   }
 
   /**
