@@ -28,6 +28,7 @@ const rotatingSalt = [];
 let cache;
 let tabs = {};
 
+// Cache API functions
 async function getCache() {
   if (!cache) {
     cache = await caches.open(cacheName);
@@ -51,6 +52,7 @@ async function deleteResponse(request) {
   await cache.delete(request);
 }
 
+// Salt and encoding functions
 function generateSalt() {
   const salt = [];
   for (let i = 0; i < 16; i++) {
@@ -80,6 +82,7 @@ function xorBase64Decode(data, salt) {
   return String.fromCharCode(...decodedArray);
 }
 
+// JS Rewriter class
 class JSRewriter {
   constructor() {
     this.scriptRegex = /(?:eval|Function|import|require)\(/g;
@@ -159,7 +162,7 @@ class JSRewriter {
   }
 
   rewriteURL(url) {
-    return url.startsWith('/') ? url : `/${url}`;
+    return url;
   }
 
   rewriteHistory(js) {
@@ -167,6 +170,7 @@ class JSRewriter {
   }
 }
 
+// HTML Rewriter class
 class HTMLRewriter {
   constructor() {
     this.srcRegex = /src\s*=\s*['"]([^'"]+)['"]/g;
@@ -201,10 +205,11 @@ class HTMLRewriter {
   }
 
   rewriteURL(url) {
-    return url.startsWith('/') ? url : `/${url}`;
+    return url;
   }
 }
 
+// CSS Rewriter class
 class CSSRewriter {
   constructor() {
     this.urlRegex = /url\(['"]([^'"]+)['"]\)/g;
@@ -224,93 +229,55 @@ class CSSRewriter {
   }
 
   rewriteURL(url) {
-    return url.startsWith('/') ? url : `/${url}`;
+    return url;
   }
 }
 
+// handleFetch function
 async function handleFetch(request) {
   const url = new URL(request.url);
-  const salt = generateSalt();
+  const cache = await getCache();
+  const cachedResponse = await cache.match(request);
 
-  if (request.method === 'GET') {
-    const response = await getResponse(request);
-    if (response) {
-      const responseBody = await response.text();
-      const rewrittenBody = rewriteResponse(request, responseBody, salt);
-      const rewrittenResponse = new Response(rewrittenBody, response);
-      await putResponse(request, rewrittenResponse);
-      return rewrittenResponse;
-    }
+  if (cachedResponse) {
+    return cachedResponse;
   }
 
-  if (request.method === 'POST') {
+  try {
     const response = await fetch(request);
-    const responseBody = await response.text();
-    const rewrittenBody = rewriteResponse(request, responseBody, salt);
-    const rewrittenResponse = new Response(rewrittenBody, response);
-    await putResponse(request, rewrittenResponse);
-    return rewrittenResponse;
+    const responseToCache = new Response(response.body, response);
+    responseToCache.headers.set('Cache-Control', 'max-age=3600');
+    await putResponse(request, responseToCache);
+    return responseToCache;
+  } catch (error) {
+    console.error('Error handling fetch:', error);
+    return new Response('Error', { status: 500 });
   }
-
-  if (request.method === 'WS') {
-    const websocketUrl = url.href.replace('http:', 'ws:');
-    const websocketRequest = new WebSocket(websocketUrl);
-
-    request.addEventListener('message', (event) => {
-      websocketRequest.send(event.data);
-    });
-
-    websocketRequest.addEventListener('message', (event) => {
-      request.dispatchEvent(new MessageEvent('message', { data: event.data }));
-    });
-
-    websocketRequest.addEventListener('error', (event) => {
-      request.dispatchEvent(new ErrorEvent('error', { error: event }));
-    });
-
-    websocketRequest.addEventListener('close', (event) => {
-      request.dispatchEvent(new CloseEvent('close', { wasClean: event.wasClean }));
-    });
-
-    return;
-  }
-
-  return fetch(request);
 }
 
-function rewriteResponse(request, responseBody, salt) {
-  const url = new URL(request.url);
-  const contentType = request.headers.get('Content-Type');
-
-  if (contentType && contentType.includes('application/javascript')) {
-    const jsRewriter = new JSRewriter();
-    responseBody = jsRewriter.rewriteJS(responseBody);
-  }
-
-  if (contentType && contentType.includes('text/html')) {
-    const htmlRewriter = new HTMLRewriter();
-    responseBody = htmlRewriter.rewriteHTML(responseBody);
-  }
-
-  if (contentType && contentType.includes('text/css')) {
-    const cssRewriter = new CSSRewriter();
-    responseBody = cssRewriter.rewriteCSS(responseBody);
-  }
-
-  responseBody = xorBase64Encode(responseBody, salt);
-
-  return responseBody;
-}
-
+// updateTab function
 function updateTab(tabId, url) {
   tabs[tabId] = url;
 }
 
+// closeTab function
 function closeTab(tabId) {
   delete tabs[tabId];
 }
 
+// search function
 function search(query, engine) {
-  const url = engine === 'google' ? `https://www.google.com/search?q=${query}` : `https://www.bing.com/search?q=${query}`;
-  return url;
+  // implement search functionality
+}
+
+// Generate a new salt and encode URL
+function encodeURL(url) {
+  const salt = generateSalt();
+  return xorBase64Encode(url, salt);
+}
+
+// Decode URL
+function decodeURL(encodedURL) {
+  const salt = rotatingSalt[rotatingSalt.length - 1];
+  return xorBase64Decode(encodedURL, salt);
 }
