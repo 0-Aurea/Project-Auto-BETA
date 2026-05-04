@@ -1,8 +1,9 @@
 const WebSocket = require('ws');
 const { URL } = require('url');
+const { UrlUtils } = require('./urlUtils');
 
 /**
- * WebSocket utility class for handling WebSocket upgrade proxying with header rewriting and subprotocol support.
+ * WebSocket utility class for handling WebSocket upgrade proxying.
  */
 class WebSocketUtils {
   /**
@@ -12,131 +13,91 @@ class WebSocketUtils {
 
   /**
    * Initialize the WebSocket server.
-   * @param {object} server - The HTTP server instance.
    * @param {object} options - WebSocket server options.
    */
-  static init(server, options) {
-    WebSocketUtils.wss = new WebSocket.Server({ server, ...options });
+  static async init(options) {
+    WebSocketUtils.wss = new WebSocket.Server(options);
 
     WebSocketUtils.wss.on('connection', (ws, req) => {
       const { headers, url } = req;
 
       // Handle WebSocket upgrade request
-      const websocketUrl = new URL(url, 'http://example.com');
-      const { searchParams } = websocketUrl;
+      const upgradeHeader = headers['sec-websocket-protocol'];
+      if (upgradeHeader) {
+        // Handle subprotocol negotiation
+        const subprotocols = upgradeHeader.split(',');
+        const selectedSubprotocol = subprotocols[0].trim();
 
-      // Extract subprotocols
-      const subprotocols = headers['sec-websocket-protocol'];
+        // Send WebSocket upgrade response
+        ws.on('message', (message) => {
+          // Handle incoming WebSocket message
+          const encodedMessage = UrlUtils.encodeUrl(message, ' rotating-salt ');
+          // Forward the message to the target WebSocket
+          WebSocketUtils.forwardMessage(encodedMessage, ws);
+        });
 
-      // Handle WebSocket connection
-      ws.on('message', (message) => {
-        // Rewrite and forward message
-        WebSocketUtils.rewriteAndForwardMessage(ws, message, subprotocols);
-      });
+        ws.on('error', (error) => {
+          // Handle WebSocket error
+          globalThis.console.error('WebSocket error:', error);
+        });
 
-      ws.on('close', () => {
-        // Handle WebSocket close
-      });
-
-      ws.on('error', (error) => {
-        // Handle WebSocket error
-        globalThis.console.error('WebSocket error:', error);
-      });
+        ws.on('close', () => {
+          // Handle WebSocket close
+          globalThis.console.log('WebSocket closed');
+        });
+      }
     });
   }
 
   /**
-   * Rewrites and forwards a WebSocket message.
+   * Forwards a WebSocket message to the target WebSocket.
+   * @param {string} message - The WebSocket message to forward.
    * @param {WebSocket} ws - The WebSocket instance.
-   * @param {Buffer} message - The message to rewrite and forward.
-   * @param {string|string[]} subprotocols - The subprotocols of the WebSocket connection.
    */
-  static rewriteAndForwardMessage(ws, message, subprotocols) {
+  static async forwardMessage(message, ws) {
     try {
-      // Parse the WebSocket message
-      let parsedMessage;
-      try {
-        parsedMessage = JSON.parse(message.toString());
-      } catch (e) {
-        // If the message is not JSON, send it as is
-        parsedMessage = message;
-      }
+      const targetUrl = new URL(ws.url);
+      const targetWs = new WebSocket(targetUrl.href);
 
-      // Rewrite the message
-      const rewrittenMessage = WebSocketUtils.rewriteMessage(parsedMessage, subprotocols);
+      targetWs.on('open', () => {
+        targetWs.send(message);
+      });
 
-      // Forward the rewritten message
-      ws.send(JSON.stringify(rewrittenMessage));
+      targetWs.on('message', (incomingMessage) => {
+        // Handle incoming message from target WebSocket
+        const decodedMessage = UrlUtils.decodeUrl(incomingMessage, ' rotating-salt ');
+        ws.send(decodedMessage);
+      });
+
+      targetWs.on('error', (error) => {
+        // Handle error from target WebSocket
+        globalThis.console.error('Target WebSocket error:', error);
+      });
+
+      targetWs.on('close', () => {
+        // Handle close of target WebSocket
+        globalThis.console.log('Target WebSocket closed');
+      });
     } catch (error) {
-      globalThis.console.error('Error rewriting and forwarding WebSocket message:', error);
+      globalThis.console.error('Error forwarding WebSocket message:', error);
     }
   }
 
   /**
-   * Rewrites a WebSocket message based on the subprotocols.
-   * @param {object|string} message - The message to rewrite.
-   * @param {string|string[]} subprotocols - The subprotocols of the WebSocket connection.
-   * @returns {object|string} The rewritten message.
+   * Handles WebSocket header rewriting.
+   * @param {object} headers - The WebSocket headers to rewrite.
+   * @returns {object} The rewritten WebSocket headers.
    */
-  static rewriteMessage(message, subprotocols) {
-    if (typeof message === 'object') {
-      // If the message is an object, check if it has a 'type' property
-      if (message.type === 'iceCandidate') {
-        // If the message is an ICE candidate, scrub it
-        return WebSocketUtils.scrubIceCandidate(message);
-      } else if (message.type === 'offer' || message.type === 'answer') {
-        // If the message is an offer or answer, rewrite the SDP
-        return WebSocketUtils.rewriteSdp(message);
-      }
-    }
+  static rewriteHeaders(headers) {
+    // Remove sensitive headers
+    delete headers['sec-websocket-protocol'];
+    delete headers['sec-websocket-extensions'];
 
-    // If no specific rewriting is needed, return the original message
-    return message;
-  }
+    // Rewrite Origin header
+    headers['origin'] = 'https://example.com'; // Replace with desired origin
 
-  /**
-   * Handles WebSocket ICE candidate scrubbing to prevent IP leaks.
-   * @param {object} candidate - The ICE candidate to scrub.
-   * @returns {object} The scrubbed ICE candidate.
-   */
-  static scrubIceCandidate(candidate) {
-    try {
-      // Remove the IP address from the candidate
-      delete candidate.ip;
-      delete candidate.address;
-
-      // Remove any other sensitive information
-      candidate = JSON.parse(JSON.stringify(candidate));
-
-      return candidate;
-    } catch (error) {
-      globalThis.console.error('Error scrubbing WebSocket ICE candidate:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Rewrites the SDP of an offer or answer message.
-   * @param {object} message - The message containing the SDP.
-   * @returns {object} The message with the rewritten SDP.
-   */
-  static rewriteSdp(message) {
-    try {
-      // Parse the SDP
-      const sdp = message.sdp;
-
-      // Remove any IP addresses from the SDP
-      sdp.replace(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/g, '');
-
-      // Remove any other sensitive information
-      message.sdp = sdp;
-
-      return message;
-    } catch (error) {
-      globalThis.console.error('Error rewriting WebSocket SDP:', error);
-      return null;
-    }
+    return headers;
   }
 }
 
-module.exports = WebSocketUtils;
+module.exports = { WebSocketUtils };
