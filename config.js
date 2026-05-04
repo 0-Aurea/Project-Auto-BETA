@@ -74,5 +74,29 @@ module.exports = {
   COMPRESSION: {
     BROTLI_ENABLED: BROTLI_COMPRESSION_ENABLED !== false,
     GZIP_ENABLED: GZIP_COMPRESSION_ENABLED !== false
+  },
+  LOGGING: {
+    LEVEL: 'info',
+    CONSOLE: true,
+    FILE: './logs/nexus.log'
+  },
+  SECURITY: {
+    SSL: {
+      CERT_FILE: SSL_CERT_FILE,
+      KEY_FILE: SSL_KEY_FILE
+    },
+    RATE_LIMITING: {
+      ENABLED: true,
+      WINDOW: 60000,
+      MAX_REQUESTS: 100
+    }
+  },
+  CACHE: {
+    MAX_AGE: MAX_CACHE_AGE,
+    TTL: 604800000 // 7 days default
+  },
+  SERVICE_WORKER: {
+    CACHE_NAME,
+    VERSION
   }
 };
