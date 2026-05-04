@@ -1,159 +1,130 @@
-const WebRTCIceCandidateScrubber = (() => {
-  const pc = new RTCPeerConnection({
-    iceServers: [],
-    iceCandidatePoolSize: 0,
-  });
+const WebSocket = require('ws');
+const http = require('http');
+const https = require('https');
+const url = require('url');
+const LRU = require('lru-cache');
 
-  let candidateQueue = [];
-
-  pc.onicecandidate = (event) => {
-    if (event.candidate) {
-      candidateQueue.push(event.candidate);
-    }
-  };
-
-  pc.onnegotiationneeded = () => {
-    pc.createOffer().then((offer) => {
-      return pc.setLocalDescription(new RTCSessionDescription({ type: 'offer', sdp: offer }));
-    }).catch((error) => {
-      console.error('Error in onnegotiationneeded:', error);
-    });
-  };
-
-  const scrubCandidates = (candidates) => {
-    const scrubbedCandidates = [];
-
-    candidates.forEach((candidate) => {
-      const { candidate: candidateStr } = candidate;
-      const ipRegex = /\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g;
-      const scrubbedCandidateStr = candidateStr.replace(ipRegex, '0.0.0.0');
-
-      scrubbedCandidates.push({ ...candidate, candidate: scrubbedCandidateStr });
-    });
-
-    return scrubbedCandidates;
-  };
-
-  const proxyWebRTC = (request, response) => {
-    if (request.method === 'POST' && request.url.includes('RTCIceCandidate')) {
-      try {
-        const candidates = JSON.parse(request.body);
-
-        const scrubbedCandidates = scrubCandidates(candidates);
-
-        response.writeHead(200, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify(scrubbedCandidates));
-      } catch (error) {
-        console.error('Error in proxyWebRTC:', error);
-        response.writeHead(500, { 'Content-Type': 'text/plain' });
-        response.end('Internal Server Error');
-      }
-    } else {
-      response.writeHead(405, { 'Content-Type': 'text/plain' });
-      response.end('Method Not Allowed');
-    }
-  };
-
-  return { proxyWebRTC };
-})();
+const cache = new LRU({
+  max: 1000,
+  maxAge: 1000 * 60 * 60 // 1 hour
+});
 
 class ProxyEngine {
   constructor() {
-    this.webRTCIceCandidateScrubber = WebRTCIceCandidateScrubber.proxyWebRTC;
-    this.dynamicImportHandler = this.dynamicImportHandler.bind(this);
-    this.websocketUpgradeHandler = this.websocketUpgradeHandler.bind(this);
+    this.server = http.createServer((req, res) => this.handleRequest(req, res));
+    this.wss = new WebSocket.Server({ server: this.server });
+    this.wss.on('connection', (ws, req) => this.handleWebSocket(ws, req));
   }
 
-  dynamicImportHandler(request, response) {
-    const dynamicImportRegex = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
-    const html = request.body;
+  handleRequest(req, res) {
+    const { hostname, pathname } = url.parse(req.url);
+    const targetUrl = `http://${hostname}${pathname}`;
 
-    const modifiedHtml = html.replace(dynamicImportRegex, (match, importUrl) => {
-      const proxiedUrl = this.getProxiedUrl(importUrl);
-      return `import('${proxiedUrl}')`;
+    req.headers['x-forwarded-for'] = req.socket.remoteAddress;
+    req.headers['x-forwarded-port'] = req.socket.remotePort;
+
+    const options = {
+      hostname,
+      port: 80,
+      path: pathname,
+      method: req.method,
+      headers: req.headers
+    };
+
+    const proxyReq = http.request(options, (proxyRes) => {
+      res.writeHead(proxyRes.statusCode, proxyRes.headers);
+      proxyRes.pipe(res);
     });
 
-    response.writeHead(200, { 'Content-Type': 'text/html' });
-    response.end(modifiedHtml);
+    req.pipe(proxyReq);
+
+    proxyReq.on('error', (err) => {
+      console.error(err);
+      res.statusCode = 500;
+      res.end();
+    });
   }
 
-  websocketUpgradeHandler(request, response) {
-    if (request.method === 'GET' && request.headers['upgrade'] === 'websocket') {
-      const websocketUrl = request.url;
-      const proxiedUrl = this.getProxiedUrl(websocketUrl);
+  handleWebSocket(ws, req) {
+    const { hostname, pathname } = url.parse(req.url);
+    const targetUrl = `ws://${hostname}${pathname}`;
 
-      const websocketOptions = {
-        headers: {
-          'Upgrade': 'websocket',
-          'Connection': 'Upgrade',
-        },
-      };
+    const options = {
+      hostname,
+      port: 80,
+      path: pathname,
+      headers: req.headers
+    };
 
-      const websocketRequest = {
-        ...request,
-        url: proxiedUrl,
-        headers: websocketOptions.headers,
-      };
+    const proxyWs = new WebSocket(targetUrl, options);
 
-      const WebSocket = require('ws');
-      const wss = new WebSocket.Server({ noServer: true });
+    ws.on('message', (message) => {
+      proxyWs.send(message);
+    });
 
-      wss.on('connection', (ws) => {
-        const clientSocket = new WebSocket(proxiedUrl);
+    ws.on('close', () => {
+      proxyWs.close();
+    });
 
-        clientSocket.on('open', () => {
-          ws.on('message', (message) => {
-            clientSocket.send(message);
-          });
+    ws.on('error', (err) => {
+      console.error(err);
+      proxyWs.close();
+    });
 
-          clientSocket.on('message', (message) => {
-            ws.send(message);
-          });
-        });
+    proxyWs.on('message', (message) => {
+      ws.send(message);
+    });
 
-        clientSocket.on('close', () => {
-          ws.close();
-        });
+    proxyWs.on('close', () => {
+      ws.close();
+    });
 
-        ws.on('close', () => {
-          clientSocket.close();
-        });
-      });
-
-      const http = require('http');
-      http.createServer((req, res) => {
-        if (req.headers['upgrade'] === 'websocket') {
-          wss.handleUpgrade(req, req.socket, Buffer.alloc(0), (ws) => {
-            wss.emit('connection', ws, req);
-          });
-        } else {
-          res.writeHead(400, { 'Content-Type': 'text/plain' });
-          res.end('Bad Request');
-        }
-      }).listen(8080);
-    } else {
-      response.writeHead(405, { 'Content-Type': 'text/plain' });
-      response.end('Method Not Allowed');
-    }
+    proxyWs.on('error', (err) => {
+      console.error(err);
+      ws.close();
+    });
   }
 
-  getProxiedUrl(url) {
-    const parsedUrl = new URL(url);
-    const proxiedUrl = `/${parsedUrl.protocol.replace(':', '')}/${parsedUrl.host}${parsedUrl.pathname}`;
+  handleWebRTCIceCandidate(req, res) {
+    const { candidate } = req.body;
 
-    return proxiedUrl;
+    // Scrub the ICE candidate to prevent IP leaks
+    const scrubbedCandidate = this.scrubIceCandidate(candidate);
+
+    res.json({ candidate: scrubbedCandidate });
   }
 
-  handleRequest(request, response) {
-    if (request.url.includes('RTCIceCandidate')) {
-      this.webRTCIceCandidateScrubber(request, response);
-    } else if (request.method === 'GET' && request.headers['upgrade'] === 'websocket') {
-      this.websocketUpgradeHandler(request, response);
-    } else {
-      response.writeHead(404, { 'Content-Type': 'text/plain' });
-      response.end('Not Found');
-    }
+  scrubIceCandidate(candidate) {
+    // Implement ICE candidate scrubbing logic here
+    // For demonstration purposes, this simply removes the IP address
+    return candidate.replace(/a=rtcp:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/g, 'a=rtcp:0.0.0.0');
+  }
+
+  start() {
+    this.server.listen(8080, () => {
+      console.log('Proxy engine listening on port 8080');
+    });
   }
 }
 
-module.exports = ProxyEngine;
+const proxyEngine = new ProxyEngine();
+proxyEngine.start();
+
+module.exports = proxyEngine;
+const express = require('express');
+const app = express();
+
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  next();
+});
+
+app.get('/webrtc/ice/candidate', (req, res) => {
+  const proxyEngine = require('./proxyEngine');
+  proxyEngine.handleWebRTCIceCandidate(req, res);
+});
+
+app.listen(8081, () => {
+  console.log('Express server listening on port 8081');
+});
