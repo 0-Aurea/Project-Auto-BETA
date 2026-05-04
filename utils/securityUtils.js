@@ -1,84 +1,91 @@
+'use strict';
+
 /**
- * Security utility class for general security-related functions and checks.
+ * Security utility class for handling various security-related tasks.
  */
 class SecurityUtils {
   /**
-   * Regular expression to match common web vulnerabilities in user input.
+   * Regular expression to match and validate base64 encoded strings.
    */
-  static VULNERABILITY_REGEX = /<(?:script|img|iframe|object|embed|applet|form|input|textarea|select|option|optgroup|button|style|link|meta|frame|frameset|noframes|noframe|iframe|frame|script|style|svg|math|plaintext|marquee|blink|spacer|a|abbr|acronym|address|applet|area|b|base|basefont|bdi|bdo|big|blockquote|body|br|button|canvas|caption|center|cite|code|col|colgroup|dd|del|dfn|dir|div|dl|dt|em|fieldset|figcaption|figure|font|footer|form|frameset|h1|h2|h3|h4|h5|h6|head|header|hgroup|hr|html|i|iframe|ins|kbd|keygen|label|legend|li|link|main|map|mark|menu|menuitem|meta|meter|nav|noframes|noscript|object|ol|optgroup|option|output|p|param|picture|plaintext|portal|pre|progress|q|rb|rp|rt|rtc|ruby|s|samp|script|section|select|slot|small|source|span|strike|strong|style|sub|summary|sup|svg|table|tbody|td|template|textarea|tfoot|th|thead|time|title|tr|track|tt|u|ul|var|video|wbr|xmp)[\s\S]*?(?:\/>|>)/gi;
+  static BASE64_REGEX = /^[A-Za-z0-9+/=]+$/;
 
   /**
-   * Check if a string contains potential web vulnerabilities.
-   * @param {string} input - The input string to check.
-   * @returns {boolean} True if the string contains potential web vulnerabilities, false otherwise.
+   * Generates a random salt for XOR encoding.
+   * @returns {string} A random salt.
    */
-  static containsVulnerabilities(input) {
-    return SecurityUtils.VULNERABILITY_REGEX.test(input);
+  static generateSalt() {
+    return Math.random().toString(36).slice(2);
   }
 
   /**
-   * Sanitize a string to prevent web vulnerabilities.
-   * @param {string} input - The input string to sanitize.
-   * @returns {string} The sanitized string.
+   * XOR encodes a string with a given salt.
+   * @param {string} str - The string to encode.
+   * @param {string} salt - The salt to use for encoding.
+   * @returns {string} The XOR encoded string.
    */
-  static sanitizeString(input) {
-    return input.replace(SecurityUtils.VULNERABILITY_REGEX, '');
-  }
-
-  /**
-   * Validate a URL to prevent SSRF and DNS rebinding attacks.
-   * @param {string} url - The URL to validate.
-   * @returns {boolean} True if the URL is valid, false otherwise.
-   */
-  static validateUrl(url) {
-    try {
-      const parsedUrl = new URL(url);
-      return parsedUrl.protocol && parsedUrl.host;
-    } catch (error) {
-      return false;
+  static xorEncode(str, salt) {
+    let encodedStr = '';
+    for (let i = 0; i < str.length; i++) {
+      encodedStr += String.fromCharCode(str.charCodeAt(i) ^ salt.charCodeAt(i % salt.length));
     }
+    return btoa(encodedStr);
   }
 
   /**
-   * Check if a URL is a valid HTTPS URL.
-   * @param {string} url - The URL to check.
-   * @returns {boolean} True if the URL is a valid HTTPS URL, false otherwise.
+   * XOR decodes a string with a given salt.
+   * @param {string} encodedStr - The string to decode.
+   * @param {string} salt - The salt to use for decoding.
+   * @returns {string} The XOR decoded string.
    */
-  static isValidHttpsUrl(url) {
-    try {
-      const parsedUrl = new URL(url);
-      return parsedUrl.protocol === 'https:' && parsedUrl.host;
-    } catch (error) {
-      return false;
+  static xorDecode(encodedStr, salt) {
+    const decodedStr = atob(encodedStr);
+    let result = '';
+    for (let i = 0; i < decodedStr.length; i++) {
+      result += String.fromCharCode(decodedStr.charCodeAt(i) ^ salt.charCodeAt(i % salt.length));
     }
+    return result;
   }
 
   /**
-   * Generate a random cryptographically secure token.
-   * @param {number} length - The length of the token.
-   * @returns {string} The generated token.
+   * Validates a base64 encoded string.
+   * @param {string} encodedStr - The string to validate.
+   * @returns {boolean} True if the string is a valid base64 encoded string, false otherwise.
    */
-  static generateToken(length) {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let token = '';
-    for (let i = 0; i < length; i++) {
-      token += chars.charAt(Math.floor(Math.random() * chars.length));
+  static isValidBase64(encodedStr) {
+    return SecurityUtils.BASE64_REGEX.test(encodedStr);
+  }
+
+  /**
+   * Escapes a string to prevent XSS attacks.
+   * @param {string} str - The string to escape.
+   * @returns {string} The escaped string.
+   */
+  static escapeHtml(str) {
+    return str.replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  /**
+   * Scrubs WebRTC ICE candidate to prevent IP leaks.
+   * @param {object} candidate - The WebRTC ICE candidate to scrub.
+   * @returns {object} The scrubbed WebRTC ICE candidate.
+   */
+  static scrubWebrtcIceCandidate(candidate) {
+    if (candidate && candidate.candidate) {
+      const candidateStr = candidate.candidate;
+      const ipRegex = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g;
+      const ipMatches = candidateStr.match(ipRegex);
+      if (ipMatches) {
+        ipMatches.forEach(ip => {
+          candidate.candidate = candidate.candidate.replace(ip, '0.0.0.0');
+        });
+      }
     }
-    return token;
-  }
-
-  /**
-   * Hash a string using SHA-256.
-   * @param {string} input - The input string to hash.
-   * @returns {string} The hashed string.
-   */
-  static hashString(input) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(input);
-    return crypto.subtle.digest('SHA-256', data).then((hash) => {
-      return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
-    });
+    return candidate;
   }
 }
 
-export default SecurityUtils;
+module.exports = SecurityUtils;
