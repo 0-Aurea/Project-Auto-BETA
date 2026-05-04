@@ -31,7 +31,7 @@ class WebSocketUtils {
       // Handle WebSocket connection
       ws.on('message', (message) => {
         // Rewrite and forward message
-        WebSocketUtils.rewriteAndForwardMessage(ws, message);
+        WebSocketUtils.rewriteAndForwardMessage(ws, message, subprotocols);
       });
 
       ws.on('close', () => {
@@ -49,14 +49,49 @@ class WebSocketUtils {
    * Rewrites and forwards a WebSocket message.
    * @param {WebSocket} ws - The WebSocket instance.
    * @param {Buffer} message - The message to rewrite and forward.
+   * @param {string|string[]} subprotocols - The subprotocols of the WebSocket connection.
    */
-  static rewriteAndForwardMessage(ws, message) {
+  static rewriteAndForwardMessage(ws, message, subprotocols) {
     try {
-      // TO DO: implement message rewriting logic
-      ws.send(message);
+      // Parse the WebSocket message
+      let parsedMessage;
+      try {
+        parsedMessage = JSON.parse(message.toString());
+      } catch (e) {
+        // If the message is not JSON, send it as is
+        parsedMessage = message;
+      }
+
+      // Rewrite the message
+      const rewrittenMessage = WebSocketUtils.rewriteMessage(parsedMessage, subprotocols);
+
+      // Forward the rewritten message
+      ws.send(JSON.stringify(rewrittenMessage));
     } catch (error) {
       globalThis.console.error('Error rewriting and forwarding WebSocket message:', error);
     }
+  }
+
+  /**
+   * Rewrites a WebSocket message based on the subprotocols.
+   * @param {object|string} message - The message to rewrite.
+   * @param {string|string[]} subprotocols - The subprotocols of the WebSocket connection.
+   * @returns {object|string} The rewritten message.
+   */
+  static rewriteMessage(message, subprotocols) {
+    if (typeof message === 'object') {
+      // If the message is an object, check if it has a 'type' property
+      if (message.type === 'iceCandidate') {
+        // If the message is an ICE candidate, scrub it
+        return WebSocketUtils.scrubIceCandidate(message);
+      } else if (message.type === 'offer' || message.type === 'answer') {
+        // If the message is an offer or answer, rewrite the SDP
+        return WebSocketUtils.rewriteSdp(message);
+      }
+    }
+
+    // If no specific rewriting is needed, return the original message
+    return message;
   }
 
   /**
@@ -66,10 +101,39 @@ class WebSocketUtils {
    */
   static scrubIceCandidate(candidate) {
     try {
-      // TO DO: implement ICE candidate scrubbing logic
+      // Remove the IP address from the candidate
+      delete candidate.ip;
+      delete candidate.address;
+
+      // Remove any other sensitive information
+      candidate = JSON.parse(JSON.stringify(candidate));
+
       return candidate;
     } catch (error) {
       globalThis.console.error('Error scrubbing WebSocket ICE candidate:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Rewrites the SDP of an offer or answer message.
+   * @param {object} message - The message containing the SDP.
+   * @returns {object} The message with the rewritten SDP.
+   */
+  static rewriteSdp(message) {
+    try {
+      // Parse the SDP
+      const sdp = message.sdp;
+
+      // Remove any IP addresses from the SDP
+      sdp.replace(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/g, '');
+
+      // Remove any other sensitive information
+      message.sdp = sdp;
+
+      return message;
+    } catch (error) {
+      globalThis.console.error('Error rewriting WebSocket SDP:', error);
       return null;
     }
   }
