@@ -97,7 +97,6 @@ class WebSocketProxyUtils {
     // Encode URL using current salt
     const encodedOrigin = Encoding.encodeUrl(origin);
 
-    // Return rewritten WebSocket message
     return message;
   }
 
@@ -120,8 +119,8 @@ class WebSocketProxyUtils {
       delete headers[header];
     });
 
-    // Add or modify headers as needed
-    headers['sec-websocket-protocol'] = 'nexus-proxy';
+    // Add custom headers if needed
+    headers['X-Forwarded-For'] = '127.0.0.1';
 
     return headers;
   }
