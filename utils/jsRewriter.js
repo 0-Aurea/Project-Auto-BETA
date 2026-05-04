@@ -92,43 +92,52 @@ class JSRewriterUtils {
     });
 
     // Handle source map URL stripping
-    jsString = SourceMapUtils.stripJsSourceMap(jsString);
+    jsString = jsString.replace(JSRewriterUtils.SOURCE_MAP_REGEX, (match, p1) => {
+      return '';
+    });
 
     // Handle document.domain mutations
     jsString = jsString.replace(JSRewriterUtils.DOCUMENT_DOMAIN_REGEX, (match, p1) => {
-      return `document.domain = ${JSON.stringify(p1)}`;
+      return `document.domain = ${JSON.stringify(UrlUtils.getRewrittenHost(p1))}`;
     });
 
     // Handle window.location assignments
     jsString = jsString.replace(JSRewriterUtils.WINDOW_LOCATION_REGEX, (match, p1) => {
-      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p1, baseUrl);
-      return `window.location = ${JSON.stringify(rewrittenUrl)}`;
+      return `window.location = ${JSON.stringify(UrlUtils.getRewrittenUrl(p1, baseUrl))}`;
     });
 
     // Handle window.open calls
     jsString = jsString.replace(JSRewriterUtils.WINDOW_OPEN_REGEX, (match, p1) => {
-      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p1, baseUrl);
-      return `window.open(${JSON.stringify(rewrittenUrl)})`;
+      return `window.open(${JSON.stringify(UrlUtils.getRewrittenUrl(p1, baseUrl))})`;
     });
 
     // Handle history.pushState and history.replaceState calls
     jsString = jsString.replace(JSRewriterUtils.HISTORY_PUSH_STATE_REGEX, (match, p1, p2, p3) => {
-      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p3, baseUrl);
-      return `${p1}(${p2}, ${JSON.stringify(rewrittenUrl)})`;
+      return `${p1}(${p2}, ${JSON.stringify(UrlUtils.getRewrittenUrl(p3, baseUrl))})`;
     });
 
     return jsString;
   }
 
   /**
-   * Rewrites a URL by applying the proxy's URL encoding and base URL.
+   * Rewrites a URL by applying the proxy's URL rewriting rules.
    * @param {string} url - The URL to rewrite.
    * @param {string} baseUrl - The base URL of the JavaScript file.
    * @returns {string} The rewritten URL.
    */
   static rewriteUrl(url, baseUrl) {
-    const absoluteUrl = new URL(url, baseUrl).href;
-    return EncodingUtils.encodeUrl(absoluteUrl);
+    const dom = new JSDOM(url);
+    const rewrittenUrl = UrlUtils.getRewrittenUrl(dom.window.location.href, baseUrl);
+    return rewrittenUrl;
+  }
+
+  /**
+   * Strips sourceMappingURL comments from a JavaScript string.
+   * @param {string} jsString - The JavaScript string to strip.
+   * @returns {string} The JavaScript string with sourceMappingURL comments stripped.
+   */
+  static stripSourceMappingURL(jsString) {
+    return jsString.replace(JSRewriterUtils.SOURCE_MAP_REGEX, '');
   }
 }
 
