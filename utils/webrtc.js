@@ -1,100 +1,53 @@
-const { RTCPeerConnection, RTCSessionDescription } = globalThis;
-
 /**
- * WebRTC utility class for handling WebRTC ICE candidate scrubbing to prevent IP leaks.
+ * WebRTC utility class for handling WebRTC ICE candidate scrubbing.
  */
 class WebRTCUtils {
   /**
+   * Regular expression to match WebRTC ICE candidate strings.
+   */
+  static ICE_CANDIDATE_REGEX = /candidate:([a-zA-Z0-9]+)\s+([a-zA-Z0-9]+)\s+([a-zA-Z0-9]+)\s+([a-zA-Z0-9]+)\s+([a-zA-Z0-9]+)\s+([a-zA-Z0-9]+)/g;
+
+  /**
    * Regular expression to match WebRTC ICE candidate IP addresses.
    */
-  static IP_ADDRESS_REGEX = /\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g;
+  static IP_ADDRESS_REGEX = /(?:[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|[a-zA-Z0-9.-]+)/g;
 
   /**
-   * Scrub WebRTC ICE candidate IP addresses to prevent IP leaks.
-   * @param {RTCPeerConnection} pc - The RTCPeerConnection instance.
-   */
-  static scrubIceCandidates(pc) {
-    if (!(pc instanceof RTCPeerConnection)) {
-      throw new Error('Invalid RTCPeerConnection instance');
-    }
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        const candidate = event.candidate.candidate;
-        const scrubbedCandidate = WebRTCUtils.scrubIpAddresses(candidate);
-        event.candidate.candidate = scrubbedCandidate;
-      }
-    };
-  }
-
-  /**
-   * Scrub IP addresses from a WebRTC ICE candidate string.
+   * Scrubs WebRTC ICE candidate IP addresses.
    * @param {string} candidate - The WebRTC ICE candidate string.
    * @returns {string} The scrubbed WebRTC ICE candidate string.
    */
-  static scrubIpAddresses(candidate) {
-    return candidate.replace(WebRTCUtils.IP_ADDRESS_REGEX, (match) => {
-      // Replace IP addresses with a placeholder value
-      return '0.0.0.0';
-    });
-  }
-
-  /**
-   * Scrub IP addresses from a WebRTC SDP string.
-   * @param {string} sdp - The WebRTC SDP string.
-   * @returns {string} The scrubbed WebRTC SDP string.
-   */
-  static scrubSdpIpAddresses(sdp) {
-    return sdp.replace(WebRTCUtils.IP_ADDRESS_REGEX, (match) => {
-      // Replace IP addresses with a placeholder value
-      return '0.0.0.0';
-    });
-  }
-
-  /**
-   * Patch the RTCPeerConnection prototype to scrub WebRTC ICE candidate IP addresses.
-   */
-  static patchRTCPeerConnection() {
-    if (RTCPeerConnection.prototype._originalIceCandidate) {
-      return;
+  static scrubIceCandidate(candidate) {
+    const ipAddresses = candidate.match(WebRTCUtils.IP_ADDRESS_REGEX);
+    if (ipAddresses) {
+      ipAddresses.forEach((ipAddress) => {
+        candidate = candidate.replace(ipAddress, '0.0.0.0');
+      });
     }
+    return candidate;
+  }
 
-    RTCPeerConnection.prototype._originalIceCandidate = RTCPeerConnection.prototype.onicecandidate;
+  /**
+   * Handles WebRTC ICE candidate creation.
+   * @param {RTCPeerConnection} peerConnection - The RTCPeerConnection instance.
+   * @param {RTCIceCandidate} candidate - The RTCIceCandidate instance.
+   */
+  static handleIceCandidate(peerConnection, candidate) {
+    const scrubbedCandidate = WebRTCUtils.scrubIceCandidate(candidate.candidate);
+    peerConnection.addIceCandidate(new RTCIceCandidate({ candidate: scrubbedCandidate }));
+  }
 
-    RTCPeerConnection.prototype.onicecandidate = function (event) {
+  /**
+   * Initializes WebRTC event listeners.
+   * @param {RTCPeerConnection} peerConnection - The RTCPeerConnection instance.
+   */
+  static initEventListeners(peerConnection) {
+    peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
-        const candidate = event.candidate.candidate;
-        const scrubbedCandidate = WebRTCUtils.scrubIpAddresses(candidate);
-        event.candidate.candidate = scrubbedCandidate;
+        WebRTCUtils.handleIceCandidate(peerConnection, event.candidate);
       }
-
-      this._originalIceCandidate.call(this, event);
-    };
-
-    RTCPeerConnection.prototype._originalSetLocalDescription = RTCPeerConnection.prototype.setLocalDescription;
-
-    RTCPeerConnection.prototype.setLocalDescription = async function (description) {
-      if (description.type === 'offer' || description.type === 'answer') {
-        const scrubbedSdp = WebRTCUtils.scrubSdpIpAddresses(description.sdp);
-        description.sdp = scrubbedSdp;
-      }
-
-      return this._originalSetLocalDescription.call(this, description);
-    };
-
-    RTCPeerConnection.prototype._originalSetRemoteDescription = RTCPeerConnection.prototype.setRemoteDescription;
-
-    RTCPeerConnection.prototype.setRemoteDescription = async function (description) {
-      if (description.type === 'offer' || description.type === 'answer') {
-        const scrubbedSdp = WebRTCUtils.scrubSdpIpAddresses(description.sdp);
-        description.sdp = scrubbedSdp;
-      }
-
-      return this._originalSetRemoteDescription.call(this, description);
     };
   }
 }
 
-WebRTCUtils.patchRTCPeerConnection();
-
-export default WebRTCUtils;
+module.exports = WebRTCUtils;
