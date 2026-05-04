@@ -85,63 +85,48 @@ class WebRTCUtils {
    * Set the local description of a peer connection and handle errors.
    * @param {RTCPeerConnection} peerConnection - The peer connection.
    * @param {RTCSessionDescription} description - The local description.
-   * @returns {Promise<void>}
+   * @returns {Promise<void>} A promise that resolves when the operation is complete.
    */
-  static async setLocalDescription(peerConnection, description) {
-    try {
-      const scrubbedDescription = new RTCSessionDescription({
-        type: description.type,
-        sdp: WebRTCUtils.scrubSdp(description.sdp),
+  static setLocalDescription(peerConnection, description) {
+    return peerConnection.setLocalDescription(description)
+      .catch((error) => {
+        globalThis.console.error('Error setting local description:', error);
+        throw error;
       });
-      await peerConnection.setLocalDescription(scrubbedDescription);
-    } catch (error) {
-      globalThis.console.error('Error setting local description:', error);
-    }
   }
 
   /**
-   * Set the remote description of a peer connection and handle errors.
+   * Create an offer for a peer connection and handle errors.
    * @param {RTCPeerConnection} peerConnection - The peer connection.
-   * @param {RTCSessionDescription} description - The remote description.
-   * @returns {Promise<void>}
+   * @returns {Promise<RTCSessionDescription>} A promise that resolves with the offer.
    */
-  static async setRemoteDescription(peerConnection, description) {
-    try {
-      const scrubbedDescription = new RTCSessionDescription({
-        type: description.type,
-        sdp: WebRTCUtils.scrubSdp(description.sdp),
+  static createOffer(peerConnection) {
+    return peerConnection.createOffer()
+      .then((offer) => {
+        return WebRTCUtils.setLocalDescription(peerConnection, offer)
+          .then(() => offer);
+      })
+      .catch((error) => {
+        globalThis.console.error('Error creating offer:', error);
+        throw error;
       });
-      await peerConnection.setRemoteDescription(scrubbedDescription);
-    } catch (error) {
-      globalThis.console.error('Error setting remote description:', error);
-    }
   }
 
   /**
-   * Add a stream to a peer connection and handle errors.
+   * Create an answer for a peer connection and handle errors.
    * @param {RTCPeerConnection} peerConnection - The peer connection.
-   * @param {MediaStream} stream - The stream to add.
-   * @returns {Promise<void>}
+   * @returns {Promise<RTCSessionDescription>} A promise that resolves with the answer.
    */
-  static async addStream(peerConnection, stream) {
-    try {
-      await peerConnection.addStream(stream);
-    } catch (error) {
-      globalThis.console.error('Error adding stream:', error);
-    }
-  }
-
-  /**
-   * Close a peer connection and handle errors.
-   * @param {RTCPeerConnection} peerConnection - The peer connection.
-   * @returns {Promise<void>}
-   */
-  static async closePeerConnection(peerConnection) {
-    try {
-      await peerConnection.close();
-    } catch (error) {
-      globalThis.console.error('Error closing peer connection:', error);
-    }
+  static createAnswer(peerConnection) {
+    return peerConnection.createAnswer()
+      .then((answer) => {
+        return WebRTCUtils.setLocalDescription(peerConnection, answer)
+          .then(() => answer);
+      })
+      .catch((error) => {
+        globalThis.console.error('Error creating answer:', error);
+        throw error;
+      });
   }
 }
 
