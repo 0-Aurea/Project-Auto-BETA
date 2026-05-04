@@ -99,39 +99,38 @@ class ProxyEngine {
       const wss = new WebSocket.Server({ noServer: true });
 
       wss.on('connection', (ws) => {
-        const client = new WebSocket(websocketUrl);
+        const clientSocket = new WebSocket(proxiedUrl);
 
-        client.on('message', (message) => {
-          ws.send(message);
+        clientSocket.on('open', () => {
+          ws.on('message', (message) => {
+            clientSocket.send(message);
+          });
+
+          clientSocket.on('message', (message) => {
+            ws.send(message);
+          });
         });
 
-        ws.on('message', (message) => {
-          client.send(message);
-        });
-
-        client.on('close', () => {
+        clientSocket.on('close', () => {
           ws.close();
         });
 
         ws.on('close', () => {
-          client.close();
+          clientSocket.close();
         });
       });
 
-      const server = require('http').createServer((req, res) => {
+      const http = require('http');
+      http.createServer((req, res) => {
         if (req.headers['upgrade'] === 'websocket') {
           wss.handleUpgrade(req, req.socket, Buffer.alloc(0), (ws) => {
             wss.emit('connection', ws, req);
           });
         } else {
-          res.writeHead(404);
-          res.end();
+          res.writeHead(400, { 'Content-Type': 'text/plain' });
+          res.end('Bad Request');
         }
-      });
-
-      server.listen(0, () => {
-        console.log('WebSocket server listening on port', server.address().port);
-      });
+      }).listen(8080);
     } else {
       response.writeHead(405, { 'Content-Type': 'text/plain' });
       response.end('Method Not Allowed');
@@ -139,10 +138,8 @@ class ProxyEngine {
   }
 
   getProxiedUrl(url) {
-    const encoder = new TextEncoder();
-    const randomSalt = Array.from(crypto.getRandomValues(new Uint8Array(16))).map((b) => b.toString(16).padStart(2, '0')).join('');
-    const encodedUrl = btoa(unescape(encodeURIComponent(url))).replace(/=/g, '');
-    const proxiedUrl = `/${randomSalt}${encodedUrl}`;
+    const parsedUrl = new URL(url);
+    const proxiedUrl = `/${parsedUrl.protocol.replace(':', '')}/${parsedUrl.host}${parsedUrl.pathname}`;
 
     return proxiedUrl;
   }
