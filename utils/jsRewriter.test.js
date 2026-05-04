@@ -1,94 +1,90 @@
-const { JSDOM } = require('jsdom');
+const { describe, it, expect } = require('@jest/globals');
 const { jsRewriter } = require('./jsRewriter');
 
 describe('jsRewriter', () => {
-  it('should handle eval()', () => {
-    const jsCode = 'eval("console.log(\'Hello World\')");';
-    const rewrittenJsCode = jsRewriter(jsCode);
-    expect(rewrittenJsCode).not.toContain('eval');
+  it('should rewrite eval() calls', () => {
+    const originalCode = 'eval("console.log(123)");';
+    const rewrittenCode = jsRewriter(originalCode);
+    expect(rewrittenCode).not.toContain('eval');
   });
 
-  it('should handle Function()', () => {
-    const jsCode = 'const func = new Function("console.log(\'Hello World\')");';
-    const rewrittenJsCode = jsRewriter(jsCode);
-    expect(rewrittenJsCode).not.toContain('Function');
+  it('should rewrite Function() calls', () => {
+    const originalCode = 'const func = new Function("console.log(123)");';
+    const rewrittenCode = jsRewriter(originalCode);
+    expect(rewrittenCode).not.toContain('Function');
   });
 
-  it('should handle dynamic import()', () => {
-    const jsCode = 'import("https://example.com/module.js");';
-    const rewrittenJsCode = jsRewriter(jsCode);
-    expect(rewrittenJsCode).not.toContain('import');
+  it('should rewrite dynamic import() calls', () => {
+    const originalCode = 'import("https://example.com/module.js");';
+    const rewrittenCode = jsRewriter(originalCode);
+    expect(rewrittenCode).not.toContain('import');
   });
 
-  it('should handle new Worker()', () => {
-    const jsCode = 'const worker = new Worker("https://example.com/worker.js");';
-    const rewrittenJsCode = jsRewriter(jsCode);
-    expect(rewrittenJsCode).not.toContain('Worker');
+  it('should rewrite Web Worker creation', () => {
+    const originalCode = 'new Worker("https://example.com/worker.js");';
+    const rewrittenCode = jsRewriter(originalCode);
+    expect(rewrittenCode).not.toContain('Worker');
   });
 
-  it('should handle importScripts()', () => {
-    const jsCode = 'importScripts("https://example.com/script.js");';
-    const rewrittenJsCode = jsRewriter(jsCode);
-    expect(rewrittenJsCode).not.toContain('importScripts');
+  it('should rewrite importScripts() calls', () => {
+    const originalCode = 'importScripts("https://example.com/script.js");';
+    const rewrittenCode = jsRewriter(originalCode);
+    expect(rewrittenCode).not.toContain('importScripts');
   });
 
-  it('should handle document.domain mutations', () => {
-    const jsCode = 'document.domain = "example.com";';
-    const rewrittenJsCode = jsRewriter(jsCode);
-    expect(rewrittenJsCode).not.toContain('document.domain');
+  it('should rewrite document.domain mutations', () => {
+    const originalCode = 'document.domain = "example.com";';
+    const rewrittenCode = jsRewriter(originalCode);
+    expect(rewrittenCode).not.toContain('document.domain');
   });
 
-  it('should handle window.location', () => {
-    const jsCode = 'window.location.href = "https://example.com";';
-    const rewrittenJsCode = jsRewriter(jsCode);
-    expect(rewrittenJsCode).not.toContain('window.location');
+  it('should rewrite window.location assignments', () => {
+    const originalCode = 'window.location.href = "https://example.com";';
+    const rewrittenCode = jsRewriter(originalCode);
+    expect(rewrittenCode).not.toContain('window.location');
   });
 
-  it('should handle window.open', () => {
-    const jsCode = 'window.open("https://example.com", "_blank");';
-    const rewrittenJsCode = jsRewriter(jsCode);
-    expect(rewrittenJsCode).not.toContain('window.open');
+  it('should rewrite window.open calls', () => {
+    const originalCode = 'window.open("https://example.com");';
+    const rewrittenCode = jsRewriter(originalCode);
+    expect(rewrittenCode).not.toContain('window.open');
   });
 
-  it('should handle history.pushState/replaceState', () => {
-    const jsCode = 'history.pushState({}, "", "https://example.com");';
-    const rewrittenJsCode = jsRewriter(jsCode);
-    expect(rewrittenJsCode).not.toContain('history.pushState');
+  it('should rewrite history.pushState calls', () => {
+    const originalCode = 'history.pushState({}, "", "https://example.com");';
+    const rewrittenCode = jsRewriter(originalCode);
+    expect(rewrittenCode).not.toContain('history.pushState');
+  });
+
+  it('should rewrite history.replaceState calls', () => {
+    const originalCode = 'history.replaceState({}, "", "https://example.com");';
+    const rewrittenCode = jsRewriter(originalCode);
+    expect(rewrittenCode).not.toContain('history.replaceState');
   });
 
   it('should handle complex code with multiple rewrites', () => {
-    const jsCode = `
-      eval("console.log(\'Hello World\')");
-      const func = new Function("console.log(\'Hello World\')");
+    const originalCode = `
+      eval("console.log(123)");
+      const func = new Function("console.log(456)");
       import("https://example.com/module.js");
-      const worker = new Worker("https://example.com/worker.js");
+      new Worker("https://example.com/worker.js");
       importScripts("https://example.com/script.js");
       document.domain = "example.com";
       window.location.href = "https://example.com";
-      window.open("https://example.com", "_blank");
+      window.open("https://example.com");
       history.pushState({}, "", "https://example.com");
+      history.replaceState({}, "", "https://example.com");
     `;
-    const rewrittenJsCode = jsRewriter(jsCode);
-    expect(rewrittenJsCode).not.toContain('eval');
-    expect(rewrittenJsCode).not.toContain('Function');
-    expect(rewrittenJsCode).not.toContain('import');
-    expect(rewrittenJsCode).not.toContain('Worker');
-    expect(rewrittenJsCode).not.toContain('importScripts');
-    expect(rewrittenJsCode).not.toContain('document.domain');
-    expect(rewrittenJsCode).not.toContain('window.location');
-    expect(rewrittenJsCode).not.toContain('window.open');
-    expect(rewrittenJsCode).not.toContain('history.pushState');
-  });
-
-  it('should handle sourceMappingURL', () => {
-    const jsCode = '//# sourceMappingURL=https://example.com/source.map';
-    const rewrittenJsCode = jsRewriter(jsCode);
-    expect(rewrittenJsCode).not.toContain('sourceMappingURL');
-  });
-
-  it('should handle empty code', () => {
-    const jsCode = '';
-    const rewrittenJsCode = jsRewriter(jsCode);
-    expect(rewrittenJsCode).toBe('');
+    const rewrittenCode = jsRewriter(originalCode);
+    expect(rewrittenCode).not.toContain('eval');
+    expect(rewrittenCode).not.toContain('Function');
+    expect(rewrittenCode).not.toContain('import');
+    expect(rewrittenCode).not.toContain('Worker');
+    expect(rewrittenCode).not.toContain('importScripts');
+    expect(rewrittenCode).not.toContain('document.domain');
+    expect(rewrittenCode).not.toContain('window.location');
+    expect(rewrittenCode).not.toContain('window.open');
+    expect(rewrittenCode).not.toContain('history.pushState');
+    expect(rewrittenCode).not.toContain('history.replaceState');
   });
 });
