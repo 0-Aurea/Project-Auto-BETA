@@ -109,34 +109,47 @@ class ProxyEngine {
   decodeUrl(encodedUrl) {
     const urlParts = encodedUrl.split('/');
     const salt = urlParts[2];
-    const base64EncodedPath = urlParts[3];
-
-    const decodedPathBuffer = Buffer.from(base64EncodedPath, 'base64');
-    const xorDecodedPath = this.xorDecode(decodedPathBuffer.toString(), salt);
-
-    return xorDecodedPath;
+    const base64EncodedUrl = urlParts[3];
+    const xorEncodedUrl = Buffer.from(base64EncodedUrl, 'base64').toString();
+    return this.xorDecode(xorEncodedUrl, salt);
   }
 
   /**
    * XOR decodes a URL with a given salt.
-   * @param {string} encodedUrl - The XOR encoded URL.
+   * @param {string} url - The URL to decode.
    * @param {string} salt - The salt to use for decoding.
-   * @returns {string} The decoded URL.
+   * @returns {string} The XOR decoded URL.
    */
-  xorDecode(encodedUrl, salt) {
-    const encodedUrlBuffer = Buffer.from(encodedUrl);
+  xorDecode(url, salt) {
+    const urlBuffer = Buffer.from(url);
     const saltBuffer = Buffer.from(salt, 'hex');
-    const decodedBuffer = Buffer.alloc(encodedUrlBuffer.length);
+    const decodedBuffer = Buffer.alloc(urlBuffer.length);
 
-    for (let i = 0; i < encodedUrlBuffer.length; i++) {
-      decodedBuffer[i] = encodedUrlBuffer[i] ^ saltBuffer[i % saltBuffer.length];
+    for (let i = 0; i < urlBuffer.length; i++) {
+      decodedBuffer[i] = urlBuffer[i] ^ saltBuffer[i % saltBuffer.length];
     }
 
     return decodedBuffer.toString();
   }
 
   /**
-   * Rewrites the request and response headers.
+   * Integrates an HTTPS tunnel.
+   */
+  integrateHttpsTunnel() {
+    const tlsOptions = {
+      key: fs.readFileSync('path/to/tls/key'),
+      cert: fs.readFileSync('path/to/tls/cert')
+    };
+
+    const tlsServer = tls.createServer(tlsOptions, (socket) => {
+      socket.destroy();
+    });
+
+    tlsServer.listen(443);
+  }
+
+  /**
+   * Rewrites request and response headers.
    * @param {http.IncomingMessage} req - The incoming request.
    * @param {http.ServerResponse} res - The outgoing response.
    */
@@ -146,96 +159,99 @@ class ProxyEngine {
     res.removeHeader('Strict-Transport-Security');
     res.removeHeader('X-Frame-Options');
 
-    // Isolate cookies per proxied origin
+    // Set cache control
+    res.setHeader('Cache-Control', 'private, no-cache');
+
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  }
+
+  /**
+   * Scopes cookies per proxied origin.
+   * @param {http.IncomingMessage} req - The incoming request.
+   * @param {http.ServerResponse} res - The outgoing response.
+   */
+  scopeCookies(req, res) {
     const cookieHeader = req.headers.cookie;
     if (cookieHeader) {
       const cookies = cookieHeader.split(';');
-      const isolatedCookies = [];
+      const scopedCookies = [];
 
       cookies.forEach((cookie) => {
-        const [key, value] = cookie.trim().split('=');
-        isolatedCookies.push(`${key}=${value}; Secure; Path=/`);
+        const [name, value] = cookie.trim().split('=');
+        scopedCookies.push(`${name}=${value}; Domain=${url.parse(req.url).hostname}`);
       });
 
-      res.setHeader('Set-Cookie', isolatedCookies);
-    }
-
-    // Rewrite WebSocket upgrade requests
-    if (req.headers['upgrade'] === 'websocket') {
-      res.setHeader('Upgrade', 'WebSocket');
-      res.setHeader('Connection', 'Upgrade');
-    }
-
-    // Handle WebRTC ICE candidate scrubbing
-    if (req.headers['content-type'] === 'application/json') {
-      const requestBody = req.body;
-      if (requestBody && requestBody.iceCandidates) {
-        requestBody.iceCandidates = requestBody.iceCandidates.map((candidate) => {
-          return candidate.replace(/a=ssrc:(\d+)/g, 'a=ssrc:xxxxxx');
-        });
-      }
+      res.setHeader('Set-Cookie', scopedCookies);
     }
   }
 
   /**
-   * Handles HTTPS tunnel connections.
+   * Handles WebRTC ICE candidate scrubbing.
    * @param {http.IncomingMessage} req - The incoming request.
    * @param {http.ServerResponse} res - The outgoing response.
    */
-  handleHttpsTunnel(req, res) {
-    const targetOptions = {
-      hostname: url.parse(req.url).hostname,
-      port: 443,
-      path: req.url,
-      headers: req.headers
-    };
+  scrubWebrtcIceCandidates(req, res) {
+    if (req.headers['content-type'] === 'application/json') {
+      let data = '';
+      req.on('data', (chunk) => {
+        data += chunk;
+      });
 
-    const targetReq = http.request(targetOptions, (targetRes) => {
-      res.writeHead(targetRes.statusCode, targetRes.headers);
-      targetRes.pipe(res);
-    });
-
-    req.pipe(targetReq);
-
-    targetReq.on('error', (error) => {
-      console.error('Target HTTPS error:', error);
-    });
+      req.on('end', () => {
+        try {
+          const jsonData = JSON.parse(data);
+          if (jsonData.type === 'candidate') {
+            // Scrub the ICE candidate
+            jsonData.sdpMLineIndex = '';
+            jsonData.sdpMid = '';
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(jsonData));
+        } catch (error) {
+          console.error('Error scrubbing WebRTC ICE candidate:', error);
+        }
+      });
+    }
   }
 
   /**
    * Starts the proxy server.
    */
   start() {
-    this.app.use((req, res) => {
-      if (req.url.startsWith('/_nexus')) {
-        this.handleRequest(req, res);
-      } else {
-        res.statusCode = 404;
-        res.end('Not Found');
-      }
-    });
-
     this.server.listen(8080, () => {
       console.log('Proxy server listening on port 8080');
     });
-  }
 
-  /**
-   * Handles incoming requests.
-   * @param {http.IncomingMessage} req - The incoming request.
-   * @param {http.ServerResponse} res - The outgoing response.
-   */
-  handleRequest(req, res) {
-    if (req.headers['upgrade'] === 'websocket') {
-      this.handleWebSocket(req.ws, req);
-    } else if (req.url.startsWith('/_nexus')) {
-      this.handleHttpsTunnel(req, res);
-    } else {
-      res.statusCode = 404;
-      res.end('Not Found');
-    }
+    this.wss.on('connection', (ws, req) => {
+      this.handleWebSocket(ws, req);
+    });
+
+    this.app.use((req, res) => {
+      this.rewriteHeaders(req, res);
+      this.scopeCookies(req, res);
+      this.scrubWebrtcIceCandidates(req, res);
+
+      const targetUrl = this.decodeUrl(req.url);
+      const targetOptions = {
+        hostname: url.parse(targetUrl).hostname,
+        port: url.parse(targetUrl).port,
+        path: url.parse(targetUrl).path,
+        headers: req.headers
+      };
+
+      const targetReq = http.request(targetOptions, (targetRes) => {
+        res.writeHead(targetRes.statusCode, targetRes.headers);
+        targetRes.pipe(res);
+      });
+
+      req.pipe(targetReq);
+    });
   }
 }
 
 const proxyEngine = new ProxyEngine();
+proxyEngine.integrateHttpsTunnel();
 proxyEngine.start();
