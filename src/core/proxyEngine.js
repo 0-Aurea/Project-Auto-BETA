@@ -55,6 +55,37 @@ function scrubWebRTCIceCandidates(req) {
   return req.body;
 }
 
+function handleWebSocketUpgrade(req, socket, head) {
+  const decodedUrl = decodeUrl(req);
+  if (!decodedUrl) return socket.destroy();
+
+  const webSocketUrl = `ws://${decodedUrl}`;
+  const options = {
+    headers: rewriteHeaders(req)
+  };
+
+  const ws = new WebSocket(webSocketUrl, options);
+
+  ws.on('open', () => {
+    socket.pipe(ws);
+    ws.pipe(socket);
+  });
+
+  ws.on('error', (err) => {
+    console.error(err);
+    socket.destroy();
+  });
+
+  socket.on('error', (err) => {
+    console.error(err);
+    ws.terminate();
+  });
+}
+
+wss.on('connection', (ws, req) => {
+  handleWebSocketUpgrade(req, ws._socket, ws._socket.remoteAddress);
+});
+
 app.use((req, res, next) => {
   const decodedUrl = decodeUrl(req);
   if (!decodedUrl) return res.status(400).send('Bad Request');
@@ -64,6 +95,7 @@ app.use((req, res, next) => {
 
 app.use((req, res, next) => {
   req.headers = rewriteHeaders(req);
+  req.body = scrubWebRTCIceCandidates(req);
   next();
 });
 
@@ -102,11 +134,13 @@ app.post('*', (req, res) => {
     res.set(cachedResponse.headers);
     res.status(cachedResponse.statusCode).send(cachedResponse.body);
   } else {
-    http.request({
+    const options = {
       method: req.method,
       url: req.url,
       headers: req.headers
-    }, (upstreamRes) => {
+    };
+
+    const upstreamReq = http.request(options, (upstreamRes) => {
       const headers = rewriteHeaders(upstreamRes.headers);
       res.set(headers);
       upstreamRes.on('data', (chunk) => {
@@ -120,28 +154,24 @@ app.post('*', (req, res) => {
           body: res.getContent()
         });
       });
-    }).on('error', (err) => {
+    });
+
+    upstreamReq.on('error', (err) => {
       console.error(err);
       res.status(500).send('Internal Server Error');
-    }).end(scrubWebRTCIceCandidates(req));
-  }
-});
+    });
 
-wss.on('connection', (ws) => {
-  ws.on('message', (message) => {
-    try {
-      const data = JSON.parse(message);
-      if (data.type === 'ping') {
-        ws.send(JSON.stringify({ type: 'pong' }));
-      } else {
-        ws.send(message);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  });
+    req.on('data', (chunk) => {
+      upstreamReq.write(chunk);
+    });
+
+    req.on('end', () => {
+      upstreamReq.end();
+    });
+  }
 });
 
 server.listen(8080, () => {
   console.log('Proxy server listening on port 8080');
 });
+module.exports = app;
