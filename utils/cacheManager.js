@@ -1,5 +1,6 @@
 const { CacheAPI } = require('sw-cache-api');
 const { MAX_CACHE_AGE, CACHE_NAME } = require('./constants');
+const { HeaderRewriterUtils } = require('./headerRewriter');
 
 /**
  * Cache Manager utility class for handling cache storage, retrieval, and eviction.
@@ -64,7 +65,10 @@ class CacheManager {
    * @returns {Promise<void>}
    */
   static async storeCacheEntry(key, response) {
-    await CacheManager.cache.put(key, response);
+    const clonedResponse = response.clone();
+    const rewrittenHeaders = HeaderRewriterUtils.rewriteResponseHeaders(clonedResponse.headers);
+    clonedResponse.headers = rewrittenHeaders;
+    await CacheManager.cache.put(key, clonedResponse);
   }
 
   /**
@@ -106,7 +110,7 @@ class CacheManager {
   }
 
   /**
-   * Parses cache control headers to determine the TTL.
+   * Parses cache control headers and determines the TTL for a cache entry.
    * @param {Headers} headers - The response headers.
    * @returns {number} The TTL in milliseconds.
    */
@@ -131,42 +135,17 @@ class CacheManager {
   }
 
   /**
-   * Handles cache hits and updates the cache entry.
+   * Caches a response with a TTL based on the cache control headers.
    * @param {string} key - The cache key.
-   * @param {Response} response - The Response object.
+   * @param {Response} response - The Response object to cache.
    * @returns {Promise<void>}
    */
-  static async handleCacheHit(key, response) {
+  static async cacheResponseWithTTL(key, response) {
     const ttl = CacheManager.parseCacheControl(response.headers);
-    const cachedResponse = await CacheManager.cache.match(key);
-
-    if (cachedResponse) {
-      const cacheControl = cachedResponse.headers.get('cache-control');
-      const cacheControlDirectives = cacheControl.split(',').map((directive) => directive.trim());
-
-      for (const directive of cacheControlDirectives) {
-        if (directive.startsWith('max-age=')) {
-          const maxAge = parseInt(directive.substring(8), 10);
-          if (!isNaN(maxAge) && maxAge * 1000 < ttl) {
-            await CacheManager.removeCacheEntry(key);
-            await CacheManager.storeCacheEntry(key, response);
-          }
-          break;
-        }
-      }
-    } else {
-      await CacheManager.storeCacheEntry(key, response);
-    }
-  }
-
-  /**
-   * Handles cache misses and prefetches the resource.
-   * @param {string} key - The cache key.
-   * @param {string} url - The URL to prefetch.
-   * @returns {Promise<void>}
-   */
-  static async handleCacheMiss(key, url) {
-    await CacheManager.prefetchCacheEntry(key, url);
+    const cachedResponse = new Response(response.body, response);
+    cachedResponse.timestamp = Date.now();
+    cachedResponse.ttl = ttl;
+    await CacheManager.storeCacheEntry(key, cachedResponse);
   }
 }
 
