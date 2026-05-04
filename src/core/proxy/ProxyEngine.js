@@ -96,70 +96,66 @@ class ProxyEngine {
       return;
     }
 
-    // Decode the URL
-    let decodedUrl = this.decodeUrl(reqUrl);
+    // Proxy the request
+    const targetUrl = await this.getTargetUrl(reqUrl);
+    const targetReq = await this.rewriteRequest(req);
+    const targetRes = await axios({
+      method: targetReq.method,
+      url: targetUrl,
+      headers: targetReq.headers,
+      data: targetReq.data,
+      responseType: 'stream'
+    });
 
-    // Check if the request is for a proxied resource
-    if (decodedUrl.startsWith('http')) {
-      // Proxy the request
-      await this.proxyRequest(req, res, decodedUrl);
-    } else {
-      // Handle static file requests
-      res.status(404).send('Not Found');
-    }
-  }
-
-  /**
-   * Decodes a URL using the XOR + base64 encoding scheme.
-   * @param {string} encodedUrl - The encoded URL.
-   * @returns {string} The decoded URL.
-   */
-  decodeUrl(encodedUrl) {
-    // Remove the URL prefix
-    encodedUrl = encodedUrl.replace(URL_PREFIX, '');
-
-    // Decode the URL
-    return EncodingUtils.decode(encodedUrl, rotatingSalt);
-  }
-
-  /**
-   * Proxies a request to the target URL.
-   * @param {object} req - The incoming request object.
-   * @param {object} res - The outgoing response object.
-   * @param {string} targetUrl - The target URL.
-   */
-  async proxyRequest(req, res, targetUrl) {
-    try {
-      // Create a new Axios request
-      const axiosReq = axios({
-        method: req.method,
-        url: targetUrl,
-        headers: req.headers,
-        data: req.body,
-      });
-
-      // Handle the response
-      const axiosRes = await axiosReq;
-      res.set(axiosRes.headers);
-      res.status(axiosRes.status);
-      res.send(axiosRes.data);
-    } catch (error) {
-      // Handle errors
-      console.error(error);
-      res.status(500).send('Internal Server Error');
-    }
+    // Rewrite the response
+    const rewrittenRes = await this.rewriteResponse(targetRes);
+    rewrittenRes.pipe(res);
   }
 
   /**
    * Handles WebSocket upgrades.
    * @param {object} req - The incoming request object.
-   * @param {object} socket - The WebSocket socket object.
-   * @param {object} head - The WebSocket head object.
+   * @param {object} socket - The socket object.
+   * @param {object} head - The head object.
    */
-  handleWebSocket(req, socket, head) {
-    // Handle WebSocket upgrades
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      wss.emit('connection', ws, req);
+  async handleWebSocket(req, socket, head) {
+    const { headers, url: reqUrl } = req;
+    const { host, referer } = headers;
+
+    // Get the target URL
+    const targetUrl = await this.getTargetUrl(reqUrl);
+
+    // Establish a WebSocket connection to the target URL
+    const targetWs = new WebSocket(targetUrl);
+
+    // Handle WebSocket messages
+    targetWs.on('message', (message) => {
+      socket.send(message);
+    });
+
+    // Handle WebSocket errors
+    targetWs.on('error', (error) => {
+      console.error('WebSocket error:', error);
+    });
+
+    // Handle WebSocket close
+    targetWs.on('close', () => {
+      socket.close();
+    });
+
+    // Handle socket messages
+    socket.on('message', (message) => {
+      targetWs.send(message);
+    });
+
+    // Handle socket errors
+    socket.on('error', (error) => {
+      console.error('Socket error:', error);
+    });
+
+    // Handle socket close
+    socket.on('close', () => {
+      targetWs.close();
     });
   }
 
@@ -168,51 +164,175 @@ class ProxyEngine {
    * @param {object} ws - The WebSocket object.
    * @param {object} req - The incoming request object.
    */
-  handleWebSocketConnection(ws, req) {
+  async handleWebSocketConnection(ws, req) {
+    const { headers, url: reqUrl } = req;
+    const { host, referer } = headers;
+
+    // Get the target URL
+    const targetUrl = await this.getTargetUrl(reqUrl);
+
+    // Establish a WebSocket connection to the target URL
+    const targetWs = new WebSocket(targetUrl);
+
     // Handle WebSocket messages
     ws.on('message', (message) => {
-      console.log(`Received WebSocket message: ${message}`);
+      targetWs.send(message);
     });
 
     // Handle WebSocket errors
     ws.on('error', (error) => {
-      console.error(`WebSocket error: ${error}`);
+      console.error('WebSocket error:', error);
     });
 
-    // Handle WebSocket closures
+    // Handle WebSocket close
     ws.on('close', () => {
-      console.log('WebSocket closed');
+      targetWs.close();
+    });
+
+    // Handle target WebSocket messages
+    targetWs.on('message', (message) => {
+      ws.send(message);
+    });
+
+    // Handle target WebSocket errors
+    targetWs.on('error', (error) => {
+      console.error('Target WebSocket error:', error);
+    });
+
+    // Handle target WebSocket close
+    targetWs.on('close', () => {
+      ws.close();
     });
   }
 
   /**
-   * Handles WebRTC ICE candidate scrubbing.
-   * @param {object} req - The incoming request object.
-   * @param {object} socket - The WebRTC socket object.
-   * @param {object} head - The WebRTC head object.
+   * Gets the target URL for a given request URL.
+   * @param {string} reqUrl - The incoming request URL.
+   * @returns {string} The target URL.
    */
-  handleWebRTC(req, socket, head) {
-    // Handle WebRTC ICE candidate scrubbing
-    const rtcPeerConnection = this.rtcPeerConnections.get(req.id);
-    if (rtcPeerConnection) {
-      // Scrub the ICE candidate
-      const scrubbedCandidate = this.scrubIceCandidate(req, rtcPeerConnection);
-      socket.write(scrubbedCandidate);
-    } else {
-      // Handle errors
-      console.error('WebRTC peer connection not found');
-      socket.destroy();
+  async getTargetUrl(reqUrl) {
+    // Decode the request URL
+    const decodedUrl = EncodingUtils.decodeUrl(reqUrl);
+
+    // Get the target URL
+    const targetUrl = decodedUrl;
+
+    return targetUrl;
+  }
+
+  /**
+   * Rewrites a request.
+   * @param {object} req - The incoming request object.
+   * @returns {object} The rewritten request object.
+   */
+  async rewriteRequest(req) {
+    const { headers, url: reqUrl, method, data } = req;
+
+    // Rewrite the request headers
+    const rewrittenHeaders = await this.rewriteHeaders(headers);
+
+    // Rewrite the request URL
+    const rewrittenUrl = await this.getTargetUrl(reqUrl);
+
+    // Create a new request object
+    const rewrittenReq = {
+      method,
+      url: rewrittenUrl,
+      headers: rewrittenHeaders,
+      data
+    };
+
+    return rewrittenReq;
+  }
+
+  /**
+   * Rewrites a response.
+   * @param {object} res - The incoming response object.
+   * @returns {object} The rewritten response object.
+   */
+  async rewriteResponse(res) {
+    const { headers, data } = res;
+
+    // Rewrite the response headers
+    const rewrittenHeaders = await this.rewriteHeaders(headers);
+
+    // Create a new response object
+    const rewrittenRes = {
+      headers: rewrittenHeaders,
+      data: await this.rewriteBody(data)
+    };
+
+    return rewrittenRes;
+  }
+
+  /**
+   * Rewrites headers.
+   * @param {object} headers - The incoming headers object.
+   * @returns {object} The rewritten headers object.
+   */
+  async rewriteHeaders(headers) {
+    const rewrittenHeaders = {};
+
+    // Iterate over the headers
+    for (const [key, value] of Object.entries(headers)) {
+      // Rewrite the header value
+      const rewrittenValue = await this.rewriteHeaderValue(key, value);
+
+      // Add the rewritten header to the rewritten headers object
+      rewrittenHeaders[key] = rewrittenValue;
+    }
+
+    return rewrittenHeaders;
+  }
+
+  /**
+   * Rewrites a header value.
+   * @param {string} key - The header key.
+   * @param {string} value - The header value.
+   * @returns {string} The rewritten header value.
+   */
+  async rewriteHeaderValue(key, value) {
+    // Handle specific headers
+    switch (key) {
+      case 'content-security-policy':
+        // Remove the content security policy header
+        return '';
+      case 'strict-transport-security':
+        // Remove the strict transport security header
+        return '';
+      case 'x-frame-options':
+        // Remove the x-frame-options header
+        return '';
+      default:
+        // Return the original header value
+        return value;
     }
   }
 
   /**
-   * Scrubs a WebRTC ICE candidate.
-   * @param {object} req - The incoming request object.
-   * @param {object} rtcPeerConnection - The WebRTC peer connection object.
-   * @returns {string} The scrubbed ICE candidate.
+   * Rewrites the body of a response.
+   * @param {object} body - The incoming body object.
+   * @returns {object} The rewritten body object.
    */
-  scrubIceCandidate(req, rtcPeerConnection) {
-    // TO DO: implement ICE candidate scrubbing
+  async rewriteBody(body) {
+    // Check if the body is a string
+    if (typeof body === 'string') {
+      // Rewrite the body as a string
+      return await this.rewriteStringBody(body);
+    } else {
+      // Return the original body
+      return body;
+    }
+  }
+
+  /**
+   * Rewrites a string body.
+   * @param {string} body - The incoming string body.
+   * @returns {string} The rewritten string body.
+   */
+  async rewriteStringBody(body) {
+    // Use the JS rewriter to rewrite the body
+    return this.jsRewriter.rewrite(body);
   }
 
   /**
@@ -221,7 +341,23 @@ class ProxyEngine {
    * @param {object} res - The outgoing response object.
    */
   async handleSearchRequest(req, res) {
-    // TO DO: implement search request handling
+    const { query } = req.query;
+
+    // Perform the search
+    const results = await this.performSearch(query);
+
+    // Return the search results
+    res.json(results);
+  }
+
+  /**
+   * Performs a search.
+   * @param {string} query - The search query.
+   * @returns {object} The search results.
+   */
+  async performSearch(query) {
+    // Implement search logic here
+    return [];
   }
 
   /**
@@ -230,7 +366,23 @@ class ProxyEngine {
    * @param {object} res - The outgoing response object.
    */
   async handleNewTabRequest(req, res) {
-    // TO DO: implement new tab request handling
+    const { url } = req.query;
+
+    // Create a new tab
+    const tab = await this.createTab(url);
+
+    // Return the tab
+    res.json(tab);
+  }
+
+  /**
+   * Creates a new tab.
+   * @param {string} url - The URL for the new tab.
+   * @returns {object} The new tab object.
+   */
+  async createTab(url) {
+    // Implement tab creation logic here
+    return {};
   }
 
   /**
@@ -239,7 +391,32 @@ class ProxyEngine {
    * @param {object} res - The outgoing response object.
    */
   async handleTabUpdateRequest(req, res) {
-    // TO DO: implement tab update request handling
+    const { tabId, url } = req.body;
+
+    // Update the tab
+    await this.updateTab(tabId, url);
+
+    // Return the updated tab
+    res.json(await this.getTab(tabId));
+  }
+
+  /**
+   * Updates a tab.
+   * @param {string} tabId - The ID of the tab to update.
+   * @param {string} url - The new URL for the tab.
+   */
+  async updateTab(tabId, url) {
+    // Implement tab update logic here
+  }
+
+  /**
+   * Gets a tab.
+   * @param {string} tabId - The ID of the tab to get.
+   * @returns {object} The tab object.
+   */
+  async getTab(tabId) {
+    // Implement tab retrieval logic here
+    return {};
   }
 
   /**
@@ -248,7 +425,21 @@ class ProxyEngine {
    * @param {object} res - The outgoing response object.
    */
   async handleTabRemoveRequest(req, res) {
-    // TO DO: implement tab removal request handling
+    const { tabId } = req.body;
+
+    // Remove the tab
+    await this.removeTab(tabId);
+
+    // Return a success response
+    res.json({ success: true });
+  }
+
+  /**
+   * Removes a tab.
+   * @param {string} tabId - The ID of the tab to remove.
+   */
+  async removeTab(tabId) {
+    // Implement tab removal logic here
   }
 }
 
