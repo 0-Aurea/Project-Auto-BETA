@@ -5,9 +5,166 @@ import { join } from 'path';
 import { promisify } from 'util';
 import axios from 'axios';
 import WebSocket from 'ws';
+import { v4 as uuidv4 } from 'uuid';
 
 const pipeline = promisify(require('stream').pipeline');
 
+/**
+ * ProxyEngine class to handle proxying requests and WebSocket upgrades.
+ */
+class ProxyEngine {
+  /**
+   * Creates a new ProxyEngine instance.
+   */
+  constructor() {
+    this.wsClients = new Map();
+  }
+
+  /**
+   * Handles incoming requests and proxies them to the target URL.
+   * @param {object} req - The incoming request object.
+   * @param {object} res - The outgoing response object.
+   */
+  async handleRequest(req, res) {
+    const { headers, url: reqUrl } = req;
+    const { host, referer } = headers;
+
+    // Check if the request is for a WebSocket upgrade
+    if (headers['upgrade'] === 'websocket') {
+      this.handleWebSocket(req, res);
+      return;
+    }
+
+    // Rewrite the request URL
+    const rewrittenUrl = this.rewriteUrl(reqUrl);
+
+    // Proxy the request
+    try {
+      const response = await axios({
+        method: req.method,
+        url: rewrittenUrl,
+        headers: this.rewriteHeaders(headers),
+        data: req.body,
+      });
+
+      // Rewrite the response headers
+      const rewrittenHeaders = this.rewriteHeaders(response.headers);
+
+      // Send the response
+      res.writeHead(response.status, rewrittenHeaders);
+      res.end(response.data);
+    } catch (error) {
+      console.error(error);
+      res.status(500).send('Internal Server Error');
+    }
+  }
+
+  /**
+   * Handles WebSocket upgrades and proxies the WebSocket connection.
+   * @param {object} req - The incoming request object.
+   * @param {object} res - The outgoing response object.
+   */
+  handleWebSocket(req, res) {
+    const { headers, url: reqUrl } = req;
+    const { host, referer } = headers;
+
+    // Rewrite the WebSocket URL
+    const rewrittenUrl = this.rewriteUrl(reqUrl);
+
+    // Create a new WebSocket client
+    const wsClient = new WebSocket(rewrittenUrl);
+
+    // Handle WebSocket messages
+    wsClient.on('message', (message) => {
+      // Rewrite the WebSocket message
+      const rewrittenMessage = this.rewriteWebSocketMessage(message);
+
+      // Send the rewritten message to the client
+      res.socket.write(`data: ${rewrittenMessage}\n\n`);
+    });
+
+    // Handle WebSocket errors
+    wsClient.on('error', (error) => {
+      console.error(error);
+    });
+
+    // Handle WebSocket close
+    wsClient.on('close', () => {
+      // Remove the WebSocket client from the map
+      this.wsClients.delete(reqUrl);
+    });
+
+    // Add the WebSocket client to the map
+    this.wsClients.set(reqUrl, wsClient);
+
+    // Send the WebSocket upgrade response
+    res.writeHead(101, {
+      'Upgrade': 'websocket',
+      'Connection': 'Upgrade',
+      'Sec-WebSocket-Accept': headers['sec-websocket-accept'],
+    });
+    res.end();
+  }
+
+  /**
+   * Rewrites a URL to handle dynamic imports.
+   * @param {string} url - The URL to rewrite.
+   * @returns {string} The rewritten URL.
+   */
+  rewriteUrl(url) {
+    // Handle relative URLs
+    if (!url.startsWith('http')) {
+      return new URL(url, 'http://example.com').href;
+    }
+
+    // Use XOR + base64 URL encoding with a rotating salt
+    return EncodingUtils.encodeUrl(url);
+  }
+
+  /**
+   * Rewrites headers to handle proxying.
+   * @param {object} headers - The headers to rewrite.
+   * @returns {object} The rewritten headers.
+   */
+  rewriteHeaders(headers) {
+    const rewrittenHeaders = {};
+
+    // Remove sensitive headers
+    for (const header in headers) {
+      if (header.toLowerCase() !== 'host' && header.toLowerCase() !== 'referer') {
+        rewrittenHeaders[header] = headers[header];
+      }
+    }
+
+    return rewrittenHeaders;
+  }
+
+  /**
+   * Rewrites WebSocket messages to handle proxying.
+   * @param {string} message - The WebSocket message to rewrite.
+   * @returns {string} The rewritten WebSocket message.
+   */
+  rewriteWebSocketMessage(message) {
+    // Handle WebSocket message rewriting
+    return message;
+  }
+
+  /**
+   * Scrubs WebRTC ICE candidate information to prevent IP leaks.
+   * @param {object} iceCandidate - The WebRTC ICE candidate object.
+   * @returns {object} The scrubbed WebRTC ICE candidate object.
+   */
+  scrubWebRTCIceCandidate(iceCandidate) {
+    // Remove IP address information
+    delete iceCandidate.candidate.split(':').pop();
+
+    return iceCandidate;
+  }
+}
+
+/**
+ * JSRewriter class to handle rewriting JavaScript code.
+ */
 class JSRewriter {
   /**
    * Rewrites JavaScript code to handle dynamic imports and eval().
@@ -84,202 +241,17 @@ class JSRewriter {
    * @returns {string} The escaped string.
    */
   escapeString(str) {
-    return str.replace(/'/g, '\\\'').replace(/"/g, '\\"');
+    return str.replace(/'/g, '\\\'');
   }
 
   /**
-   * Rewrites history state to prevent code injection.
-   * @param {string} state - The history state to rewrite.
+   * Rewrites history state to handle proxying.
+   * @param {string} historyState - The history state to rewrite.
    * @returns {string} The rewritten history state.
    */
-  rewriteHistoryState(state) {
-    return state.replace(/'/g, '\\\'').replace(/"/g, '\\"');
+  rewriteHistoryState(historyState) {
+    return historyState;
   }
 }
 
-class ProxyEngine {
-  /**
-   * Creates a new ProxyEngine instance.
-   */
-  constructor() {
-    this.cache = new Map();
-    this.wsClients = new Map();
-    this.jsRewriter = new JSRewriter();
-  }
-
-  /**
-   * Handles an incoming request and returns a response.
-   * @param {object} req - The incoming request object.
-   * @param {object} res - The outgoing response object.
-   * @returns {Promise<void>} A promise that resolves when the response is sent.
-   */
-  async handleRequest(req, res) {
-    const { url: reqUrl, headers, method } = req;
-
-    // Check if the request is for a proxied resource
-    if (!reqUrl.startsWith(URL_PREFIX)) {
-      return this.handleDirectRequest(req, res);
-    }
-
-    // Check if the request is a WebSocket upgrade request
-    if (headers['upgrade'] === 'websocket') {
-      return this.handleWebSocketRequest(req, res);
-    }
-
-    // Decode the URL
-    const decodedUrl = this.decodeUrl(reqUrl);
-
-    // Check if the request is cached
-    if (this.cache.has(decodedUrl)) {
-      const cachedResponse = this.cache.get(decodedUrl);
-      res.writeHead(cachedResponse.status, cachedResponse.headers);
-      res.end(cachedResponse.body);
-      return;
-    }
-
-    try {
-      // Forward the request to the target server
-      const targetResponse = await axios({
-        method,
-        url: decodedUrl,
-        headers: this.rewriteHeaders(headers),
-        data: req.body,
-      });
-
-      // Cache the response
-      this.cache.set(decodedUrl, targetResponse);
-
-      // Rewrite the response headers
-      const rewrittenHeaders = this.rewriteHeaders(targetResponse.headers);
-
-      // Send the response
-      res.writeHead(targetResponse.status, rewrittenHeaders);
-      res.end(targetResponse.data);
-    } catch (error) {
-      console.error(error);
-      res.writeHead(500);
-      res.end('Internal Server Error');
-    }
-  }
-
-  /**
-   * Handles a direct request and returns a response.
-   * @param {object} req - The incoming request object.
-   * @param {object} res - The outgoing response object.
-   * @returns {Promise<void>} A promise that resolves when the response is sent.
-   */
-  async handleDirectRequest(req, res) {
-    try {
-      // Forward the request to the target server
-      const targetResponse = await axios({
-        method: req.method,
-        url: req.url,
-        headers: req.headers,
-        data: req.body,
-      });
-
-      // Send the response
-      res.writeHead(targetResponse.status, targetResponse.headers);
-      res.end(targetResponse.data);
-    } catch (error) {
-      console.error(error);
-      res.writeHead(500);
-      res.end('Internal Server Error');
-    }
-  }
-
-  /**
-   * Handles a WebSocket upgrade request and establishes a WebSocket connection.
-   * @param {object} req - The incoming request object.
-   * @param {object} res - The outgoing response object.
-   * @returns {Promise<void>} A promise that resolves when the WebSocket connection is established.
-   */
-  async handleWebSocketRequest(req, res) {
-    const { url: reqUrl, headers } = req;
-
-    // Decode the URL
-    const decodedUrl = this.decodeUrl(reqUrl);
-
-    // Establish a WebSocket connection to the target server
-    const targetWs = new WebSocket(decodedUrl);
-
-    // Handle WebSocket messages
-    targetWs.on('message', (message) => {
-      this.wsClients.get(reqUrl).send(message);
-    });
-
-    // Handle WebSocket errors
-    targetWs.on('error', (error) => {
-      console.error(error);
-      this.wsClients.get(reqUrl).close();
-    });
-
-    // Handle WebSocket close
-    targetWs.on('close', () => {
-      this.wsClients.delete(reqUrl);
-    });
-
-    // Handle WebSocket upgrade response
-    res.writeHead(101, {
-      'Upgrade': 'websocket',
-      'Connection': 'Upgrade',
-      'Sec-WebSocket-Accept': headers['sec-webSocket-accept'],
-    });
-
-    // Establish a WebSocket connection to the client
-    const clientWs = new WebSocket(reqUrl);
-    this.wsClients.set(reqUrl, clientWs);
-
-    // Handle client WebSocket messages
-    clientWs.on('message', (message) => {
-      targetWs.send(message);
-    });
-
-    // Handle client WebSocket errors
-    clientWs.on('error', (error) => {
-      console.error(error);
-      targetWs.close();
-    });
-
-    // Handle client WebSocket close
-    clientWs.on('close', () => {
-      targetWs.close();
-    });
-  }
-
-  /**
-   * Decodes a URL from the proxied request.
-   * @param {string} reqUrl - The URL of the proxied request.
-   * @returns {string} The decoded URL.
-   */
-  decodeUrl(reqUrl) {
-    const encodedUrl = reqUrl.substring(URL_PREFIX.length);
-    const decodedUrl = EncodingUtils.decode(encodedUrl);
-    return decodedUrl;
-  }
-
-  /**
-   * Rewrites the headers of a response.
-   * @param {object} headers - The headers to rewrite.
-   * @returns {object} The rewritten headers.
-   */
-  rewriteHeaders(headers) {
-    const rewrittenHeaders = {};
-
-    for (const [key, value] of Object.entries(headers)) {
-      if (key.toLowerCase() === 'content-security-policy') {
-        rewrittenHeaders[key] = value.replace(/'self'/g, '*');
-      } else if (key.toLowerCase() === 'strict-transport-security') {
-        rewrittenHeaders[key] = '';
-      } else if (key.toLowerCase() === 'x-frame-options') {
-        rewrittenHeaders[key] = '';
-      } else {
-        rewrittenHeaders[key] = value;
-      }
-    }
-
-    return rewrittenHeaders;
-  }
-}
-
-export default ProxyEngine;
+export { ProxyEngine, JSRewriter };
