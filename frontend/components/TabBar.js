@@ -5,6 +5,7 @@ const TabBar = () => {
   const [activeTab, setActiveTab] = useState(null);
   const [tabTitle, setTabTitle] = useState('');
   const [tabIcon, setTabIcon] = useState('');
+  const [tabUrl, setTabUrl] = useState('');
 
   useEffect(() => {
     const storedTabs = localStorage.getItem('tabs');
@@ -22,15 +23,16 @@ const TabBar = () => {
   }, [tabs]);
 
   const addTab = (title, icon, url) => {
-    const newTab = { title, icon, url };
+    const newTab = { title, icon, url, id: Date.now() };
     setTabs([...tabs, newTab]);
     setActiveTab(newTab);
     setTabTitle('');
     setTabIcon('');
+    setTabUrl('');
   };
 
   const removeTab = (tab) => {
-    const updatedTabs = tabs.filter((t) => t !== tab);
+    const updatedTabs = tabs.filter((t) => t.id !== tab.id);
     setTabs(updatedTabs);
     if (tab === activeTab && updatedTabs.length > 0) {
       setActiveTab(updatedTabs[0]);
@@ -51,11 +53,20 @@ const TabBar = () => {
     setTabIcon(event.target.value);
   };
 
+  const handleUrlChange = (event) => {
+    setTabUrl(event.target.value);
+  };
+
   const handleSubmit = (event) => {
     event.preventDefault();
-    if (tabTitle && tabIcon) {
-      addTab(tabTitle, tabIcon, 'about:blank');
+    if (tabTitle && tabIcon && tabUrl) {
+      addTab(tabTitle, tabIcon, tabUrl);
     }
+  };
+
+  const handleIframeLoad = (event) => {
+    const iframe = event.target;
+    iframe.contentWindow.document.title = iframe.dataset.title;
   };
 
   return (
@@ -73,11 +84,17 @@ const TabBar = () => {
           onChange={handleIconChange}
           placeholder="Tab icon"
         />
+        <input
+          type="text"
+          value={tabUrl}
+          onChange={handleUrlChange}
+          placeholder="Tab URL"
+        />
         <button type="submit">New Tab</button>
       </form>
       <ul>
-        {tabs.map((tab, index) => (
-          <li key={index}>
+        {tabs.map((tab) => (
+          <li key={tab.id}>
             <a
               href="#"
               className={activeTab === tab ? 'active' : ''}
@@ -90,6 +107,16 @@ const TabBar = () => {
           </li>
         ))}
       </ul>
+      {activeTab && (
+        <iframe
+          src={activeTab.url}
+          data-title={activeTab.title}
+          onLoad={handleIframeLoad}
+          frameBorder="0"
+          width="100%"
+          height="500"
+        />
+      )}
     </div>
   );
 };
