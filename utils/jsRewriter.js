@@ -1,5 +1,7 @@
 const { URL } = require('url');
 const { JSDOM } = require('jsdom');
+const { EncodingUtils } = require('./encoding');
+const { UrlUtils } = require('./urlUtils');
 
 /**
  * JavaScript rewriter utility class for handling complex JavaScript rewriting,
@@ -60,6 +62,31 @@ class JSRewriterUtils {
     // Handle source map URL stripping
     jsString = jsString.replace(JSRewriterUtils.SOURCE_MAP_REGEX, () => '');
 
+    // Handle document.domain mutations
+    jsString = jsString.replace(/document\.domain\s*=\s*['"](.*?)['"]/g, (match, p1) => {
+      return `document.domain = ${JSON.stringify(p1)}`;
+    });
+
+    // Handle window.location and window.open
+    jsString = jsString.replace(/window\.location\s*=\s*['"](.*?)['"]/g, (match, p1) => {
+      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p1, baseUrl);
+      return `window.location = ${JSON.stringify(rewrittenUrl)}`;
+    });
+    jsString = jsString.replace(/window\.open\s*\(\s*['"](.*?)['"]/g, (match, p1) => {
+      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p1, baseUrl);
+      return `window.open(${JSON.stringify(rewrittenUrl)})`;
+    });
+
+    // Handle history.pushState and history.replaceState
+    jsString = jsString.replace(/history\.pushState\s*\(\s*.*?\s*,\s*['"](.*?)['"]/g, (match, p1) => {
+      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p1, baseUrl);
+      return `history.pushState(${JSON.stringify(rewrittenUrl)})`;
+    });
+    jsString = jsString.replace(/history\.replaceState\s*\(\s*.*?\s*,\s*['"](.*?)['"]/g, (match, p1) => {
+      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p1, baseUrl);
+      return `history.replaceState(${JSON.stringify(rewrittenUrl)})`;
+    });
+
     return jsString;
   }
 
@@ -71,9 +98,20 @@ class JSRewriterUtils {
    */
   static rewriteUrl(url, baseUrl) {
     const dom = new URL(url, baseUrl);
-    const rewrittenUrl = `${dom.protocol}//${dom.host}${dom.pathname}`;
+    let rewrittenUrl = `${dom.protocol}//${dom.host}${dom.pathname}`;
+
+    if (dom.search) {
+      rewrittenUrl += dom.search;
+    }
+
+    if (dom.hash) {
+      rewrittenUrl += dom.hash;
+    }
 
     // Apply URL rewriting rules here
+    const salt = EncodingUtils.getSalt();
+    rewrittenUrl = UrlUtils.encodeUrl(rewrittenUrl, salt);
+
     return rewrittenUrl;
   }
 }
