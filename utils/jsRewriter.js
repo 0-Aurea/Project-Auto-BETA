@@ -103,17 +103,19 @@ class JSRewriterUtils {
 
     // Handle window.location assignments
     jsString = jsString.replace(JSRewriterUtils.WINDOW_LOCATION_REGEX, (match, p1) => {
-      return `window.location = ${JSON.stringify(UrlUtils.getFullUrl(p1, baseUrl))}`;
+      return `window.location = ${JSON.stringify(UrlUtils.getHostname(baseUrl))}`;
     });
 
     // Handle window.open calls
     jsString = jsString.replace(JSRewriterUtils.WINDOW_OPEN_REGEX, (match, p1) => {
-      return `window.open(${JSON.stringify(UrlUtils.getFullUrl(p1, baseUrl))})`;
+      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p1, baseUrl);
+      return `window.open(${JSON.stringify(rewrittenUrl)})`;
     });
 
     // Handle history.pushState and history.replaceState calls
     jsString = jsString.replace(JSRewriterUtils.HISTORY_PUSH_STATE_REGEX, (match, p1, p2, p3) => {
-      return `${p1}(${p2}, ${JSON.stringify(UrlUtils.getFullUrl(p3, baseUrl))})`;
+      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p3, baseUrl);
+      return `${p1}(${p2}, ${JSON.stringify(rewrittenUrl)})`;
     });
 
     return jsString;
@@ -126,15 +128,9 @@ class JSRewriterUtils {
    * @returns {string} The rewritten URL.
    */
   static rewriteUrl(url, baseUrl) {
-    const fullUrl = UrlUtils.getFullUrl(url, baseUrl);
-    const hostname = UrlUtils.getHostname(fullUrl);
-    const pathname = UrlUtils.getPathname(fullUrl);
-    const search = UrlUtils.getSearch(fullUrl);
-
-    const rewrittenUrl = UrlUtils.getFullUrl(pathname, baseUrl);
-    rewrittenUrl.search = search;
-
-    return EncodingUtils.encodeUrl(rewrittenUrl.href);
+    // Apply URL rewriting rules here
+    // For example, you can use the UrlUtils class to rewrite the URL
+    return UrlUtils.rewriteUrl(url, baseUrl);
   }
 }
 
