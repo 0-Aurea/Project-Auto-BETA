@@ -107,7 +107,7 @@ class CacheManager {
 
   /**
    * Parses cache control headers to determine the TTL.
-   * @param {object} headers - The response headers.
+   * @param {Headers} headers - The response headers.
    * @returns {number} The TTL in milliseconds.
    */
   static parseCacheControl(headers) {
@@ -131,39 +131,42 @@ class CacheManager {
   }
 
   /**
-   * Handles caching for responses with varying cache control headers.
-   * @param {Response} response - The response to cache.
+   * Handles cache hits and updates the cache entry.
    * @param {string} key - The cache key.
+   * @param {Response} response - The Response object.
    * @returns {Promise<void>}
    */
-  static async handleResponseCaching(response, key) {
+  static async handleCacheHit(key, response) {
     const ttl = CacheManager.parseCacheControl(response.headers);
-    const cacheEntry = await CacheManager.getCacheEntry(key);
+    const cachedResponse = await CacheManager.cache.match(key);
 
-    if (cacheEntry) {
-      await CacheManager.removeCacheEntry(key);
+    if (cachedResponse) {
+      const cacheControl = cachedResponse.headers.get('cache-control');
+      const cacheControlDirectives = cacheControl.split(',').map((directive) => directive.trim());
+
+      for (const directive of cacheControlDirectives) {
+        if (directive.startsWith('max-age=')) {
+          const maxAge = parseInt(directive.substring(8), 10);
+          if (!isNaN(maxAge) && maxAge * 1000 < ttl) {
+            await CacheManager.removeCacheEntry(key);
+            await CacheManager.storeCacheEntry(key, response);
+          }
+          break;
+        }
+      }
+    } else {
+      await CacheManager.storeCacheEntry(key, response);
     }
-
-    const cachedResponse = new Response(response.body, response);
-    cachedResponse.timestamp = Date.now();
-    cachedResponse.ttl = ttl;
-
-    await CacheManager.storeCacheEntry(key, cachedResponse);
   }
 
   /**
-   * Caches a response with a TTL based on the response's cache control headers.
-   * @param {Response} response - The response to cache.
+   * Handles cache misses and prefetches the resource.
    * @param {string} key - The cache key.
+   * @param {string} url - The URL to prefetch.
    * @returns {Promise<void>}
    */
-  static async cacheResponse(response, key) {
-    const ttl = CacheManager.parseCacheControl(response.headers);
-    const cachedResponse = new Response(response.body, response);
-    cachedResponse.timestamp = Date.now();
-    cachedResponse.ttl = ttl;
-
-    await CacheManager.storeCacheEntry(key, cachedResponse);
+  static async handleCacheMiss(key, url) {
+    await CacheManager.prefetchCacheEntry(key, url);
   }
 }
 
