@@ -1,12 +1,63 @@
 import { EncodingUtils } from '../utils/encodingUtils.js';
-import { URL_PREFIX, DEFAULT_ENCODING } from '../config/constants.js';
+import { URL_PREFIX, DEFAULT_ENCODING, SALT_LENGTH } from '../config/constants.js';
 import { createReadStream, createWriteStream, readFileSync } from 'fs';
 import { join } from 'path';
 import { promisify } from 'util';
 import axios from 'axios';
 import WebSocket from 'ws';
 
-const pipeline = promisify(require('stream').pipeline);
+const pipeline = promisify(require('stream').pipeline');
+
+class JSRewriter {
+  /**
+   * Rewrites JavaScript code to handle dynamic imports and eval().
+   * @param {string} jsCode - The JavaScript code to rewrite.
+   * @param {string} url - The URL of the JavaScript file.
+   * @returns {string} The rewritten JavaScript code.
+   */
+  rewrite(jsCode, url) {
+    // Handle dynamic imports
+    jsCode = jsCode.replace(/import\(['"]([^'"]+)['"]\)/g, (match, importUrl) => {
+      return `import('${this.rewriteUrl(importUrl, url)}')`;
+    });
+
+    // Handle eval()
+    jsCode = jsCode.replace(/eval\(['"]([^'"]+)['"]\)/g, (match, evalCode) => {
+      return `eval('${this.escapeString(evalCode)}')`;
+    });
+
+    // Handle Function()
+    jsCode = jsCode.replace(/Function\(['"]([^'"]+)['"]\)/g, (match, funcCode) => {
+      return `Function('${this.escapeString(funcCode)}')`;
+    });
+
+    return jsCode;
+  }
+
+  /**
+   * Rewrites a URL to handle dynamic imports.
+   * @param {string} url - The URL to rewrite.
+   * @param {string} baseUrl - The base URL of the JavaScript file.
+   * @returns {string} The rewritten URL.
+   */
+  rewriteUrl(url, baseUrl) {
+    // Handle relative URLs
+    if (!url.startsWith('http')) {
+      return new URL(url, baseUrl).href;
+    }
+
+    return url;
+  }
+
+  /**
+   * Escapes a string to prevent code injection.
+   * @param {string} str - The string to escape.
+   * @returns {string} The escaped string.
+   */
+  escapeString(str) {
+    return str.replace(/'/g, '\\\'').replace(/"/g, '\\"');
+  }
+}
 
 class ProxyEngine {
   /**
@@ -91,43 +142,55 @@ class ProxyEngine {
     // Handle the WebSocket connection
     targetWs.on('open', () => {
       // Forward the WebSocket upgrade request to the target server
-      upgrade(targetWs, req, res, (err) => {
-        if (err) {
-          console.error(err);
-        }
-      });
-
-      // Forward messages from the client to the target server
-      req.on('data', (data) => {
-        targetWs.send(data);
-      });
-
-      // Forward messages from the target server to the client
-      targetWs.on('message', (data) => {
-        res.write(data);
-      });
-
-      // Handle errors
-      targetWs.on('error', (err) => {
-        console.error(err);
-      });
-
-      // Handle close
-      targetWs.on('close', () => {
-        res.end();
-      });
+      upgrade(targetWs, req, res, req.headers['sec-websocket-protocol']);
     });
+
+    targetWs.on('message', (message) => {
+      // Forward the WebSocket message to the client
+      this.wsClients.get(reqUrl).send(message);
+    });
+
+    targetWs.on('close', () => {
+      // Close the WebSocket connection
+      this.wsClients.delete(reqUrl);
+    });
+
+    targetWs.on('error', (error) => {
+      // Handle WebSocket errors
+      console.error('WebSocket error:', error);
+    });
+
+    this.wsClients.set(reqUrl, targetWs);
   }
 
   /**
-   * Decodes a URL.
-   * @param {string} encodedUrl - The encoded URL.
+   * Decodes a URL from the request.
+   * @param {string} reqUrl - The URL from the request.
    * @returns {string} The decoded URL.
    */
-  decodeUrl(encodedUrl) {
-    const encodedPrefix = URL_PREFIX.length;
-    const encodedUrlWithoutPrefix = encodedUrl.substring(encodedPrefix);
-    return EncodingUtils.decode(encodedUrlWithoutPrefix);
+  decodeUrl(reqUrl) {
+    // Remove the URL prefix
+    const urlWithoutPrefix = reqUrl.substring(URL_PREFIX.length);
+
+    // Decode the URL using the rotating salt
+    const decodedUrl = EncodingUtils.decodeUrl(urlWithoutPrefix, EncodingUtils.getSalt());
+
+    return decodedUrl;
+  }
+
+  /**
+   * Encodes a URL for the response.
+   * @param {string} url - The URL to encode.
+   * @returns {string} The encoded URL.
+   */
+  encodeUrl(url) {
+    // Encode the URL using the rotating salt
+    const encodedUrl = EncodingUtils.encodeUrl(url, EncodingUtils.getSalt());
+
+    // Add the URL prefix
+    const prefixedUrl = `${URL_PREFIX}/${encodedUrl}`;
+
+    return prefixedUrl;
   }
 
   /**
@@ -137,65 +200,88 @@ class ProxyEngine {
    * @returns {Promise<object>} A promise that resolves with the target response.
    */
   async forwardRequest(decodedUrl, req) {
-    const { method, headers, body } = req;
-    const targetResponse = await axios({
-      method,
-      url: decodedUrl,
-      headers,
-      data: body,
+    // Create a new request to the target server
+    const targetReq = axios.create({
+      headers: req.headers,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
     });
+
+    // Forward the request to the target server
+    const targetResponse = await targetReq({
+      method: req.method,
+      url: decodedUrl,
+      data: req.body,
+      headers: req.headers,
+    });
+
     return targetResponse;
   }
 
   /**
-   * Rewrites a response.
-   * @param {object} response - The response to rewrite.
+   * Rewrites the response HTML/JS/CSS.
+   * @param {object} targetResponse - The target response.
    * @param {string} decodedUrl - The decoded URL.
    * @returns {Promise<object>} A promise that resolves with the rewritten response.
    */
-  async rewriteResponse(response, decodedUrl) {
-    const { data, headers } = response;
-    const contentType = headers['content-type'];
+  async rewriteResponse(targetResponse, decodedUrl) {
+    // Get the response HTML/JS/CSS
+    let responseBody = await targetResponse.data;
 
-    if (contentType.includes('text/html')) {
-      return this.rewriteHtml(data, decodedUrl);
-    } else if (contentType.includes('application/javascript')) {
-      return this.rewriteJs(data, decodedUrl);
-    } else if (contentType.includes('text/css')) {
-      return this.rewriteCss(data, decodedUrl);
+    // Check if the response is HTML
+    if (targetResponse.headers['content-type'].includes('text/html')) {
+      // Rewrite the HTML
+      responseBody = this.rewriteHtml(responseBody, decodedUrl);
     }
 
-    return response;
+    // Check if the response is JavaScript
+    if (targetResponse.headers['content-type'].includes('application/javascript')) {
+      // Rewrite the JavaScript
+      responseBody = this.jsRewriter.rewrite(responseBody, decodedUrl);
+    }
+
+    // Update the response headers
+    targetResponse.headers['content-length'] = Buffer.byteLength(responseBody);
+
+    // Return the rewritten response
+    return {
+      ...targetResponse,
+      data: responseBody,
+    };
   }
 
   /**
-   * Rewrites HTML.
-   * @param {string} html - The HTML to rewrite.
+   * Rewrites the HTML response.
+   * @param {string} html - The HTML response.
    * @param {string} decodedUrl - The decoded URL.
-   * @returns {Promise<string>} A promise that resolves with the rewritten HTML.
+   * @returns {string} The rewritten HTML.
    */
-  async rewriteHtml(html, decodedUrl) {
-    return this.jsRewriter.rewriteHtml(html, decodedUrl);
+  rewriteHtml(html, decodedUrl) {
+    // Handle HTML tags
+    html = html.replace(/<script src=['"]([^'"]+)['"]>/g, (match, scriptSrc) => {
+      return `<script src="${this.rewriteUrl(scriptSrc, decodedUrl)}"></script>`;
+    });
+
+    html = html.replace(/<link href=['"]([^'"]+)['"]>/g, (match, linkHref) => {
+      return `<link href="${this.rewriteUrl(linkHref, decodedUrl)}">`;
+    });
+
+    return html;
   }
 
   /**
-   * Rewrites JavaScript.
-   * @param {string} js - The JavaScript to rewrite.
-   * @param {string} decodedUrl - The decoded URL.
-   * @returns {Promise<string>} A promise that resolves with the rewritten JavaScript.
+   * Rewrites a URL in the HTML response.
+   * @param {string} url - The URL to rewrite.
+   * @param {string} baseUrl - The base URL of the HTML response.
+   * @returns {string} The rewritten URL.
    */
-  async rewriteJs(js, decodedUrl) {
-    return this.jsRewriter.rewriteJs(js, decodedUrl);
-  }
+  rewriteUrl(url, baseUrl) {
+    // Handle relative URLs
+    if (!url.startsWith('http')) {
+      return new URL(url, baseUrl).href;
+    }
 
-  /**
-   * Rewrites CSS.
-   * @param {string} css - The CSS to rewrite.
-   * @param {string} decodedUrl - The decoded URL.
-   * @returns {Promise<string>} A promise that resolves with the rewritten CSS.
-   */
-  async rewriteCss(css, decodedUrl) {
-    return this.jsRewriter.rewriteCss(css, decodedUrl);
+    return url;
   }
 
   /**
@@ -205,19 +291,29 @@ class ProxyEngine {
    * @returns {Promise<void>} A promise that resolves when the response is sent.
    */
   async handleDirectRequest(req, res) {
-    // Implement direct request handling
+    // Handle the direct request
+    const directResponse = await axios({
+      method: req.method,
+      url: req.url,
+      headers: req.headers,
+      data: req.body,
+    });
+
+    // Send the direct response
+    res.status(directResponse.status).set(directResponse.headers).send(directResponse.data);
   }
 
   /**
    * Handles an error.
    * @param {object} req - The incoming request object.
    * @param {object} res - The outgoing response object.
-   * @param {number} statusCode - The status code.
-   * @param {string} message - The error message.
+   * @param {number} statusCode - The error status code.
+   * @param {string} errorMessage - The error message.
    * @returns {Promise<void>} A promise that resolves when the response is sent.
    */
-  async handleError(req, res, statusCode, message) {
-    res.status(statusCode).send(message);
+  async handleError(req, res, statusCode, errorMessage) {
+    // Send the error response
+    res.status(statusCode).send(errorMessage);
   }
 
   /**
@@ -226,7 +322,12 @@ class ProxyEngine {
    * @returns {Promise<object>} A promise that resolves with the cached response.
    */
   async getCachedResponse(decodedUrl) {
-    // Implement caching
+    // Check if the response is cached
+    if (this.cache.has(decodedUrl)) {
+      return this.cache.get(decodedUrl);
+    }
+
+    return null;
   }
 
   /**
@@ -236,7 +337,8 @@ class ProxyEngine {
    * @returns {Promise<void>} A promise that resolves when the response is cached.
    */
   async cacheResponse(decodedUrl, response) {
-    // Implement caching
+    // Cache the response
+    this.cache.set(decodedUrl, response);
   }
 
   /**
@@ -247,49 +349,8 @@ class ProxyEngine {
    * @returns {Promise<void>} A promise that resolves when the response is sent.
    */
   async sendResponse(req, res, response) {
-    const { status, headers, data } = response;
-    res.status(status);
-
-    Object.keys(headers).forEach((header) => {
-      res.set(header, headers[header]);
-    });
-
-    res.send(data);
-  }
-}
-
-class JSRewriter {
-  /**
-   * Rewrites HTML.
-   * @param {string} html - The HTML to rewrite.
-   * @param {string} decodedUrl - The decoded URL.
-   * @returns {Promise<string>} A promise that resolves with the rewritten HTML.
-   */
-  async rewriteHtml(html, decodedUrl) {
-    // Implement HTML rewriting
-    return html;
-  }
-
-  /**
-   * Rewrites JavaScript.
-   * @param {string} js - The JavaScript to rewrite.
-   * @param {string} decodedUrl - The decoded URL.
-   * @returns {Promise<string>} A promise that resolves with the rewritten JavaScript.
-   */
-  async rewriteJs(js, decodedUrl) {
-    // Implement JavaScript rewriting
-    return js;
-  }
-
-  /**
-   * Rewrites CSS.
-   * @param {string} css - The CSS to rewrite.
-   * @param {string} decodedUrl - The decoded URL.
-   * @returns {Promise<string>} A promise that resolves with the rewritten CSS.
-   */
-  async rewriteCss(css, decodedUrl) {
-    // Implement CSS rewriting
-    return css;
+    // Send the response
+    res.status(response.status).set(response.headers).send(response.data);
   }
 }
 
