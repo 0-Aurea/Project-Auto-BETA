@@ -3,19 +3,52 @@ import React, { useState, useEffect } from 'react';
 const SearchBar = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [focused, setFocused] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const handleSearch = (event) => {
     event.preventDefault();
-    const searchInput = document.getElementById('search-input');
-    const searchValue = searchInput.value.trim();
+    const searchValue = searchQuery.trim();
     if (searchValue) {
       // Implement search logic here
       console.log(`Searching for: ${searchValue}`);
+      // Call the proxy service to handle the search query
+      fetch('/proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: searchValue }),
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          console.log(data);
+          // Handle the response data
+        })
+        .catch((error) => {
+          console.error(error);
+        });
     }
   };
 
   const handleInputChange = (event) => {
     setSearchQuery(event.target.value);
+    if (event.target.value.length > 0) {
+      setShowSuggestions(true);
+      // Fetch suggestions from the proxy service
+      fetch('/suggestions', {
+        method: 'GET',
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          setSuggestions(data);
+        })
+        .catch((error) => {
+          console.error(error);
+        });
+    } else {
+      setShowSuggestions(false);
+    }
   };
 
   const handleFocus = () => {
@@ -24,6 +57,11 @@ const SearchBar = () => {
 
   const handleBlur = () => {
     setFocused(false);
+  };
+
+  const handleSuggestionClick = (suggestion) => {
+    setSearchQuery(suggestion);
+    setShowSuggestions(false);
   };
 
   return (
@@ -39,6 +77,15 @@ const SearchBar = () => {
           onBlur={handleBlur}
           className={focused ? 'focused' : ''}
         />
+        {showSuggestions && (
+          <ul className="suggestions">
+            {suggestions.map((suggestion, index) => (
+              <li key={index} onClick={() => handleSuggestionClick(suggestion)}>
+                {suggestion}
+              </li>
+            ))}
+          </ul>
+        )}
         <button id="search-button" type="submit">
           <svg
             width="20"
