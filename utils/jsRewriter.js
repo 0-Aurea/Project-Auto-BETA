@@ -93,54 +93,83 @@ class JSRewriterUtils {
 
     // Handle source map URL stripping
     jsString = jsString.replace(JSRewriterUtils.SOURCE_MAP_REGEX, (match, p1) => {
-      return '';
+      return `//#${SourceMapUtils.stripSourceMappingURL(p1)}`;
     });
 
     // Handle document.domain mutations
     jsString = jsString.replace(JSRewriterUtils.DOCUMENT_DOMAIN_REGEX, (match, p1) => {
-      return `document.domain = ${JSON.stringify(UrlUtils.getHostname(baseUrl))}`;
+      return `document.domain = ${JSON.stringify(p1)}`;
     });
 
     // Handle window.location assignments
     jsString = jsString.replace(JSRewriterUtils.WINDOW_LOCATION_REGEX, (match, p1) => {
-      return `window.location = ${JSON.stringify(UrlUtils.getHostname(baseUrl))}`;
+      return `window.location = ${JSON.stringify(p1)}`;
     });
 
     // Handle window.open calls
     jsString = jsString.replace(JSRewriterUtils.WINDOW_OPEN_REGEX, (match, p1) => {
-      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p1, baseUrl);
-      return `window.open(${JSON.stringify(rewrittenUrl)})`;
+      return `window.open(${JSON.stringify(p1)})`;
     });
 
     // Handle history.pushState and history.replaceState calls
     jsString = jsString.replace(JSRewriterUtils.HISTORY_PUSH_STATE_REGEX, (match, p1, p2, p3) => {
-      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p3, baseUrl);
-      return `${p1}(${p2}, ${JSON.stringify(rewrittenUrl)})`;
+      return `${p1}(${p2}, ${JSON.stringify(p3)})`;
     });
 
     return jsString;
   }
 
   /**
-   * Rewrites a URL to ensure it is proxied through the Nexus proxy.
+   * Rewrites a URL by applying XOR + base64 URL encoding with a rotating salt.
    * @param {string} url - The URL to rewrite.
    * @param {string} baseUrl - The base URL of the JavaScript file.
    * @returns {string} The rewritten URL.
    */
   static rewriteUrl(url, baseUrl) {
-    // Check if the URL is already proxied
-    if (url.startsWith('/proxy/')) {
-      return url;
-    }
+    const absoluteUrl = new URL(url, baseUrl).href;
+    const encodedUrl = UrlUtils.encodeUrl(absoluteUrl, EncodingUtils.getRotatingSalt());
+    return encodedUrl;
+  }
 
-    // Check if the URL is absolute
-    if (new URL(url, baseUrl).origin !== baseUrl.origin) {
-      return EncodingUtils.encodeUrl(url);
-    }
+  /**
+   * Extracts and rewrites inline scripts and styles.
+   * @param {string} htmlString - The HTML string to process.
+   * @param {string} baseUrl - The base URL of the HTML file.
+   * @returns {string} The rewritten HTML string.
+   */
+  static rewriteInlineScripts(htmlString, baseUrl) {
+    const dom = new JSDOM(htmlString);
+    const scripts = dom.window.document.querySelectorAll('script');
 
-    // URL is relative, so rewrite it to be proxied
-    return EncodingUtils.encodeUrl(new URL(url, baseUrl).href);
+    scripts.forEach((script) => {
+      if (script.src) {
+        script.src = JSRewriterUtils.rewriteUrl(script.src, baseUrl);
+      } else {
+        const jsString = script.textContent;
+        script.textContent = JSRewriterUtils.rewriteJs(jsString, baseUrl);
+      }
+    });
+
+    return dom.serialize();
+  }
+
+  /**
+   * Extracts and rewrites inline styles.
+   * @param {string} htmlString - The HTML string to process.
+   * @param {string} baseUrl - The base URL of the HTML file.
+   * @returns {string} The rewritten HTML string.
+   */
+  static rewriteInlineStyles(htmlString, baseUrl) {
+    const dom = new JSDOM(htmlString);
+    const styles = dom.window.document.querySelectorAll('style');
+
+    styles.forEach((style) => {
+      const cssString = style.textContent;
+      style.textContent = CSSRewriterUtils.rewriteCss(cssString, baseUrl);
+    });
+
+    return dom.serialize();
   }
 }
 
-module.exports = { jsRewriter: JSRewriterUtils.rewriteJs };
+module.exports = JSRewriterUtils;
