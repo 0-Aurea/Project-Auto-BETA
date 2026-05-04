@@ -1,67 +1,90 @@
-const { XORBase64EncoderUtils } = require('./xorBase64Encoder');
+'use strict';
+
+const { RTCPeerConnection } = require('wrtc');
 
 /**
  * WebRTC interceptor utility class for handling WebRTC traffic.
  */
 class WebRTCInterceptor {
   /**
-   * WebRTC peer connection.
+   * Regular expression to match WebRTC ICE candidate messages.
    */
-  static peerConnection = null;
+  static ICE_CANDIDATE_REGEX = /^candidate:.*$/;
 
   /**
-   * WebRTC interceptor callback function.
+   * Regular expression to match WebRTC offer/answer messages.
    */
-  static callback = null;
+  static OFFER_ANSWER_REGEX = /^offer|answer$/;
 
   /**
-   * Initialize the WebRTC interceptor.
-   * @param {function} callback - The callback function to handle intercepted WebRTC traffic.
+   * Intercepts and rewrites WebRTC ICE candidate messages.
+   * @param {RTCPeerConnection} peerConnection - The RTCPeerConnection instance.
+   * @param {function} callback - The callback function to handle intercepted messages.
    */
-  static init(callback) {
-    WebRTCInterceptor.callback = callback;
-    WebRTCInterceptor.peerConnection = new RTCPeerConnection({
-      iceServers: [],
-      iceCandidatePoolSize: 0,
-    });
-
-    // Handle ice candidate events
-    WebRTCInterceptor.peerConnection.onicecandidate = (event) => {
+  static interceptIceCandidates(peerConnection, callback) {
+    peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
-        // Scrub the ICE candidate to prevent IP leaks
-        const scrubbedCandidate = WebRTCInterceptor.scrubIceCandidate(event.candidate);
-        WebRTCInterceptor.callback(scrubbedCandidate);
+        const candidate = event.candidate.candidate;
+        if (WebRTCInterceptor.ICE_CANDIDATE_REGEX.test(candidate)) {
+          // Rewrite the ICE candidate to prevent IP leaks
+          const rewrittenCandidate = WebRTCInterceptor.rewriteIceCandidate(candidate);
+          callback(rewrittenCandidate);
+        }
       }
     };
+  }
 
-    // Handle track events
-    WebRTCInterceptor.peerConnection.ontrack = (event) => {
-      // Handle the track event
+  /**
+   * Rewrites a WebRTC ICE candidate message to prevent IP leaks.
+   * @param {string} candidate - The ICE candidate message.
+   * @returns {string} The rewritten ICE candidate message.
+   */
+  static rewriteIceCandidate(candidate) {
+    // Remove IP addresses from the ICE candidate message
+    return candidate.replace(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/g, '0.0.0.0');
+  }
+
+  /**
+   * Intercepts and rewrites WebRTC offer/answer messages.
+   * @param {RTCPeerConnection} peerConnection - The RTCPeerConnection instance.
+   * @param {function} callback - The callback function to handle intercepted messages.
+   */
+  static interceptOfferAnswer(peerConnection, callback) {
+    peerConnection.onnegotiationneeded = () => {
+      peerConnection.createOffer().then((offer) => {
+        const rewrittenOffer = WebRTCInterceptor.rewriteOfferAnswer(offer);
+        callback(rewrittenOffer);
+      });
     };
 
-    // Handle signaling state changes
-    WebRTCInterceptor.peerConnection.onsignalingstatechange = () => {
-      // Handle the signaling state change
+    peerConnection.onaddstream = (event) => {
+      // Handle answer messages
+      peerConnection.createAnswer().then((answer) => {
+        const rewrittenAnswer = WebRTCInterceptor.rewriteOfferAnswer(answer);
+        callback(rewrittenAnswer);
+      });
     };
   }
 
   /**
-   * Scrub an ICE candidate to prevent IP leaks.
-   * @param {RTCIceCandidate} candidate - The ICE candidate to scrub.
-   * @returns {RTCIceCandidate} The scrubbed ICE candidate.
+   * Rewrites a WebRTC offer/answer message.
+   * @param {object} message - The offer/answer message.
+   * @returns {object} The rewritten offer/answer message.
    */
-  static scrubIceCandidate(candidate) {
-    // Use XOR + base64 URL encoding to scrub the ICE candidate
-    const encodedCandidate = XORBase64EncoderUtils.xorEncode(JSON.stringify(candidate));
-    return JSON.parse(XORBase64EncoderUtils.xorEncode(encodedCandidate));
+  static rewriteOfferAnswer(message) {
+    // Remove sensitive information from the offer/answer message
+    delete message.sdp;
+    return message;
   }
 
   /**
-   * Handle an intercepted WebRTC traffic.
-   * @param {*} data - The intercepted WebRTC traffic data.
+   * Handles WebRTC traffic by intercepting and rewriting ICE candidate and offer/answer messages.
+   * @param {RTCPeerConnection} peerConnection - The RTCPeerConnection instance.
+   * @param {function} callback - The callback function to handle intercepted messages.
    */
-  static handleInterceptedTraffic(data) {
-    // TO DO: Implement handling of intercepted WebRTC traffic
+  static handleWebRTC(peerConnection, callback) {
+    WebRTCInterceptor.interceptIceCandidates(peerConnection, callback);
+    WebRTCInterceptor.interceptOfferAnswer(peerConnection, callback);
   }
 }
 
