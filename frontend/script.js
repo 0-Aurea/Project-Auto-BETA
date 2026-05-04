@@ -1,163 +1,106 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import TabManager from './components/TabManager';
-import ProxySettings from './components/ProxySettings';
+import './style.css';
+import SearchBar from './components/SearchBar';
+import TabBar from './components/TabBar';
+import SettingsPanel from './components/SettingsPanel';
 import ProxyHistory from './components/ProxyHistory';
 import BookmarksManager from './components/BookmarksManager';
-import SettingsPanel from './components/SettingsPanel';
-import SearchBar from './components/SearchBar';
-import './style.css';
 
 const App = () => {
   return (
-    <div className="app-container">
+    <div className="app">
       <SearchBar />
-      <TabManager />
-      <ProxySettings />
+      <TabBar />
+      <SettingsPanel />
       <ProxyHistory />
       <BookmarksManager />
-      <SettingsPanel />
     </div>
   );
 };
 
-ReactDOM.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-  document.getElementById('root')
-);
+ReactDOM.render(<App />, document.getElementById('root'));
 
-// Service Worker registration
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker
-    .register('sw.js')
-    .then((registration) => {
-      console.log('Service Worker registered:', registration);
-    })
-    .catch((error) => {
-      console.error('Service Worker registration failed:', error);
-    });
-} else {
-  console.log('Service Worker is not supported.');
-}
+navigator.serviceWorker.register('sw.js')
+  .then(registration => {
+    console.log('Service worker registered:', registration);
+  })
+  .catch(error => {
+    console.error('Service worker registration failed:', error);
+  });
 
-// Handle messages from Service Worker
-navigator.serviceWorker.addEventListener('message', (event) => {
-  if (event.data.type === 'updateTab') {
-    const tabId = event.data.tabId;
-    const tabUrl = event.data.tabUrl;
-    // Update tab URL in TabManager
-    const tabManager = document.querySelector('TabManager');
-    if (tabManager) {
-      tabManager.updateTab(tabId, tabUrl);
-    }
-  } else if (event.data.type === 'addHistory') {
-    const historyItem = event.data.historyItem;
-    // Add history item in ProxyHistory
-    const proxyHistory = document.querySelector('ProxyHistory');
-    if (proxyHistory) {
-      proxyHistory.addHistory(historyItem);
-    }
+window.addEventListener('message', event => {
+  if (event.data.type === 'proxy-message') {
+    const { tabId, message } = event.data;
+    // Handle messages from the proxy
   }
 });
 
-// Initialize proxy connection
-const proxyUrl = '/proxy';
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
-
-// Send a test request to the proxy to ensure it's working
-fetch(proxyUrl, {
-  method: 'GET',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
-  .then((response) => response.json())
-  .then((data) => {
-    if (data.success) {
-      console.log('Proxy connection established.');
-    } else {
-      console.error('Proxy connection failed:', data.error);
-    }
-  })
-  .catch((error) => {
-    console.error('Proxy connection failed:', error);
-  });
-
-// Handle tab updates
-document.addEventListener('tabUpdated', (event) => {
-  const tabId = event.detail.tabId;
-  const tabUrl = event.detail.tabUrl;
-  // Send a message to the Service Worker to update the tab URL
-  navigator.serviceWorker.controller.postMessage({
-    type: 'updateTab',
-    tabId,
-    tabUrl,
-  });
+window.addEventListener('beforeunload', () => {
+  // Clean up before unloading the page
+  navigator.serviceWorker.controller.postMessage({ type: 'shutdown' });
 });
 
-// Handle history updates
-document.addEventListener('historyUpdated', (event) => {
-  const historyItem = event.detail.historyItem;
-  // Send a message to the Service Worker to add the history item
-  navigator.serviceWorker.controller.postMessage({
-    type: 'addHistory',
-    historyItem,
-  });
-});
+function connectToProxy() {
+  // Establish a connection to the proxy
+  const proxyUrl = 'http://localhost:8080'; // Replace with the actual proxy URL
+  const connection = new WebSocket(proxyUrl);
 
-// Initialize search bar
-const searchBar = document.querySelector('SearchBar');
-if (searchBar) {
-  searchBar.addEventListener('search', (event) => {
-    const searchQuery = event.detail.searchQuery;
-    // Send a message to the Service Worker to perform the search
-    navigator.serviceWorker.controller.postMessage({
-      type: 'search',
-      searchQuery,
-    });
-  });
+  connection.onmessage = event => {
+    console.log('Received message from proxy:', event.data);
+  };
+
+  connection.onopen = () => {
+    console.log('Connected to proxy');
+  };
+
+  connection.onerror = error => {
+    console.error('Error connecting to proxy:', error);
+  };
+
+  connection.onclose = () => {
+    console.log('Disconnected from proxy');
+  };
 }
 
-// Initialize tab manager
-const tabManager = document.querySelector('TabManager');
-if (tabManager) {
-  tabManager.addEventListener('tabUpdated', (event) => {
-    const tabId = event.detail.tabId;
-    const tabUrl = event.detail.tabUrl;
-    // Send a message to the Service Worker to update the tab URL
-    navigator.serviceWorker.controller.postMessage({
-      type: 'updateTab',
-      tabId,
-      tabUrl,
-    });
-  });
+connectToProxy();
+
+function handleSearchQuery(searchQuery) {
+  // Handle search queries from the search bar
+  const searchEngine = localStorage.getItem('searchEngine');
+  let url;
+  if (searchEngine === 'google') {
+    url = `https://www.google.com/search?q=${searchQuery}`;
+  } else if (searchEngine === 'bing') {
+    url = `https://www.bing.com/search?q=${searchQuery}`;
+  } else {
+    // Default to Google
+    url = `https://www.google.com/search?q=${searchQuery}`;
+  }
+
+  // Open the search results in a new tab
+  window.open(url, '_blank');
 }
 
-// Initialize bookmarks manager
-const bookmarksManager = document.querySelector('BookmarksManager');
-if (bookmarksManager) {
-  bookmarksManager.addEventListener('bookmarkAdded', (event) => {
-    const bookmark = event.detail.bookmark;
-    // Send a message to the Service Worker to add the bookmark
-    navigator.serviceWorker.controller.postMessage({
-      type: 'addBookmark',
-      bookmark,
-    });
-  });
+function handleTabChange(tabId) {
+  // Handle tab changes
+  const tab = document.getElementById(`tab-${tabId}`);
+  tab.classList.add('active');
 }
 
-// Initialize settings panel
-const settingsPanel = document.querySelector('SettingsPanel');
-if (settingsPanel) {
-  settingsPanel.addEventListener('settingsUpdated', (event) => {
-    const settings = event.detail.settings;
-    // Send a message to the Service Worker to update the settings
-    navigator.serviceWorker.controller.postMessage({
-      type: 'updateSettings',
-      settings,
-    });
-  });
+function handleSettingsChange(settings) {
+  // Handle settings changes
+  localStorage.setItem('encodingMode', settings.encodingMode);
+  localStorage.setItem('cacheEnabled', settings.cacheEnabled);
+  localStorage.setItem('adBlockEnabled', settings.adBlockEnabled);
+}
+
+function handleProxyHistoryChange(history) {
+  // Handle proxy history changes
+  localStorage.setItem('proxyHistory', JSON.stringify(history));
+}
+
+function handleBookmarksChange(bookmarks) {
+  // Handle bookmarks changes
+  localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
 }
