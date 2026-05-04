@@ -135,11 +135,11 @@ class JSRewriter {
     });
 
     js = js.replace(this.historyPushStateRegex, (match) => {
-      return `history.pushState(${this.rewriteHistory(match)})`;
+      return `history.pushState(${this.rewriteHistoryState(match)})`;
     });
 
     js = js.replace(this.historyReplaceStateRegex, (match) => {
-      return `history.replaceState(${this.rewriteHistory(match)})`;
+      return `history.replaceState(${this.rewriteHistoryState(match)})`;
     });
 
     return js;
@@ -165,8 +165,8 @@ class JSRewriter {
     return url;
   }
 
-  rewriteHistory(js) {
-    return js;
+  rewriteHistoryState(state) {
+    return state;
   }
 }
 
@@ -233,51 +233,55 @@ class CSSRewriter {
   }
 }
 
-// handleFetch function
 async function handleFetch(request) {
   const url = new URL(request.url);
-  const cache = await getCache();
-  const cachedResponse = await cache.match(request);
+  const encodedUrl = xorBase64Encode(url.href, generateSalt());
+  const proxiedRequest = new Request(encodedUrl, {
+    method: request.method,
+    headers: request.headers,
+    body: request.body,
+  });
 
-  if (cachedResponse) {
-    return cachedResponse;
+  const response = await fetch(proxiedRequest);
+  const rewrittenResponse = new Response(response.body, response);
+
+  const contentType = response.headers.get('Content-Type');
+  if (contentType && contentType.includes('text/javascript')) {
+    const jsRewriter = new JSRewriter();
+    const rewrittenBody = await response.text();
+    const rewrittenJS = jsRewriter.rewriteJS(rewrittenBody);
+    rewrittenResponse.body = rewrittenJS;
+  } else if (contentType && contentType.includes('text/html')) {
+    const htmlRewriter = new HTMLRewriter();
+    const rewrittenBody = await response.text();
+    const rewrittenHTML = htmlRewriter.rewriteHTML(rewrittenBody);
+    rewrittenResponse.body = rewrittenHTML;
+  } else if (contentType && contentType.includes('text/css')) {
+    const cssRewriter = new CSSRewriter();
+    const rewrittenBody = await response.text();
+    const rewrittenCSS = cssRewriter.rewriteCSS(rewrittenBody);
+    rewrittenResponse.body = rewrittenCSS;
   }
 
-  try {
-    const response = await fetch(request);
-    const responseToCache = new Response(response.body, response);
-    responseToCache.headers.set('Cache-Control', 'max-age=3600');
-    await putResponse(request, responseToCache);
-    return responseToCache;
-  } catch (error) {
-    console.error('Error handling fetch:', error);
-    return new Response('Error', { status: 500 });
-  }
+  rewrittenResponse.headers.set('Content-Type', contentType);
+
+  await putResponse(request, rewrittenResponse);
+
+  return rewrittenResponse;
 }
 
-// updateTab function
 function updateTab(tabId, url) {
   tabs[tabId] = url;
 }
 
-// closeTab function
 function closeTab(tabId) {
   delete tabs[tabId];
 }
 
-// search function
 function search(query, engine) {
-  // implement search functionality
+  // Implement search functionality
 }
 
-// Generate a new salt and encode URL
-function encodeURL(url) {
-  const salt = generateSalt();
-  return xorBase64Encode(url, salt);
-}
-
-// Decode URL
-function decodeURL(encodedURL) {
-  const salt = rotatingSalt[rotatingSalt.length - 1];
-  return xorBase64Decode(encodedURL, salt);
+function getTabURL(tabId) {
+  return tabs[tabId];
 }
