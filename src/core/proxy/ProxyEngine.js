@@ -91,49 +91,76 @@ class ProxyEngine {
     }
 
     // Check if the request is a search request
-    if (reqUrl.startsWith(`${URL_PREFIX}/search`)) {
+    if (reqUrl.startsWith('/_nexus/search')) {
       await this.handleSearchRequest(req, res);
       return;
     }
 
-    // Rewrite the request URL
-    const rewrittenUrl = this.rewriteUrl(reqUrl);
+    // Decode the URL
+    let decodedUrl = this.decodeUrl(reqUrl);
 
-    // Check if the request is cached
-    if (this.cache.has(rewrittenUrl)) {
-      const cachedResponse = this.cache.get(rewrittenUrl);
-      res.writeHead(cachedResponse.status, cachedResponse.headers);
-      res.end(cachedResponse.data);
-      this.proxyHistory.addEntry(req, cachedResponse);
-      return;
+    // Check if the request is for a proxied resource
+    if (decodedUrl.startsWith('http')) {
+      // Proxy the request
+      await this.proxyRequest(req, res, decodedUrl);
+    } else {
+      // Handle static file requests
+      res.status(404).send('Not Found');
     }
+  }
 
-    // Proxy the request
+  /**
+   * Decodes a URL using the XOR + base64 encoding scheme.
+   * @param {string} encodedUrl - The encoded URL.
+   * @returns {string} The decoded URL.
+   */
+  decodeUrl(encodedUrl) {
+    // Remove the URL prefix
+    encodedUrl = encodedUrl.replace(URL_PREFIX, '');
+
+    // Decode the URL
+    return EncodingUtils.decode(encodedUrl, rotatingSalt);
+  }
+
+  /**
+   * Proxies a request to the target URL.
+   * @param {object} req - The incoming request object.
+   * @param {object} res - The outgoing response object.
+   * @param {string} targetUrl - The target URL.
+   */
+  async proxyRequest(req, res, targetUrl) {
     try {
-      const response = await axios({
+      // Create a new Axios request
+      const axiosReq = axios({
         method: req.method,
-        url: rewrittenUrl,
-        headers: this.rewriteHeaders(headers),
+        url: targetUrl,
+        headers: req.headers,
         data: req.body,
       });
 
-      // Cache the response
-      const cacheKey = rewrittenUrl;
-      this.cache.set(cacheKey, response);
-
-      // Rewrite the response
-      const rewrittenResponse = this.rewriteResponse(response);
-
-      // Send the rewritten response
-      res.writeHead(rewrittenResponse.status, rewrittenResponse.headers);
-      res.end(rewrittenResponse.data);
-
-      // Update proxy history
-      this.proxyHistory.addEntry(req, rewrittenResponse);
+      // Handle the response
+      const axiosRes = await axiosReq;
+      res.set(axiosRes.headers);
+      res.status(axiosRes.status);
+      res.send(axiosRes.data);
     } catch (error) {
+      // Handle errors
       console.error(error);
       res.status(500).send('Internal Server Error');
     }
+  }
+
+  /**
+   * Handles WebSocket upgrades.
+   * @param {object} req - The incoming request object.
+   * @param {object} socket - The WebSocket socket object.
+   * @param {object} head - The WebSocket head object.
+   */
+  handleWebSocket(req, socket, head) {
+    // Handle WebSocket upgrades
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit('connection', ws, req);
+    });
   }
 
   /**
@@ -141,80 +168,51 @@ class ProxyEngine {
    * @param {object} ws - The WebSocket object.
    * @param {object} req - The incoming request object.
    */
-  async handleWebSocketConnection(ws, req) {
-    const { headers, url: reqUrl } = req;
-    const { host, referer } = headers;
-
-    // Handle WebSocket upgrade
+  handleWebSocketConnection(ws, req) {
+    // Handle WebSocket messages
     ws.on('message', (message) => {
       console.log(`Received WebSocket message: ${message}`);
     });
 
-    ws.on('close', () => {
-      console.log('WebSocket connection closed');
-    });
-
+    // Handle WebSocket errors
     ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
-    });
-  }
-
-  /**
-   * Handles WebSocket requests.
-   * @param {object} req - The incoming request object.
-   * @param {object} socket - The socket object.
-   * @param {object} head - The head object.
-   */
-  async handleWebSocket(req, socket, head) {
-    const { headers, url: reqUrl } = req;
-    const { host, referer } = headers;
-
-    // Handle WebSocket upgrade
-    const ws = new WebSocket(reqUrl);
-    ws.on('open', () => {
-      console.log('WebSocket connection established');
+      console.error(`WebSocket error: ${error}`);
     });
 
-    ws.on('message', (message) => {
-      console.log(`Received WebSocket message: ${message}`);
-    });
-
+    // Handle WebSocket closures
     ws.on('close', () => {
-      console.log('WebSocket connection closed');
-    });
-
-    ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
+      console.log('WebSocket closed');
     });
   }
 
   /**
    * Handles WebRTC ICE candidate scrubbing.
    * @param {object} req - The incoming request object.
-   * @param {object} socket - The socket object.
-   * @param {object} head - The head object.
+   * @param {object} socket - The WebRTC socket object.
+   * @param {object} head - The WebRTC head object.
    */
-  async handleWebRTC(req, socket, head) {
-    const { headers, url: reqUrl } = req;
-    const { host, referer } = headers;
-
+  handleWebRTC(req, socket, head) {
     // Handle WebRTC ICE candidate scrubbing
-    const rtcPeerConnection = new RTCPeerConnection();
-    this.rtcPeerConnections.set(reqUrl, rtcPeerConnection);
+    const rtcPeerConnection = this.rtcPeerConnections.get(req.id);
+    if (rtcPeerConnection) {
+      // Scrub the ICE candidate
+      const scrubbedCandidate = this.scrubIceCandidate(req, rtcPeerConnection);
+      socket.write(scrubbedCandidate);
+    } else {
+      // Handle errors
+      console.error('WebRTC peer connection not found');
+      socket.destroy();
+    }
+  }
 
-    rtcPeerConnection.onicecandidate = (event) => {
-      if (event.candidate) {
-        console.log('WebRTC ICE candidate:', event.candidate);
-      }
-    };
-
-    rtcPeerConnection.onaddstream = (event) => {
-      console.log('WebRTC stream added:', event.stream);
-    };
-
-    rtcPeerConnection.onremovestream = (event) => {
-      console.log('WebRTC stream removed:', event.stream);
-    };
+  /**
+   * Scrubs a WebRTC ICE candidate.
+   * @param {object} req - The incoming request object.
+   * @param {object} rtcPeerConnection - The WebRTC peer connection object.
+   * @returns {string} The scrubbed ICE candidate.
+   */
+  scrubIceCandidate(req, rtcPeerConnection) {
+    // TO DO: implement ICE candidate scrubbing
   }
 
   /**
@@ -223,23 +221,7 @@ class ProxyEngine {
    * @param {object} res - The outgoing response object.
    */
   async handleSearchRequest(req, res) {
-    const { query } = req.query;
-
-    // Perform search
-    const searchResults = await this.performSearch(query);
-
-    // Send search results
-    res.json(searchResults);
-  }
-
-  /**
-   * Performs a search.
-   * @param {string} query - The search query.
-   * @returns {object} The search results.
-   */
-  async performSearch(query) {
-    // Implement search logic here
-    return [];
+    // TO DO: implement search request handling
   }
 
   /**
@@ -248,14 +230,7 @@ class ProxyEngine {
    * @param {object} res - The outgoing response object.
    */
   async handleNewTabRequest(req, res) {
-    const { url } = req.query;
-
-    // Create a new tab
-    const tabId = uuidv4();
-    this.tabs.set(tabId, { url, history: [] });
-
-    // Send tab ID
-    res.json({ tabId });
+    // TO DO: implement new tab request handling
   }
 
   /**
@@ -264,21 +239,7 @@ class ProxyEngine {
    * @param {object} res - The outgoing response object.
    */
   async handleTabUpdateRequest(req, res) {
-    const { tabId, url } = req.body;
-
-    // Update tab
-    if (this.tabs.has(tabId)) {
-      const tab = this.tabs.get(tabId);
-      tab.url = url;
-      tab.history.push(url);
-      this.tabs.set(tabId, tab);
-
-      // Send success response
-      res.json({ success: true });
-    } else {
-      // Send error response
-      res.status(404).json({ error: 'Tab not found' });
-    }
+    // TO DO: implement tab update request handling
   }
 
   /**
@@ -287,48 +248,7 @@ class ProxyEngine {
    * @param {object} res - The outgoing response object.
    */
   async handleTabRemoveRequest(req, res) {
-    const { tabId } = req.body;
-
-    // Remove tab
-    if (this.tabs.has(tabId)) {
-      this.tabs.delete(tabId);
-
-      // Send success response
-      res.json({ success: true });
-    } else {
-      // Send error response
-      res.status(404).json({ error: 'Tab not found' });
-    }
-  }
-
-  /**
-   * Rewrites a URL.
-   * @param {string} url - The URL to rewrite.
-   * @returns {string} The rewritten URL.
-   */
-  rewriteUrl(url) {
-    // Implement URL rewriting logic here
-    return url;
-  }
-
-  /**
-   * Rewrites headers.
-   * @param {object} headers - The headers to rewrite.
-   * @returns {object} The rewritten headers.
-   */
-  rewriteHeaders(headers) {
-    // Implement header rewriting logic here
-    return headers;
-  }
-
-  /**
-   * Rewrites a response.
-   * @param {object} response - The response to rewrite.
-   * @returns {object} The rewritten response.
-   */
-  rewriteResponse(response) {
-    // Implement response rewriting logic here
-    return response;
+    // TO DO: implement tab removal request handling
   }
 }
 
