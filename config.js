@@ -30,6 +30,12 @@ const WEBSOCKET_SETTINGS = {
   keepAliveInterval: WEBSOCKET_KEEP_ALIVE_INTERVAL,
   pingInterval: WEBSOCKET_PING_INTERVAL,
   pongTimeout: WEBSOCKET_PONG_TIMEOUT,
+  // Add WebSocket subprotocol support
+  subprotocols: ['nexus-ws'],
+  // WebSocket connection headers
+  connectionHeaders: {
+    'Sec-WebSocket-Protocol': 'nexus-ws',
+  },
 };
 
 const WEBRTC_SETTINGS = {
@@ -37,6 +43,13 @@ const WEBRTC_SETTINGS = {
   peerConnectionConfig: {
     iceServers: [],
     iceCandidatePoolSize: 0,
+  },
+  // WebRTC data channel settings
+  dataChannel: {
+    // Enable or disable WebRTC data channel
+    enabled: true,
+    // Data channel label
+    label: 'nexus-data-channel',
   },
 };
 
@@ -49,34 +62,6 @@ const HEADER_REWRITE_RULES = {
   'Strict-Transport-Security': (value) => '',
   'X-Content-Type-Options': (value) => value.replace('nosniff', ''),
 };
-
-const INTEGRATED_HTTPS_TUNNEL = process.env.INTEGRATED_HTTPS_TUNNEL !== 'false';
-const WEBSOCKET_UPGRADE_PROXYING = process.env.WEBSOCKET_UPGRADE_PROXYING !== 'false';
-
-const CACHE_TTL_HEADERS = process.env.CACHE_TTL_HEADERS ? process.env.CACHE_TTL_HEADERS.split(',') : ['Cache-Control', 'Expires'];
-const CACHE_REVALIDATE_THRESHOLD = process.env.CACHE_REVALIDATE_THRESHOLD ? parseInt(process.env.CACHE_REVALIDATE_THRESHOLD) : 5 * 60 * 1000; // 5 minutes
-const CACHE_SIZE_LIMIT = process.env.CACHE_SIZE_LIMIT ? parseInt(process.env.CACHE_SIZE_LIMIT) : 100 * 1024 * 1024; // 100MB
-
-const PREFETCH_HINTS_ENABLED = process.env.PREFETCH_HINTS_ENABLED !== 'false';
-const PREFETCH_HINTS_CACHE_AGE = process.env.PREFETCH_HINTS_CACHE_AGE ? parseInt(process.env.PREFETCH_HINTS_CACHE_AGE) : 24 * 60 * 60 * 1000; // 24 hours
-
-const COMPRESSION_ENABLED = process.env.COMPRESSION_ENABLED !== 'false';
-const BROTLI_COMPRESSION_THRESHOLD = process.env.BROTLI_COMPRESSION_THRESHOLD ? parseInt(process.env.BROTLI_COMPRESSION_THRESHOLD) : 1024; // bytes
-const GZIP_COMPRESSION_THRESHOLD = process.env.GZIP_COMPRESSION_THRESHOLD ? parseInt(process.env.GZIP_COMPRESSION_THRESHOLD) : 1024; // bytes
-const COMPRESSION_MIN_SIZE = process.env.COMPRESSION_MIN_SIZE ? parseInt(process.env.COMPRESSION_MIN_SIZE) : 100; // bytes
-const COMPRESSION_MAX_SIZE = process.env.COMPRESSION_MAX_SIZE ? parseInt(process.env.COMPRESSION_MAX_SIZE) : 10 * 1024 * 1024; // 10MB
-const COMPRESSION_QUALITY = process.env.COMPRESSION_QUALITY ? parseInt(process.env.COMPRESSION_QUALITY) : 6; // 0-11
-
-const CONNECTION_TIMEOUT = process.env.CONNECTION_TIMEOUT ? parseInt(process.env.CONNECTION_TIMEOUT) : 10 * 1000; // 10 seconds
-const SOCKET_TIMEOUT = process.env.SOCKET_TIMEOUT ? parseInt(process.env.SOCKET_TIMEOUT) : 30 * 1000; // 30 seconds
-
-const TAB_BAR_ENABLED = process.env.TAB_BAR_ENABLED !== 'false';
-const TAB_BAR_WIDTH = process.env.TAB_BAR_WIDTH ? parseInt(process.env.TAB_BAR_WIDTH) : 250;
-const TAB_BAR_HEIGHT = process.env.TAB_BAR_HEIGHT ? parseInt(process.env.TAB_BAR_HEIGHT) : 40;
-
-const SETTINGS_PANEL_ENABLED = process.env.SETTINGS_PANEL_ENABLED !== 'false';
-const SETTINGS_PANEL_WIDTH = process.env.SETTINGS_PANEL_WIDTH ? parseInt(process.env.SETTINGS_PANEL_WIDTH) : 300;
-const SETTINGS_PANEL_HEIGHT = process.env.SETTINGS_PANEL_HEIGHT ? parseInt(process.env.SETTINGS_PANEL_HEIGHT) : 200;
 
 module.exports = {
   CACHE_NAME,
@@ -100,25 +85,4 @@ module.exports = {
   COOKIE_SCOPING_ENABLED,
   COOKIE_STORAGE_KEY,
   HEADER_REWRITE_RULES,
-  INTEGRATED_HTTPS_TUNNEL,
-  WEBSOCKET_UPGRADE_PROXYING,
-  CACHE_TTL_HEADERS,
-  CACHE_REVALIDATE_THRESHOLD,
-  CACHE_SIZE_LIMIT,
-  PREFETCH_HINTS_ENABLED,
-  PREFETCH_HINTS_CACHE_AGE,
-  COMPRESSION_ENABLED,
-  BROTLI_COMPRESSION_THRESHOLD,
-  GZIP_COMPRESSION_THRESHOLD,
-  COMPRESSION_MIN_SIZE,
-  COMPRESSION_MAX_SIZE,
-  COMPRESSION_QUALITY,
-  CONNECTION_TIMEOUT,
-  SOCKET_TIMEOUT,
-  TAB_BAR_ENABLED,
-  TAB_BAR_WIDTH,
-  TAB_BAR_HEIGHT,
-  SETTINGS_PANEL_ENABLED,
-  SETTINGS_PANEL_WIDTH,
-  SETTINGS_PANEL_HEIGHT,
 };
