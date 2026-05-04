@@ -107,16 +107,12 @@ class HTTSTunnelUtils {
     const { pathname, search } = url;
 
     if (pathname === '/') {
-      // Handle root request
+      // Handle root URL
       res.writeHead(200);
-      res.end('Nexus HTTPS Tunnel');
+      res.end('NEXUS HTTPS Tunnel');
     } else if (pathname === '/websocket') {
-      // Handle WebSocket upgrade
+      // Handle WebSocket connection
       const ws = new WebSocket(req, req.headers['sec-websocket-protocol']);
-      ws.on('open', () => {
-        console.log('WebSocket connection established');
-      });
-
       ws.on('message', (message) => {
         console.log(`Received WebSocket message: ${message}`);
         ws.send(`Server response: ${message}`);
@@ -130,41 +126,10 @@ class HTTSTunnelUtils {
         console.error('WebSocket error:', error);
       });
     } else {
-      // Handle proxied request
-      const proxyMiddleware = HTTSTunnelUtils.createProxyMiddleware('https://example.com', {
-        bypass: (req) => {
-          // Implement bypass logic
-        },
-      });
-
-      await proxyMiddleware(req, res);
+      // Handle other URLs
+      const proxyMiddleware = HTTSTunnelUtils.createProxyMiddleware('https://example.com', {});
+      proxyMiddleware(req, res);
     }
-  }
-
-  /**
-   * Handle WebSocket upgrade.
-   * @param {IncomingMessage} req - The incoming request.
-   * @param {ServerResponse} res - The server response.
-   * @returns {Promise<void>}
-   */
-  static async handleWebSocketUpgrade(req, res) {
-    const ws = new WebSocket(req, req.headers['sec-websocket-protocol']);
-    ws.on('open', () => {
-      console.log('WebSocket connection established');
-    });
-
-    ws.on('message', (message) => {
-      console.log(`Received WebSocket message: ${message}`);
-      ws.send(`Server response: ${message}`);
-    });
-
-    ws.on('close', () => {
-      console.log('WebSocket connection closed');
-    });
-
-    ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
-    });
   }
 }
 
