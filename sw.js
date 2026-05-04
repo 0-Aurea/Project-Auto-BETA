@@ -124,39 +124,31 @@ class JSRewriter {
       return `window.open('${this.rewriteURL(p1)}')`;
     });
 
-    js = js.replace(this.historyPushStateRegex, (match) => {
-      return `history.pushState(${this.rewriteHistoryState(match)})`;
-    });
-
-    js = js.replace(this.historyReplaceStateRegex, (match) => {
-      return `history.replaceState(${this.rewriteHistoryState(match)})`;
-    });
-
     return js;
   }
 
-  rewriteEval(match) {
-    return match.slice(5, -1);
+  rewriteEval(evalStr) {
+    return evalStr.replace(/[^a-zA-Z0-9]/g, (match) => {
+      return xorBase64Encode(match, generateSalt());
+    });
   }
 
-  rewriteFunction(match) {
-    return match.slice(9, -1);
+  rewriteFunction(funcStr) {
+    return funcStr.replace(/[^a-zA-Z0-9]/g, (match) => {
+      return xorBase64Encode(match, generateSalt());
+    });
   }
 
-  rewriteDynamicImport(match) {
-    return match.slice(7, -1);
+  rewriteDynamicImport(importStr) {
+    return xorBase64Encode(importStr, generateSalt());
   }
 
-  rewriteRequire(match) {
-    return match.slice(8, -1);
+  rewriteRequire(requireStr) {
+    return xorBase64Encode(requireStr, generateSalt());
   }
 
   rewriteURL(url) {
-    return url.startsWith('/') ? url : `/${url}`;
-  }
-
-  rewriteHistoryState(match) {
-    return match.slice(0, -1);
+    return xorBase64Encode(url, generateSalt());
   }
 }
 
@@ -194,7 +186,7 @@ class HTMLRewriter {
   }
 
   rewriteURL(url) {
-    return url.startsWith('/') ? url : `/${url}`;
+    return xorBase64Encode(url, generateSalt());
   }
 }
 
@@ -202,6 +194,7 @@ class CSSRewriter {
   constructor() {
     this.urlRegex = /url\(['"]([^'"]+)['"]\)/g;
     this.importRegex = /@import\s+['"]([^'"]+)['"]/g;
+    this.contentRegex = /content:\s*url\(['"]([^'"]+)['"]\)/g;
   }
 
   rewriteCSS(css) {
@@ -213,11 +206,15 @@ class CSSRewriter {
       return `@import '${this.rewriteURL(p1)}'`;
     });
 
+    css = css.replace(this.contentRegex, (match, p1) => {
+      return `content: url('${this.rewriteURL(p1)}')`;
+    });
+
     return css;
   }
 
   rewriteURL(url) {
-    return url.startsWith('/') ? url : `/${url}`;
+    return xorBase64Encode(url, generateSalt());
   }
 }
 
@@ -234,35 +231,12 @@ async function handleFetch(request) {
 
   try {
     const response = await fetch(request);
-    const clonedResponse = response.clone();
-
-    if (request.method === 'GET') {
-      await putResponse(request, clonedResponse);
-    }
-
-    return response;
+    const responseToCache = new Response(response.body, response);
+    responseToCache.headers.set('Cache-Control', 'max-age=3600');
+    await putResponse(request, responseToCache);
+    return responseToCache;
   } catch (error) {
+    console.error('Error handling fetch:', error);
     return new Response('Error', { status: 500 });
   }
-}
-
-async function handlePostRequest(request) {
-  try {
-    const response = await fetch(request);
-    return response;
-  } catch (error) {
-    return new Response('Error', { status: 500 });
-  }
-}
-
-function getTTLExpirationTime(ttl) {
-  return Date.now() + ttl * 1000;
-}
-
-function getResponseHeaders(response) {
-  const headers = {};
-  response.headers.forEach((value, key) => {
-    headers[key] = value;
-  });
-  return headers;
 }
