@@ -84,6 +84,24 @@ const init = () => {
     const tab = window.open(url, '_blank');
     tab.focus();
   });
+
+  const tabBar = document.querySelector('tab-bar');
+  tabBar.addEventListener('tabChange', (tabId) => {
+    const tab = tabBar.getTab(tabId);
+    if (tab) {
+      const url = tab.url;
+      const proxiedUrl = `${proxy}?url=${encodeURIComponent(url)}`;
+      tabBar.updateTab(tabId, { url: proxiedUrl });
+    }
+  });
+
+  const bookmarksManager = document.querySelector('bookmarks-manager');
+  bookmarksManager.addEventListener('bookmarkClick', (bookmark) => {
+    const url = bookmark.url;
+    const proxiedUrl = `${proxy}?url=${encodeURIComponent(url)}`;
+    const tab = window.open(proxiedUrl, '_blank');
+    tab.focus();
+  });
 };
 
 init();
@@ -93,6 +111,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     handleSettingsChange(request.key, request.value);
   } else if (request.type === 'updateSearchEngine') {
     handleSearchEngineChange(request.engine);
+  } else if (request.type === 'updateTab') {
+    const tabBar = document.querySelector('tab-bar');
+    tabBar.updateTab(request.tabId, request.tab);
+  } else if (request.type === 'addBookmark') {
+    const bookmarksManager = document.querySelector('bookmarks-manager');
+    bookmarksManager.addBookmark(request.bookmark);
   }
 });
 
@@ -104,36 +128,17 @@ navigator.serviceWorker.register('service-worker.js')
     console.error('Service worker registration failed:', error);
   });
 
-window.addEventListener('message', (event) => {
-  if (event.data.type === 'proxyUpdate') {
-    const { key, value } = event.data;
-    handleSettingsChange(key, value);
+document.addEventListener('DOMContentLoaded', () => {
+  const tabBar = document.querySelector('tab-bar');
+  tabBar.init();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    connectToProxy();
   }
 });
 
-// Listen for tab updates
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete') {
-    chrome.tabs.sendMessage(tabId, { type: 'tabUpdated' });
-  }
-});
-
-// Handle search queries from the omnibox
-chrome.omnibox.onInputEntered.addListener((text) => {
-  const { searchEngine } = settings;
-  let url;
-  if (searchEngine === 'google') {
-    url = `https://www.google.com/search?q=${encodeURIComponent(text)}`;
-  } else if (searchEngine === 'bing') {
-    url = `https://www.bing.com/search?q=${encodeURIComponent(text)}`;
-  } else {
-    console.error('Unsupported search engine:', searchEngine);
-    return;
-  }
-  chrome.tabs.create({ url });
-});
-
-// Periodically sync settings with the service worker
 setInterval(() => {
   connectToProxy();
-}, 10000);
+}, 60000);
