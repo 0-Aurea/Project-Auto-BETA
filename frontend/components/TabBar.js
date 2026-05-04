@@ -5,8 +5,6 @@ const TabBar = () => {
   const [activeTab, setActiveTab] = useState(null);
   const [tabTitle, setTabTitle] = useState('');
   const [tabIcon, setTabIcon] = useState('');
-  const [tabUrl, setTabUrl] = useState('');
-  const [tabLoading, setTabLoading] = useState({});
 
   useEffect(() => {
     const storedTabs = localStorage.getItem('tabs');
@@ -14,7 +12,7 @@ const TabBar = () => {
       const tabsArray = JSON.parse(storedTabs);
       setTabs(tabsArray);
       if (tabsArray.length > 0) {
-        setActiveTab(tabsArray[0]);
+        setActiveTab(tabsArray[0].id);
       }
     }
   }, []);
@@ -23,116 +21,69 @@ const TabBar = () => {
     localStorage.setItem('tabs', JSON.stringify(tabs));
   }, [tabs]);
 
-  const addTab = (title, icon, url) => {
-    const newTab = { title, icon, url, id: Date.now() };
+  const addTab = (url, title, icon) => {
+    const newTab = {
+      id: Date.now(),
+      url,
+      title,
+      icon,
+    };
     setTabs([...tabs, newTab]);
-    setActiveTab(newTab);
-    setTabTitle('');
-    setTabIcon('');
-    setTabUrl('');
+    setActiveTab(newTab.id);
   };
 
-  const removeTab = (tab) => {
-    const updatedTabs = tabs.filter((t) => t.id !== tab.id);
+  const removeTab = (id) => {
+    const updatedTabs = tabs.filter((tab) => tab.id !== id);
     setTabs(updatedTabs);
-    if (tab === activeTab && updatedTabs.length > 0) {
-      setActiveTab(updatedTabs[0]);
+    if (activeTab === id && updatedTabs.length > 0) {
+      setActiveTab(updatedTabs[0].id);
     } else if (updatedTabs.length === 0) {
       setActiveTab(null);
     }
   };
 
-  const handleTabClick = (tab) => {
-    setActiveTab(tab);
+  const updateTabTitle = (id, title) => {
+    const updatedTabs = tabs.map((tab) => {
+      if (tab.id === id) {
+        return { ...tab, title };
+      }
+      return tab;
+    });
+    setTabs(updatedTabs);
   };
 
-  const handleTitleChange = (event) => {
-    setTabTitle(event.target.value);
+  const updateTabIcon = (id, icon) => {
+    const updatedTabs = tabs.map((tab) => {
+      if (tab.id === id) {
+        return { ...tab, icon };
+      }
+      return tab;
+    });
+    setTabs(updatedTabs);
   };
 
-  const handleIconChange = (event) => {
-    setTabIcon(event.target.value);
-  };
-
-  const handleUrlChange = (event) => {
-    setTabUrl(event.target.value);
-  };
-
-  const handleSubmit = (event) => {
-    event.preventDefault();
-    if (tabTitle && tabIcon && tabUrl) {
-      addTab(tabTitle, tabIcon, tabUrl);
-    }
-  };
-
-  const handleIframeLoad = (event) => {
-    const iframe = event.target;
-    iframe.contentWindow.document.title = iframe.dataset.title;
-    setTabLoading((prevLoading) => ({ ...prevLoading, [iframe.dataset.tabId]: false }));
-  };
-
-  const handleIframeLoadStart = (event) => {
-    const iframe = event.target;
-    setTabLoading((prevLoading) => ({ ...prevLoading, [iframe.dataset.tabId]: true }));
+  const handleTabClick = (id) => {
+    setActiveTab(id);
   };
 
   return (
     <div className="tab-bar">
-      <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          value={tabTitle}
-          onChange={handleTitleChange}
-          placeholder="Tab title"
-        />
-        <input
-          type="text"
-          value={tabIcon}
-          onChange={handleIconChange}
-          placeholder="Tab icon"
-        />
-        <input
-          type="text"
-          value={tabUrl}
-          onChange={handleUrlChange}
-          placeholder="Tab URL"
-        />
-        <button type="submit">New Tab</button>
-      </form>
-      <ul>
-        {tabs.map((tab) => (
-          <li key={tab.id}>
-            <a
-              href="#"
-              className={activeTab === tab ? 'active' : ''}
-              onClick={() => handleTabClick(tab)}
-            >
-              <img src={tab.icon} alt={tab.title} />
-              {tab.title}
-            </a>
-            <button onClick={() => removeTab(tab)}>Close</button>
-          </li>
-        ))}
-      </ul>
-      {activeTab && (
-        <iframe
-          src={activeTab.url}
-          data-title={activeTab.title}
-          data-tab-id={activeTab.id}
-          onLoad={handleIframeLoad}
-          onLoadStart={handleIframeLoadStart}
-          frameBorder="0"
-          width="100%"
-          height="500"
-          loading={tabLoading[activeTab.id] ? 'lazy' : 'eager'}
-        />
-      )}
-      {!activeTab && tabs.length > 0 && (
-        <p>No active tab</p>
-      )}
-      {!tabs.length && (
-        <p>No tabs open</p>
-      )}
+      {tabs.map((tab) => (
+        <div
+          key={tab.id}
+          className={`tab ${activeTab === tab.id ? 'active' : ''}`}
+          onClick={() => handleTabClick(tab.id)}
+        >
+          <img src={tab.icon} alt={tab.title} />
+          <span>{tab.title}</span>
+          <button className="close-tab" onClick={() => removeTab(tab.id)}>
+            ×
+          </button>
+        </div>
+      ))}
+      <button className="new-tab" onClick={() => addTab('', '', '')}>
+        +
+      </button>
     </div>
   );
 };
