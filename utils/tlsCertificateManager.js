@@ -1,135 +1,145 @@
 const fs = require('fs');
 const path = require('path');
 const { promisify } = require('util');
-const { generateKeyPair, createSelfSignedCertificate } = require('crypto');
+const { createCertificate, createPrivateKey, createCertificateSigningRequest } = require('crypto');
 
 /**
- * TLS Certificate Manager utility class for handling TLS certificates and certificate rotation.
+ * TLS Certificate Manager utility class for handling TLS certificates.
  */
 class TLSCertificateManager {
   /**
-   * Certificate storage directory.
+   * Directory to store TLS certificates.
    */
-  static CERTIFICATE_DIR = 'tls-certificates';
+  static CERT_DIR = 'tls/certs';
 
   /**
-   * Certificate file name.
+   * Directory to store private keys.
    */
-  static CERTIFICATE_FILE = 'certificate.crt';
+  static KEY_DIR = 'tls/keys';
 
   /**
-   * Private key file name.
+   * Create directories for certificates and keys if they don't exist.
    */
-  static PRIVATE_KEY_FILE = 'private.key';
+  static async init() {
+    try {
+      await promisify(fs.mkdir)(TLSCertificateManager.CERT_DIR, { recursive: true });
+      await promisify(fs.mkdir)(TLSCertificateManager.KEY_DIR, { recursive: true });
+    } catch (err) {
+      if (err.code !== 'EEXIST') {
+        throw err;
+      }
+    }
+  }
 
   /**
-   * Certificate rotation interval in milliseconds.
+   * Generate a new self-signed TLS certificate.
+   * @param {string} domain - The domain for the certificate.
+   * @param {number} days - The number of days the certificate is valid.
+   * @returns {Promise<{ cert: string, key: string }>} A promise resolving to the certificate and private key.
    */
-  static CERTIFICATE_ROTATION_INTERVAL = 30 * 24 * 60 * 60 * 1000; // 30 days
-
-  /**
-   * Generate a new self-signed certificate and private key.
-   * @returns {Promise<{ certificate: string, privateKey: string }>} The generated certificate and private key.
-   */
-  static async generateCertificate() {
-    const keyPair = await promisify(generateKeyPair)('rsa', {
-      modulusLength: 2048,
-      publicExponent: 65537,
-      publicKeyEncoding: {
-        type: 'spki',
-        format: 'pem',
-      },
-      privateKeyEncoding: {
+  static async generateSelfSignedCertificate(domain, days = 365) {
+    const key = await promisify(createPrivateKey)({
+      type: 'spki',
+      format: 'pem',
+      privateKey: {
         type: 'pkcs8',
         format: 'pem',
+        privateKey: createPrivateKey({
+          type: 'pkcs1',
+          format: 'pem',
+          modulusLength: 2048,
+          publicExponent: 65537,
+          publicKeyEncoding: {
+            type: 'spki',
+            format: 'pem',
+          },
+        }).export({
+          type: 'pkcs8',
+          format: 'pem',
+        }),
       },
     });
 
-    const certificate = await promisify(createSelfSignedCertificate)(keyPair.privateKey, {
-      days: 30,
-      serial: 1,
+    const csr = await promisify(createCertificateSigningRequest)({
       subject: {
-        C: 'US',
-        ST: 'State',
-        L: 'Locality',
-        O: 'Organization',
-        OU: 'Organizational Unit',
-        CN: 'localhost',
+        CN: domain,
       },
+      publicKey: key,
     });
+
+    const cert = await promisify(createCertificate)({
+      subject: {
+        CN: domain,
+      },
+      issuer: {
+        CN: domain,
+      },
+      serialNumber: '01',
+      validity: {
+        notBefore: new Date(),
+        notAfter: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
+      },
+      publicKey: csr.publicKey,
+      signingKey: key,
+      extensions: [
+        {
+          name: 'basicConstraints',
+          cA: true,
+        },
+        {
+          name: 'subjectAlternativeName',
+          altNames: [
+            {
+              type: 2,
+              value: domain,
+            },
+          ],
+        },
+      ],
+    });
+
+    const certPath = path.join(TLSCertificateManager.CERT_DIR, `${domain}.crt`);
+    const keyPath = path.join(TLSCertificateManager.KEY_DIR, `${domain}.key`);
+
+    await promisify(fs.writeFile)(certPath, cert.export({
+      type: 'pem',
+      format: 'pem',
+    }));
+    await promisify(fs.writeFile)(keyPath, key.export({
+      type: 'pkcs8',
+      format: 'pem',
+    }));
 
     return {
-      certificate: certificate.export({
-        type: 'spki',
+      cert: cert.export({
+        type: 'pem',
         format: 'pem',
       }),
-      privateKey: keyPair.privateKey,
+      key: key.export({
+        type: 'pkcs8',
+        format: 'pem',
+      }),
     };
   }
 
   /**
-   * Load the existing certificate and private key from disk.
-   * @returns {Promise<{ certificate: string, privateKey: string }>} The loaded certificate and private key.
+   * Load a TLS certificate from file.
+   * @param {string} domain - The domain of the certificate.
+   * @returns {Promise<string>} A promise resolving to the certificate.
    */
-  static async loadCertificate() {
-    try {
-      const certificatePath = path.join(TLSCertificateManager.CERTIFICATE_DIR, TLSCertificateManager.CERTIFICATE_FILE);
-      const privateKeyPath = path.join(TLSCertificateManager.CERTIFICATE_DIR, TLSCertificateManager.PRIVATE_KEY_FILE);
-
-      const certificate = await promisify(fs.readFile)(certificatePath, 'utf8');
-      const privateKey = await promisify(fs.readFile)(privateKeyPath, 'utf8');
-
-      return { certificate, privateKey };
-    } catch (error) {
-      if (error.code === 'ENOENT') {
-        // Certificate files do not exist, generate new ones.
-        return TLSCertificateManager.generateCertificate();
-      }
-      throw error;
-    }
+  static async loadCertificate(domain) {
+    const certPath = path.join(TLSCertificateManager.CERT_DIR, `${domain}.crt`);
+    return await promisify(fs.readFile)(certPath, 'utf8');
   }
 
   /**
-   * Save the certificate and private key to disk.
-   * @param {string} certificate - The certificate to save.
-   * @param {string} privateKey - The private key to save.
-   * @returns {Promise<void>}
+   * Load a private key from file.
+   * @param {string} domain - The domain of the key.
+   * @returns {Promise<string>} A promise resolving to the private key.
    */
-  static async saveCertificate(certificate, privateKey) {
-    const certificatePath = path.join(TLSCertificateManager.CERTIFICATE_DIR, TLSCertificateManager.CERTIFICATE_FILE);
-    const privateKeyPath = path.join(TLSCertificateManager.CERTIFICATE_DIR, TLSCertificateManager.PRIVATE_KEY_FILE);
-
-    await promisify(fs.mkdir)(TLSCertificateManager.CERTIFICATE_DIR, { recursive: true });
-    await promisify(fs.writeFile)(certificatePath, certificate);
-    await promisify(fs.writeFile)(privateKeyPath, privateKey);
-  }
-
-  /**
-   * Rotate the certificate and private key.
-   * @returns {Promise<void>}
-   */
-  static async rotateCertificate() {
-    const { certificate, privateKey } = await TLSCertificateManager.generateCertificate();
-    await TLSCertificateManager.saveCertificate(certificate, privateKey);
-  }
-
-  /**
-   * Initialize the certificate manager and rotate the certificate if necessary.
-   * @returns {Promise<void>}
-   */
-  static async init() {
-    try {
-      const { certificate } = await TLSCertificateManager.loadCertificate();
-      const certNotBefore = new Date(certificate.notBefore);
-      const certNotAfter = new Date(certificate.notAfter);
-
-      const timeUntilRotation = certNotAfter.getTime() - Date.now();
-      if (timeUntilRotation < TLSCertificateManager.CERTIFICATE_ROTATION_INTERVAL) {
-        await TLSCertificateManager.rotateCertificate();
-      }
-    } catch (error) {
-      await TLSCertificateManager.rotateCertificate();
-    }
+  static async loadPrivateKey(domain) {
+    const keyPath = path.join(TLSCertificateManager.KEY_DIR, `${domain}.key`);
+    return await promisify(fs.readFile)(keyPath, 'utf8');
   }
 }
 
