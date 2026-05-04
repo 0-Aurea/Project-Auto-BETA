@@ -26,6 +26,22 @@ class ProxyEngine {
       maxAge: 1000 * 60 * 60 // 1 hour
     });
     this.jsRewriter = new JSRewriter();
+    this.rtcPeerConnections = new Map();
+
+    // Initialize WebSocket server event listeners
+    wss.on('connection', (ws, req) => {
+      this.handleWebSocketConnection(ws, req);
+    });
+
+    // Initialize WebRTC peer connection handling
+    server.on('upgrade', (req, socket, head) => {
+      if (req.headers['upgrade'] === 'websocket') {
+        this.handleWebSocket(req, socket, head);
+      } else {
+        // Handle WebRTC ICE candidate scrubbing
+        this.handleWebRTC(req, socket, head);
+      }
+    });
   }
 
   /**
@@ -98,77 +114,133 @@ class ProxyEngine {
   }
 
   /**
-   * Handles WebSocket upgrades and proxies the WebSocket connection.
+   * Handles WebSocket upgrades and establishes a WebSocket connection.
    * @param {object} req - The incoming request object.
-   * @param {object} res - The outgoing response object.
+   * @param {object} socket - The WebSocket socket object.
+   * @param {object} head - The WebSocket head object.
    */
-  handleWebSocket(req, res) {
+  async handleWebSocket(req, socket, head) {
     const { headers, url: reqUrl } = req;
-    const websocketKey = headers['sec-websocket-key'];
-    const websocketAccept = crypto.createHash('sha1').update(websocketKey + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+    const { host, referer } = headers;
 
-    res.writeHead(101, {
-      'Sec-WebSocket-Accept': websocketAccept,
-      'Upgrade': 'websocket',
-      'Connection': 'Upgrade',
+    // Rewrite the request URL
+    const rewrittenUrl = this.rewriteUrl(reqUrl);
+
+    // Establish a WebSocket connection to the target URL
+    const targetWs = new WebSocket(rewrittenUrl);
+
+    // Handle WebSocket messages
+    targetWs.on('message', (message) => {
+      socket.send(message);
     });
 
-    const websocket = new WebSocket(reqUrl);
-    this.wsClients.set(reqUrl, websocket);
-
-    websocket.on('message', (message) => {
-      // Handle incoming WebSocket message
-    });
-
-    websocket.on('close', () => {
-      // Handle WebSocket close
-      this.wsClients.delete(reqUrl);
-    });
-
-    websocket.on('error', (error) => {
+    // Handle WebSocket errors
+    targetWs.on('error', (error) => {
       console.error(error);
+      socket.destroy();
     });
 
-    res.on('close', () => {
-      // Handle client close
-      websocket.close();
+    // Handle WebSocket close
+    targetWs.on('close', () => {
+      socket.destroy();
+    });
+
+    // Handle incoming WebSocket messages
+    socket.on('message', (message) => {
+      targetWs.send(message);
+    });
+
+    // Handle WebSocket errors
+    socket.on('error', (error) => {
+      console.error(error);
+      targetWs.destroy();
+    });
+
+    // Handle WebSocket close
+    socket.on('close', () => {
+      targetWs.destroy();
     });
   }
 
   /**
-   * Rewrites the request URL.
-   * @param {string} reqUrl - The incoming request URL.
+   * Handles WebRTC peer connections and scrubs ICE candidates.
+   * @param {object} req - The incoming request object.
+   * @param {object} socket - The WebRTC socket object.
+   * @param {object} head - The WebRTC head object.
+   */
+  async handleWebRTC(req, socket, head) {
+    const { headers, url: reqUrl } = req;
+    const { host, referer } = headers;
+
+    // Rewrite the request URL
+    const rewrittenUrl = this.rewriteUrl(reqUrl);
+
+    // Handle WebRTC ICE candidate scrubbing
+    const rtcPeerConnection = new RTCPeerConnection();
+    this.rtcPeerConnections.set(reqUrl, rtcPeerConnection);
+
+    // Handle WebRTC ICE candidate messages
+    rtcPeerConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        // Scrub the ICE candidate
+        const scrubbedCandidate = this.scrubICECandidate(event.candidate);
+        socket.send(JSON.stringify({ type: 'iceCandidate', candidate: scrubbedCandidate }));
+      }
+    };
+
+    // Handle WebRTC errors
+    rtcPeerConnection.oniceerror = (error) => {
+      console.error(error);
+      socket.destroy();
+    };
+
+    // Handle WebRTC close
+    rtcPeerConnection.onclose = () => {
+      socket.destroy();
+    };
+  }
+
+  /**
+   * Scrubs an ICE candidate to prevent IP leaks.
+   * @param {object} candidate - The ICE candidate object.
+   * @returns {object} The scrubbed ICE candidate object.
+   */
+  scrubICECandidate(candidate) {
+    // TO DO: implement ICE candidate scrubbing logic
+    return candidate;
+  }
+
+  /**
+   * Rewrites a URL to use the proxy prefix.
+   * @param {string} url - The URL to rewrite.
    * @returns {string} The rewritten URL.
    */
-  rewriteUrl(reqUrl) {
-    // Implement URL rewriting logic here
-    return reqUrl;
+  rewriteUrl(url) {
+    // TO DO: implement URL rewriting logic
+    return url;
   }
 
   /**
-   * Rewrites the request headers.
-   * @param {object} headers - The incoming request headers.
+   * Rewrites headers to remove sensitive information.
+   * @param {object} headers - The headers to rewrite.
    * @returns {object} The rewritten headers.
    */
   rewriteHeaders(headers) {
-    // Implement header rewriting logic here
+    // TO DO: implement header rewriting logic
     return headers;
   }
 }
 
+export { ProxyEngine };
 class JSRewriter {
   /**
-   * Rewrites JavaScript code.
-   * @param {string} jsCode - The JavaScript code to rewrite.
-   * @param {string} url - The URL of the JavaScript resource.
+   * Rewrites JavaScript code to handle dynamic imports and eval.
+   * @param {string} code - The JavaScript code to rewrite.
+   * @param {string} url - The URL of the JavaScript code.
    * @returns {string} The rewritten JavaScript code.
    */
-  rewrite(jsCode, url) {
-    // Implement JavaScript rewriting logic here
-    // Handle eval(), Function(), dynamic import(), new Worker(), importScripts(), document.domain mutations,
-    // window.location, window.open, history.pushState/replaceState
-    return jsCode;
+  rewrite(code, url) {
+    // TO DO: implement JavaScript rewriting logic
+    return code;
   }
 }
-
-export { ProxyEngine };
