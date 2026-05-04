@@ -25,20 +25,7 @@
             </nav>
         </header>
         <main>
-            <div class="search-bar">
-                <input type="search" id="search-input" placeholder="Search...">
-                <button id="search-button">Go</button>
-                <div class="search-options">
-                    <label>
-                        <input type="radio" id="search-engine-google" name="search-engine" checked>
-                        Google
-                    </label>
-                    <label>
-                        <input type="radio" id="search-engine-bing" name="search-engine">
-                        Bing
-                    </label>
-                </div>
-            </div>
+            <div id="search-bar-component"></div>
             <div class="tab-bar" id="tab-bar">
                 <div id="tab-bar-component"></div>
             </div>
@@ -56,46 +43,5 @@
     </div>
 
     <script type="module" src="script.js"></script>
-    <script type="module">
-        import React from 'react';
-        import ReactDOM from 'react-dom';
-        import TabBar from './components/TabBar.js';
-        import SettingsPanel from './components/SettingsPanel.js';
-        import BookmarksManager from './components/BookmarksManager.js';
-        import ProxyHistory from './components/ProxyHistory.js';
-        import SearchBar from './components/SearchBar.js';
-
-        ReactDOM.render(
-            <React.StrictMode>
-                <TabBar />
-                <SettingsPanel />
-                <BookmarksManager />
-                <ProxyHistory />
-                <SearchBar />
-            </React.StrictMode>,
-            document.getElementById('tab-bar-component')
-        );
-
-        ReactDOM.render(
-            <React.StrictMode>
-                <SettingsPanel />
-            </React.StrictMode>,
-            document.getElementById('settings-panel-component')
-        );
-
-        ReactDOM.render(
-            <React.StrictMode>
-                <BookmarksManager />
-            </React.StrictMode>,
-            document.getElementById('bookmarks-panel-component')
-        );
-
-        ReactDOM.render(
-            <React.StrictMode>
-                <ProxyHistory />
-            </React.StrictMode>,
-            document.getElementById('proxy-history-panel-component')
-        );
-    </script>
 </body>
 </html>
