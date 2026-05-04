@@ -1,182 +1,168 @@
-const { createServer } = require('https');
-const { ServerResponse, IncomingMessage } = require('http');
-const { URL } = require('url');
-const fs = require('fs');
-const WebSocket = require('ws');
+const { TLSSocket } = require('tls');
+const { Socket } = require('net');
+const { EventEmitter } = require('events');
 
 /**
- * TLS handler utility class for managing HTTPS connections and certificate verification.
+ * TLS handler utility class for handling TLS connections and certificate management.
  */
-class TLSEngine {
+class TLSEndpoint {
   /**
-   * HTTPS server instance.
+   * TLS socket instance.
    */
-  static httpsServer;
+  static tlsSocket;
 
   /**
-   * WebSocket server instance.
+   * Certificate authority (CA) certificate.
    */
-  static wss;
+  static caCertificate;
 
   /**
-   * Options for the TLS handler.
+   * Private key for the TLS endpoint.
    */
-  static options = {
-    key: fs.readFileSync('path/to/privkey.pem'),
-    cert: fs.readFileSync('path/to/cert.pem'),
-  };
+  static privateKey;
 
   /**
-   * Initialize the TLS handler.
-   * @param {object} options - Options for the TLS handler.
+   * TLS endpoint certificate.
    */
-  static init(options = {}) {
-    Object.assign(TLSEngine.options, options);
+  static tlsCertificate;
 
-    TLSEngine.httpsServer = createServer(TLSEngine.options, (req, res) => {
-      TLSEngine.handleRequest(req, res);
+  /**
+   * Initialize the TLS endpoint.
+   * @param {object} options - TLS endpoint options.
+   */
+  static async init(options) {
+    TLSEndpoint.caCertificate = options.caCertificate;
+    TLSEndpoint.privateKey = options.privateKey;
+    TLSEndpoint.tlsCertificate = options.tlsCertificate;
+
+    // Create a TLS socket
+    TLSEndpoint.tlsSocket = new TLSSocket(new Socket(), {
+      ca: [TLSEndpoint.caCertificate],
+      cert: TLSEndpoint.tlsCertificate,
+      key: TLSEndpoint.privateKey,
+      rejectUnauthorized: true,
     });
 
-    TLSEngine.wss = new WebSocket.Server({ server: TLSEngine.httpsServer }, () => {
-      TLSEngine.handleWebSocketConnection();
+    // Handle TLS socket events
+    TLSEndpoint.tlsSocket.on('secureConnect', () => {
+      console.log('TLS connection established');
     });
 
-    TLSEngine.httpsServer.listen(443, () => {
-      console.log('TLS server listening on port 443');
-    });
-  }
-
-  /**
-   * Handle an incoming HTTPS request.
-   * @param {IncomingMessage} req - The incoming request.
-   * @param {ServerResponse} res - The outgoing response.
-   */
-  static handleRequest(req, res) {
-    const url = new URL(req.url, `https://${req.headers.host}`);
-
-    // Handle HTTP CONNECT requests
-    if (req.method === 'CONNECT') {
-      TLSEngine.handleConnectRequest(req, res, url);
-    } else {
-      // Handle other HTTPS requests
-      TLSEngine.handleHttpsRequest(req, res, url);
-    }
-  }
-
-  /**
-   * Handle an HTTP CONNECT request.
-   * @param {IncomingMessage} req - The incoming request.
-   * @param {ServerResponse} res - The outgoing response.
-   * @param {URL} url - The URL of the request.
-   */
-  static handleConnectRequest(req, res, url) {
-    const targetHost = url.hostname;
-    const targetPort = url.port || 443;
-
-    // Establish a connection to the target server
-    const targetSocket = require('net').createConnection(targetPort, targetHost, () => {
-      res.writeHead(200, { 'Content-Length': 0 });
-      res.end();
-
-      // Pipe data between the client and target server
-      req.pipe(targetSocket);
-      targetSocket.pipe(req);
+    TLSEndpoint.tlsSocket.on('error', (err) => {
+      console.error('TLS error:', err);
     });
 
-    targetSocket.on('error', (err) => {
-      console.error(`Error establishing connection to ${targetHost}:${targetPort}`, err);
-      res.destroy();
+    TLSEndpoint.tlsSocket.on('close', () => {
+      console.log('TLS connection closed');
     });
   }
 
   /**
-   * Handle an HTTPS request.
-   * @param {IncomingMessage} req - The incoming request.
-   * @param {ServerResponse} res - The outgoing response.
-   * @param {URL} url - The URL of the request.
+   * Handle incoming TLS connections.
+   * @param {object} socket - Incoming socket connection.
    */
-  static handleHttpsRequest(req, res, url) {
-    // Verify the certificate and handle the request
-    TLSEngine.verifyCertificate(req, res, url, (verified) => {
-      if (verified) {
-        // Forward the request to the target server
-        TLSEngine.forwardRequest(req, res, url);
-      } else {
-        res.writeHead(403, { 'Content-Length': 0 });
-        res.end();
-      }
+  static handleConnection(socket) {
+    // Upgrade the socket to a TLS socket
+    const tlsSocket = new TLSSocket(socket, {
+      ca: [TLSEndpoint.caCertificate],
+      cert: TLSEndpoint.tlsCertificate,
+      key: TLSEndpoint.privateKey,
+      rejectUnauthorized: true,
     });
+
+    // Handle TLS socket events
+    tlsSocket.on('secureConnect', () => {
+      console.log('TLS connection established');
+    });
+
+    tlsSocket.on('error', (err) => {
+      console.error('TLS error:', err);
+    });
+
+    tlsSocket.on('close', () => {
+      console.log('TLS connection closed');
+    });
+
+    return tlsSocket;
   }
 
   /**
-   * Verify the certificate for an HTTPS request.
-   * @param {IncomingMessage} req - The incoming request.
-   * @param {ServerResponse} res - The outgoing response.
-   * @param {URL} url - The URL of the request.
-   * @param {function} callback - Callback function with a boolean indicating whether the certificate is verified.
+   * Generate a TLS certificate.
+   * @param {object} options - Certificate generation options.
+   * @returns {object} The generated TLS certificate.
    */
-  static verifyCertificate(req, res, url, callback) {
-    // Implement certificate verification logic here
-    callback(true); // Temporarily allow all requests
+  static generateCertificate(options) {
+    // Generate a private key
+    const privateKey = TLSEndpoint.generatePrivateKey();
+
+    // Generate a certificate signing request (CSR)
+    const csr = TLSEndpoint.generateCSR(privateKey, options);
+
+    // Sign the CSR with the CA certificate
+    const tlsCertificate = TLSEndpoint.signCSR(csr, options);
+
+    return tlsCertificate;
   }
 
   /**
-   * Forward an HTTPS request to the target server.
-   * @param {IncomingMessage} req - The incoming request.
-   * @param {ServerResponse} res - The outgoing response.
-   * @param {URL} url - The URL of the request.
+   * Generate a private key.
+   * @returns {object} The generated private key.
    */
-  static forwardRequest(req, res, url) {
-    const targetHost = url.hostname;
-    const targetPort = url.port || 443;
+  static generatePrivateKey() {
+    // Generate a private key using a cryptographically secure pseudo-random number generator
+    const crypto = require('crypto');
+    const privateKey = crypto.generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicExponent: 65537,
+      publicKeyEncoding: {
+        type: 'spki',
+        format: 'pem',
+      },
+      privateKeyEncoding: {
+        type: 'pkcs8',
+        format: 'pem',
+      },
+    }).privateKey;
 
-    // Establish a connection to the target server
-    const targetSocket = require('https').request({
-      hostname: targetHost,
-      port: targetPort,
-      path: url.pathname,
-      method: req.method,
-      headers: req.headers,
-    }, (targetRes) => {
-      // Pipe data between the client and target server
-      targetRes.pipe(res);
-      res.pipe(targetSocket);
-
-      // Handle the response from the target server
-      targetRes.on('end', () => {
-        res.end();
-      });
-    });
-
-    targetSocket.on('error', (err) => {
-      console.error(`Error forwarding request to ${targetHost}:${targetPort}`, err);
-      res.destroy();
-    });
-
-    req.pipe(targetSocket);
+    return privateKey;
   }
 
   /**
-   * Handle a WebSocket connection.
+   * Generate a certificate signing request (CSR).
+   * @param {object} privateKey - The private key to use for the CSR.
+   * @param {object} options - CSR generation options.
+   * @returns {object} The generated CSR.
    */
-  static handleWebSocketConnection() {
-    TLSEngine.wss.on('connection', (ws) => {
-      // Handle WebSocket messages
-      ws.on('message', (message) => {
-        console.log(`Received WebSocket message: ${message}`);
-      });
+  static generateCSR(privateKey, options) {
+    // Generate a CSR using the private key and provided options
+    const csr = require('openssl-wrapper').createCSR({
+      countryName: options.countryName,
+      organizationName: options.organizationName,
+      organizationalUnitName: options.organizationalUnitName,
+      commonName: options.commonName,
+      emailAddress: options.emailAddress,
+    }, privateKey);
 
-      // Handle WebSocket errors
-      ws.on('error', (err) => {
-        console.error('WebSocket error:', err);
-      });
+    return csr;
+  }
 
-      // Handle WebSocket close
-      ws.on('close', () => {
-        console.log('WebSocket connection closed');
-      });
+  /**
+   * Sign a certificate signing request (CSR) with the CA certificate.
+   * @param {object} csr - The CSR to sign.
+   * @param {object} options - Certificate signing options.
+   * @returns {object} The signed TLS certificate.
+   */
+  static signCSR(csr, options) {
+    // Sign the CSR with the CA certificate
+    const tlsCertificate = require('openssl-wrapper').createCertificate({
+      days: options.days,
+      csr: csr,
+      privateKey: TLSEndpoint.privateKey,
+      ca: TLSEndpoint.caCertificate,
     });
+
+    return tlsCertificate;
   }
 }
 
-module.exports = TLSEngine;
+module.exports = TLSEndpoint;
