@@ -117,7 +117,26 @@ const TabBar = () => {
       </button>
       {activeTab && (
         <div className="tab-content">
-          {tabContent[activeTab]}
+          <input
+            type="text"
+            value={tabTitle}
+            onChange={(e) => setTabTitle(e.target.value)}
+            placeholder="Tab title"
+          />
+          <input
+            type="text"
+            value={tabIcon}
+            onChange={(e) => setTabIcon(e.target.value)}
+            placeholder="Tab icon"
+          />
+          <button
+            onClick={() =>
+              updateTabTitle(activeTab, tabTitle) &&
+              updateTabIcon(activeTab, tabIcon)
+            }
+          >
+            Update Tab
+          </button>
         </div>
       )}
     </div>
