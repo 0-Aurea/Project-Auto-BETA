@@ -87,4 +87,55 @@ describe('jsRewriter', () => {
     expect(rewrittenCode).not.toContain('history.pushState');
     expect(rewrittenCode).not.toContain('history.replaceState');
   });
+
+  it('should handle sourceMappingURL', () => {
+    const originalCode = `
+      //# sourceMappingURL=example.js.map
+      console.log(123);
+    `;
+    const rewrittenCode = jsRewriter(originalCode);
+    expect(rewrittenCode).not.toContain('sourceMappingURL');
+  });
+
+  it('should handle complex code with JSON.parse and JSON.stringify', () => {
+    const originalCode = `
+      const obj = { foo: 'bar' };
+      const json = JSON.stringify(obj);
+      const parsedObj = JSON.parse(json);
+      console.log(parsedObj);
+    `;
+    const rewrittenCode = jsRewriter(originalCode);
+    expect(rewrittenCode).toContain('JSON.stringify');
+    expect(rewrittenCode).toContain('JSON.parse');
+  });
+
+  it('should handle code with RegExp', () => {
+    const originalCode = `
+      const regex = new RegExp('foo', 'g');
+      console.log(regex);
+    `;
+    const rewrittenCode = jsRewriter(originalCode);
+    expect(rewrittenCode).toContain('RegExp');
+  });
+
+  it('should handle code with Date', () => {
+    const originalCode = `
+      const date = new Date();
+      console.log(date);
+    `;
+    const rewrittenCode = jsRewriter(originalCode);
+    expect(rewrittenCode).toContain('Date');
+  });
+
+  it('should handle code with Array and Object methods', () => {
+    const originalCode = `
+      const arr = [1, 2, 3];
+      console.log(arr.map(x => x * 2));
+      const obj = { foo: 'bar' };
+      console.log(Object.keys(obj));
+    `;
+    const rewrittenCode = jsRewriter(originalCode);
+    expect(rewrittenCode).toContain('map');
+    expect(rewrittenCode).toContain('Object.keys');
+  });
 });
