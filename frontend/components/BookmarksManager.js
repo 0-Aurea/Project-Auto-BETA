@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import './BookmarksManager.css';
 
 const BookmarksManager = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -8,6 +9,9 @@ const BookmarksManager = () => {
   });
   const [newBookmarkTitle, setNewBookmarkTitle] = useState('');
   const [newBookmarkURL, setNewBookmarkURL] = useState('');
+  const [editBookmarkId, setEditBookmarkId] = useState(null);
+  const [editedBookmarkTitle, setEditedBookmarkTitle] = useState('');
+  const [editedBookmarkURL, setEditedBookmarkURL] = useState('');
 
   useEffect(() => {
     localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
@@ -17,7 +21,8 @@ const BookmarksManager = () => {
     setIsOpen(!isOpen);
   };
 
-  const handleAddBookmark = () => {
+  const handleAddBookmark = (e) => {
+    e.preventDefault();
     if (newBookmarkTitle && newBookmarkURL) {
       const newBookmark = {
         id: Date.now(),
@@ -34,12 +39,35 @@ const BookmarksManager = () => {
     setBookmarks(bookmarks.filter((bookmark) => bookmark.id !== id));
   };
 
-  const handleEditBookmark = (id, title, url) => {
-    setBookmarks(
-      bookmarks.map((bookmark) =>
-        bookmark.id === id ? { ...bookmark, title, url } : bookmark
-      )
-    );
+  const handleEditBookmark = (id) => {
+    const bookmark = bookmarks.find((bookmark) => bookmark.id === id);
+    if (bookmark) {
+      setEditBookmarkId(id);
+      setEditedBookmarkTitle(bookmark.title);
+      setEditedBookmarkURL(bookmark.url);
+    }
+  };
+
+  const handleSaveEditedBookmark = (e) => {
+    e.preventDefault();
+    if (editBookmarkId) {
+      setBookmarks(
+        bookmarks.map((bookmark) =>
+          bookmark.id === editBookmarkId
+            ? { ...bookmark, title: editedBookmarkTitle, url: editedBookmarkURL }
+            : bookmark
+        )
+      );
+      setEditBookmarkId(null);
+      setEditedBookmarkTitle('');
+      setEditedBookmarkURL('');
+    }
+  };
+
+  const handleCancelEditing = () => {
+    setEditBookmarkId(null);
+    setEditedBookmarkTitle('');
+    setEditedBookmarkURL('');
   };
 
   return (
@@ -53,27 +81,53 @@ const BookmarksManager = () => {
           <ul>
             {bookmarks.map((bookmark) => (
               <li key={bookmark.id}>
-                <input
-                  type="text"
-                  value={bookmark.title}
-                  onChange={(e) =>
-                    handleEditBookmark(bookmark.id, e.target.value, bookmark.url)
-                  }
-                />
-                <input
-                  type="text"
-                  value={bookmark.url}
-                  onChange={(e) =>
-                    handleEditBookmark(bookmark.id, bookmark.title, e.target.value)
-                  }
-                />
-                <button onClick={() => handleRemoveBookmark(bookmark.id)}>
-                  Remove
-                </button>
+                {editBookmarkId === bookmark.id ? (
+                  <form onSubmit={handleSaveEditedBookmark}>
+                    <input
+                      type="text"
+                      value={editedBookmarkTitle}
+                      onChange={(e) => setEditedBookmarkTitle(e.target.value)}
+                      placeholder="Bookmark title"
+                    />
+                    <input
+                      type="text"
+                      value={editedBookmarkURL}
+                      onChange={(e) => setEditedBookmarkURL(e.target.value)}
+                      placeholder="Bookmark URL"
+                    />
+                    <button type="submit">Save</button>
+                    <button type="button" onClick={handleCancelEditing}>
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      value={bookmark.title}
+                      readOnly
+                    />
+                    <input
+                      type="text"
+                      value={bookmark.url}
+                      readOnly
+                    />
+                  </>
+                )}
+                {editBookmarkId !== bookmark.id && (
+                  <>
+                    <button onClick={() => handleEditBookmark(bookmark.id)}>
+                      Edit
+                    </button>
+                    <button onClick={() => handleRemoveBookmark(bookmark.id)}>
+                      Remove
+                    </button>
+                  </>
+                )}
               </li>
             ))}
           </ul>
-          <form>
+          <form onSubmit={handleAddBookmark}>
             <input
               type="text"
               value={newBookmarkTitle}
@@ -86,7 +140,7 @@ const BookmarksManager = () => {
               onChange={(e) => setNewBookmarkURL(e.target.value)}
               placeholder="Bookmark URL"
             />
-            <button onClick={handleAddBookmark}>Add Bookmark</button>
+            <button type="submit">Add Bookmark</button>
           </form>
         </div>
       )}
