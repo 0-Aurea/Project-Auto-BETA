@@ -3,6 +3,7 @@ const { createServer } = require('http');
 const { URL } = require('url');
 const crypto = require('crypto');
 const zlib = require('zlib');
+const { JSDOM } = require('jsdom');
 
 class ProxyEngine {
   constructor() {
@@ -48,9 +49,10 @@ class ProxyEngine {
       return;
     }
 
-    this.rewriteResponseHeaders(res, targetRes.headers);
-    res.writeHead(targetRes.statusCode, targetRes.headers);
-    targetRes.pipe(res);
+    const rewrittenRes = await this.rewriteResponse(targetRes);
+    this.rewriteResponseHeaders(res, rewrittenRes.headers);
+    res.writeHead(rewrittenRes.statusCode, rewrittenRes.headers);
+    rewrittenRes.pipe(res);
   }
 
   async createTargetRequest(req, targetHost) {
@@ -84,6 +86,89 @@ class ProxyEngine {
     });
   }
 
+  async rewriteResponse(targetRes) {
+    const chunks = [];
+    targetRes.on('data', (chunk) => {
+      chunks.push(chunk);
+    });
+    return new Promise((resolve, reject) => {
+      targetRes.on('end', () => {
+        const responseBody = Buffer.concat(chunks);
+        const contentType = targetRes.headers['content-type'];
+        if (contentType && contentType.includes('text/html')) {
+          const rewrittenBody = this.rewriteHtml(responseBody.toString());
+          const rewrittenRes = {
+            statusCode: targetRes.statusCode,
+            headers: targetRes.headers,
+            pipe: (res) => {
+              res.writeHead(targetRes.statusCode, targetRes.headers);
+              res.end(rewrittenBody);
+            },
+          };
+          resolve(rewrittenRes);
+        } else if (contentType && contentType.includes('application/javascript')) {
+          const rewrittenBody = this.rewriteJs(responseBody.toString());
+          const rewrittenRes = {
+            statusCode: targetRes.statusCode,
+            headers: targetRes.headers,
+            pipe: (res) => {
+              res.writeHead(targetRes.statusCode, targetRes.headers);
+              res.end(rewrittenBody);
+            },
+          };
+          resolve(rewrittenRes);
+        } else {
+          const rewrittenRes = {
+            statusCode: targetRes.statusCode,
+            headers: targetRes.headers,
+            pipe: (res) => {
+              res.writeHead(targetRes.statusCode, targetRes.headers);
+              res.end(responseBody);
+            },
+          };
+          resolve(rewrittenRes);
+        }
+      });
+      targetRes.on('error', (error) => {
+        console.error('Error rewriting response:', error);
+        reject(error);
+      });
+    });
+  }
+
+  rewriteHtml(html) {
+    const dom = new JSDOM(html);
+    const document = dom.window.document;
+
+    // Handle HTML elements
+    const scripts = document.querySelectorAll('script');
+    scripts.forEach((script) => {
+      const rewrittenScript = this.rewriteJs(script.textContent);
+      script.textContent = rewrittenScript;
+    });
+
+    // Handle HTML attributes
+    const images = document.querySelectorAll('img');
+    images.forEach((image) => {
+      const src = image.getAttribute('src');
+      if (src) {
+        image.setAttribute('src', this.rewriteUrl(src));
+      }
+    });
+
+    return dom.serialize();
+  }
+
+  rewriteJs(js) {
+    // Simple JS rewriting, handle eval(), Function(), etc.
+    return js.replace(/eval\(/g, 'eval.call(navigator,');
+  }
+
+  rewriteUrl(url) {
+    // Simple URL rewriting
+    return url.replace(/^\/\//, 'https://');
+  }
+
   rewriteResponseHeaders(res, headers) {
     for (const [key, value] of Object.entries(headers)) {
       if (key.toLowerCase() !== 'transfer-encoding') {
@@ -106,82 +191,21 @@ class ProxyEngine {
       return;
     }
 
-    this.wss.handleUpgrade(req, socket, head, (ws) => {
-      this.wss.emit('connection', ws, req);
-
-      const clientId = crypto.randomBytes(16).toString('hex');
-      this.clients.set(clientId, { ws, targetSocket });
-
-      ws.on('message', (message) => {
-        this.handleClientMessage(clientId, message);
-      });
-
-      ws.on('close', () => {
-        this.clients.delete(clientId);
-      });
-
-      targetSocket.on('message', (message) => {
-        this.handleTargetMessage(clientId, message);
-      });
-
-      targetSocket.on('close', () => {
-        this.clients.delete(clientId);
-      });
-
-      ws.on('error', (error) => {
-        console.error('Error occurred on client WebSocket:', error);
-      });
-
-      targetSocket.on('error', (error) => {
-        console.error('Error occurred on target WebSocket:', error);
-      });
-    });
+    socket.pipe(targetSocket);
+    targetSocket.pipe(socket);
   }
 
   async connectToTarget(targetHost) {
     return new Promise((resolve, reject) => {
-      const targetSocket = new WebSocket(targetHost);
+      const targetSocket = require('net').connect(targetHost, (stream) => {
+        resolve(stream);
+      });
       targetSocket.on('error', (error) => {
         console.error('Error connecting to target:', error);
         reject(error);
       });
-      targetSocket.on('open', () => {
-        resolve(targetSocket);
-      });
-    });
-  }
-
-  handleClientMessage(clientId, message) {
-    const { targetSocket } = this.clients.get(clientId);
-    if (targetSocket) {
-      targetSocket.send(message);
-    }
-  }
-
-  handleTargetMessage(clientId, message) {
-    const { ws } = this.clients.get(clientId);
-    if (ws) {
-      ws.send(message);
-    }
-  }
-
-  rewriteHeaders(headers) {
-    const rewrittenHeaders = {};
-    for (const [key, value] of Object.entries(headers)) {
-      if (key.toLowerCase() !== 'sec-websocket-protocol') {
-        rewrittenHeaders[key] = value;
-      }
-    }
-    return rewrittenHeaders;
-  }
-
-  start() {
-    const port = 8080;
-    this.server.listen(port, () => {
-      console.log(`Proxy engine listening on port ${port}`);
     });
   }
 }
 
-const proxyEngine = new ProxyEngine();
-proxyEngine.start();
+module.exports = ProxyEngine;
