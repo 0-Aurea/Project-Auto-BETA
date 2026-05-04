@@ -82,49 +82,87 @@ describe('ProxyEngine', () => {
     });
   });
 
-  describe('handleWebSocket', () => {
-    it('should handle WebSocket upgrades and header rewriting', () => {
-      const ws = new WebSocket('ws://example.com');
-      proxyEngine.handleWebSocket(ws);
-      expect(ws._socket._header).toContain('Upgrade: websocket');
-    });
-  });
-
-  describe('handleRequest', () => {
-    it('should handle incoming requests and proxy them to the target URL', async () => {
+  describe('handleWebSocketUpgrade', () => {
+    it('should handle WebSocket upgrade requests', async () => {
       const req = {
-        url: 'https://example.com',
         headers: {
-          'User-Agent': 'Mozilla/5.0'
+          'upgrade': 'websocket',
+          'connection': 'Upgrade',
+          'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==',
+          'sec-websocket-version': '13'
         }
       };
       const res = {
         writeHead: jest.fn(),
         end: jest.fn()
       };
-      await proxyEngine.handleRequest(req, res);
+      const socket = {
+        on: jest.fn(),
+        emit: jest.fn()
+      };
+      await proxyEngine.handleWebSocketUpgrade(req, res, socket);
       expect(res.writeHead).toHaveBeenCalledTimes(1);
       expect(res.end).toHaveBeenCalledTimes(1);
+      expect(socket.on).toHaveBeenCalledTimes(1);
+      expect(socket.emit).toHaveBeenCalledTimes(1);
     });
   });
 
-  describe('cache', () => {
+  describe('scrubWebRtcIceCandidates', () => {
+    it('should scrub WebRTC ICE candidate IP addresses', () => {
+      const candidate = {
+        candidate: 'candidate:0 1 1 0.0.0.0 1234 typ host generation 0',
+        sdpMLineIndex: 0,
+        sdpMid: 'audio'
+      };
+      const scrubbedCandidate = proxyEngine.scrubWebRtcIceCandidates(candidate);
+      expect(scrubbedCandidate.candidate).not.toContain('0.0.0.0');
+    });
+  });
+
+  describe('cacheResponse', () => {
     it('should cache proxied responses with TTL headers', async () => {
       const req = {
         url: 'https://example.com',
         headers: {
-          'User-Agent': 'Mozilla/5.0'
+          'cache-control': 'max-age=3600'
         }
       };
       const res = {
-        writeHead: jest.fn(),
-        end: jest.fn(),
+        statusCode: 200,
         headers: {
-          'Cache-Control': 'max-age=3600'
+          'content-type': 'text/html',
+          'cache-control': 'max-age=3600'
+        },
+        body: 'Hello World'
+      };
+      await proxyEngine.cacheResponse(req, res);
+      expect(cache.get(req.url)).not.toBeUndefined();
+    });
+  });
+
+  describe('getCachedResponse', () => {
+    it('should retrieve cached responses', async () => {
+      const req = {
+        url: 'https://example.com',
+        headers: {
+          'cache-control': 'max-age=3600'
         }
       };
-      await proxyEngine.handleRequest(req, res);
-      expect(cache.get(req.url)).not.toBeUndefined();
+      const res = {
+        statusCode: 200,
+        headers: {
+          'content-type': 'text/html',
+          'cache-control': 'max-age=3600'
+        },
+        body: 'Hello World'
+      };
+      await proxyEngine.cacheResponse(req, res);
+      const cachedRes = await proxyEngine.getCachedResponse(req);
+      expect(cachedRes).not.toBeUndefined();
+      expect(cachedRes.statusCode).toBe(200);
+      expect(cachedRes.headers['content-type']).toBe('text/html');
+      expect(cachedRes.body).toBe('Hello World');
     });
   });
 });
