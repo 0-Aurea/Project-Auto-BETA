@@ -25,6 +25,73 @@ class ProxyEngine {
     });
   }
 
+  async handleRequest(req, res) {
+    const { pathname, searchParams } = new URL(req.url, 'http://example.com');
+    const targetHost = searchParams.get('targetHost');
+    if (!targetHost) {
+      res.writeHead(400);
+      res.end('Bad Request');
+      return;
+    }
+
+    const targetReq = await this.createTargetRequest(req, targetHost);
+    if (!targetReq) {
+      res.writeHead(500);
+      res.end('Internal Server Error');
+      return;
+    }
+
+    const targetRes = await this.forwardRequest(targetReq);
+    if (!targetRes) {
+      res.writeHead(500);
+      res.end('Internal Server Error');
+      return;
+    }
+
+    this.rewriteResponseHeaders(res, targetRes.headers);
+    res.writeHead(targetRes.statusCode, targetRes.headers);
+    targetRes.pipe(res);
+  }
+
+  async createTargetRequest(req, targetHost) {
+    const targetReq = {
+      method: req.method,
+      headers: req.headers,
+      url: `http://${targetHost}${req.url}`,
+    };
+
+    return new Promise((resolve, reject) => {
+      const targetReqSocket = require('https').request(targetReq, (targetRes) => {
+        resolve(targetReqSocket);
+      });
+      targetReqSocket.on('error', (error) => {
+        console.error('Error creating target request:', error);
+        reject(error);
+      });
+      targetReqSocket.end();
+    });
+  }
+
+  async forwardRequest(targetReq) {
+    return new Promise((resolve, reject) => {
+      const targetReqSocket = require('https').request(targetReq, (targetRes) => {
+        resolve(targetRes);
+      });
+      targetReqSocket.on('error', (error) => {
+        console.error('Error forwarding request:', error);
+        reject(error);
+      });
+    });
+  }
+
+  rewriteResponseHeaders(res, headers) {
+    for (const [key, value] of Object.entries(headers)) {
+      if (key.toLowerCase() !== 'transfer-encoding') {
+        res.setHeader(key, value);
+      }
+    }
+  }
+
   async handleUpgrade(req, socket, head) {
     const { pathname, searchParams } = new URL(req.url, 'http://example.com');
     const targetHost = searchParams.get('targetHost');
@@ -108,90 +175,13 @@ class ProxyEngine {
     return rewrittenHeaders;
   }
 
-  rotateSalt() {
-    this.saltIndex++;
-    if (this.saltIndex > 100) {
-      this.salt = crypto.randomBytes(16);
-      this.saltIndex = 0;
-    }
-    return this.salt;
-  }
-
-  encodeUrl(url) {
-    const salt = this.rotateSalt();
-    const encodedUrl = Buffer.from(url).toString('base64');
-    const xorBuffer = Buffer.alloc(salt.length + encodedUrl.length);
-    for (let i = 0; i < salt.length; i++) {
-      xorBuffer[i] = salt[i];
-    }
-    for (let i = 0; i < encodedUrl.length; i++) {
-      xorBuffer[salt.length + i] = encodedUrl[i] ^ salt[i % salt.length];
-    }
-    return xorBuffer.toString('base64');
-  }
-
-  decodeUrl(encodedUrl) {
-    const buffer = Buffer.from(encodedUrl, 'base64');
-    const salt = buffer.slice(0, 16);
-    const encodedBuffer = buffer.slice(16);
-    const decodedBuffer = Buffer.alloc(encodedBuffer.length);
-    for (let i = 0; i < encodedBuffer.length; i++) {
-      decodedBuffer[i] = encodedBuffer[i] ^ salt[i % salt.length];
-    }
-    return decodedBuffer.toString();
-  }
-
-  handleRequest(req, res) {
-    const { pathname } = new URL(req.url, 'http://example.com');
-    const targetUrl = this.decodeUrl(pathname.slice(1));
-    const targetReq = {
-      method: req.method,
-      headers: this.rewriteHeaders(req.headers),
-      url: targetUrl,
-    };
-    const targetRes = {
-      on: (event, callback) => {
-        if (event === 'data') {
-          callback(Buffer.alloc(0));
-        }
-      },
-    };
-
-    const protocol = req.headers['sec-websocket-protocol'];
-    if (protocol) {
-      targetReq.headers['sec-websocket-protocol'] = protocol;
-    }
-
-    const reqBody = [];
-    req.on('data', (chunk) => {
-      reqBody.push(chunk);
-    });
-    req.on('end', () => {
-      const body = Buffer.concat(reqBody);
-      const options = {
-        method: targetReq.method,
-        headers: targetReq.headers,
-        url: targetReq.url,
-      };
-
-      const targetSocket = require('https').request(options, (targetRes) => {
-        res.writeHead(targetRes.statusCode, targetRes.headers);
-        targetRes.on('data', (chunk) => {
-          res.write(chunk);
-        });
-        targetRes.on('end', () => {
-          res.end();
-        });
-      });
-
-      targetSocket.on('error', (error) => {
-        console.error('Error occurred on target request:', error);
-      });
-
-      targetSocket.write(body);
-      targetSocket.end();
+  start() {
+    const port = 8080;
+    this.server.listen(port, () => {
+      console.log(`Proxy engine listening on port ${port}`);
     });
   }
 }
 
-module.exports = ProxyEngine;
+const proxyEngine = new ProxyEngine();
+proxyEngine.start();
