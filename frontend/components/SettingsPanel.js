@@ -19,6 +19,10 @@ const SettingsPanel = () => {
     const storedEngine = localStorage.getItem('searchEngine');
     return storedEngine ? storedEngine : 'google';
   });
+  const [adBlockFilterList, setAdBlockFilterList] = useState(() => {
+    const storedFilterList = localStorage.getItem('adBlockFilterList');
+    return storedFilterList ? JSON.parse(storedFilterList) : [];
+  });
 
   useEffect(() => {
     localStorage.setItem('encodingMode', encodingMode);
@@ -36,6 +40,10 @@ const SettingsPanel = () => {
     localStorage.setItem('searchEngine', searchEngine);
   }, [searchEngine]);
 
+  useEffect(() => {
+    localStorage.setItem('adBlockFilterList', JSON.stringify(adBlockFilterList));
+  }, [adBlockFilterList]);
+
   const handleEncodingModeChange = (event) => {
     setEncodingMode(event.target.value);
   };
@@ -50,6 +58,11 @@ const SettingsPanel = () => {
 
   const handleSearchEngineChange = (event) => {
     setSearchEngine(event.target.value);
+  };
+
+  const handleAdBlockFilterListChange = (event) => {
+    const filterList = event.target.value.split(',');
+    setAdBlockFilterList(filterList.map((filter) => filter.trim()));
   };
 
   return (
@@ -77,6 +90,17 @@ const SettingsPanel = () => {
           <button onClick={handleAdBlockToggle}>
             {adBlockEnabled ? 'Enabled' : 'Disabled'}
           </button>
+          {adBlockEnabled && (
+            <div>
+              <label>Filter List:</label>
+              <input
+                type="text"
+                value={adBlockFilterList.join(', ')}
+                onChange={handleAdBlockFilterListChange}
+                placeholder="Enter filter list (comma-separated)"
+              />
+            </div>
+          )}
         </div>
         <div className="settings-group">
           <label>Search Engine:</label>
