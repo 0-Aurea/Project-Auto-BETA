@@ -1,68 +1,105 @@
-const { JSDOM } = require('jsdom');
-const { URL } = require('url');
-
 /**
- * Security utility class for handling security-related tasks, such as HTML sanitization and CSP header management.
+ * Security utility class for handling advanced security-related tasks.
  */
 class SecurityUtils {
   /**
-   * Sanitizes an HTML string by removing all script and style elements, and escaping any remaining HTML special characters.
-   * @param {string} html - The HTML string to sanitize.
-   * @returns {string} The sanitized HTML string.
+   * Sanitizes HTML to prevent XSS attacks.
+   * @param {string} html - The HTML code to sanitize.
+   * @returns {string} The sanitized HTML code.
    */
   static sanitizeHtml(html) {
-    const dom = new JSDOM(html);
-    const { document } = dom.window;
+    const DOMParser = require('dom-parser');
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const elements = doc.getElementsByTagName('*');
 
     // Remove all script and style elements
-    document.querySelectorAll('script, style').forEach((element) => element.remove());
+    for (let i = elements.length - 1; i >= 0; i--) {
+      const element = elements[i];
+      if (element.tagName === 'SCRIPT' || element.tagName === 'STYLE') {
+        element.parentNode.removeChild(element);
+      }
+    }
 
-    // Escape any remaining HTML special characters
-    return dom.serialize().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // Remove all inline event handlers
+    for (let i = elements.length - 1; i >= 0; i--) {
+      const element = elements[i];
+      for (let j = 0; j < element.attributes.length; j++) {
+        const attribute = element.attributes[j];
+        if (attribute.name.startsWith('on')) {
+          element.removeAttribute(attribute.name);
+        }
+      }
+    }
+
+    // Remove all comments
+    const commentRegex = /<!--.*?-->/g;
+    html = doc.documentElement.outerHTML.replace(commentRegex, '');
+
+    return html;
   }
 
   /**
-   * Strips any unwanted headers from a response object to prevent sensitive information disclosure.
-   * @param {object} response - The response object to strip headers from.
-   * @returns {object} The response object with unwanted headers stripped.
+   * Manages Content Security Policy (CSP) headers.
    */
-  static stripResponseHeaders(response) {
-    const unwantedHeaders = ['Content-Security-Policy', 'Strict-Transport-Security', 'X-Frame-Options', 'X-XSS-Protection'];
+  static class CSPUtils {
+    /**
+     * Default CSP policy.
+     */
+    static defaultPolicy = {
+      'default-src': ["'self'"],
+      'script-src': ["'self'"],
+      'style-src': ["'self'"],
+      'object-src': ["'none'"],
+      'frame-src': ["'none'"],
+      'child-src': ["'none'"],
+    };
 
-    unwantedHeaders.forEach((header) => delete response.headers[header]);
+    /**
+     * Merges two CSP policies.
+     * @param {object} policy1 - The first CSP policy.
+     * @param {object} policy2 - The second CSP policy.
+     * @returns {object} The merged CSP policy.
+     */
+    static mergePolicies(policy1, policy2) {
+      const mergedPolicy = { ...policy1 };
+      for (const directive in policy2) {
+        if (!mergedPolicy[directive]) {
+          mergedPolicy[directive] = policy2[directive];
+        } else {
+          mergedPolicy[directive] = [...new Set([...mergedPolicy[directive], ...policy2[directive]])];
+        }
+      }
+      return mergedPolicy;
+    }
 
-    return response;
-  }
-
-  /**
-   * Generates a Content Security Policy (CSP) header string to allow for a specific set of sources.
-   * @param {string[]} sources - An array of sources to allow (e.g. 'self', 'https://example.com').
-   * @returns {string} The CSP header string.
-   */
-  static generateCSPHeader(sources) {
-    return `default-src 'none'; script-src ${sources.join(' ')}; object-src 'none'; frame-ancestors 'none'`;
-  }
-
-  /**
-   * Checks if a URL is a potential WebRTC leak risk (i.e. it uses the 'webrtc' protocol).
-   * @param {string} url - The URL to check.
-   * @returns {boolean} True if the URL is a potential WebRTC leak risk, false otherwise.
-   */
-  static isWebRTCLeakRisk(url) {
-    try {
-      return new URL(url).protocol === 'webrtc:';
-    } catch (error) {
-      return false;
+    /**
+     * Converts a CSP policy to a header string.
+     * @param {object} policy - The CSP policy.
+     * @returns {string} The CSP header string.
+     */
+    static policyToHeader(policy) {
+      const header = [];
+      for (const directive in policy) {
+        header.push(`${directive} ${policy[directive].join(' ')}`);
+      }
+      return header.join('; ');
     }
   }
 
   /**
-   * Scrubs WebRTC ICE candidate information from a string to prevent IP leaks.
-   * @param {string} candidate - The ICE candidate string to scrub.
-   * @returns {string} The scrubbed ICE candidate string.
+   * Validates and rewrites URLs to prevent SSRF attacks.
+   * @param {string} url - The URL to validate and rewrite.
+   * @param {string} baseUrl - The base URL of the proxied resource.
+   * @returns {string} The validated and rewritten URL.
    */
-  static scrubWebRTCICECandidate(candidate) {
-    return candidate.replace(/candidate:(\w+) (\w+) (\d+\.\d+\.\d+\.\d+):(\d+)/, 'candidate:$1 $2 0.0.0.0:$4');
+  static validateAndRewriteUrl(url, baseUrl) {
+    const { URL } = require('url');
+    const parsedUrl = new URL(url, baseUrl);
+    if (!parsedUrl.protocol || !parsedUrl.host) {
+      throw new Error('Invalid URL');
+    }
+    return parsedUrl.href;
   }
 }
 
