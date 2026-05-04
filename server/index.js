@@ -88,7 +88,6 @@ function decompressBody(req, res, next) {
         } else {
           req.body = buffer;
           req.headers['content-length'] = req.body.length;
-          delete req.headers['content-encoding'];
           next();
         }
       });
@@ -100,7 +99,6 @@ function decompressBody(req, res, next) {
         } else {
           req.body = buffer;
           req.headers['content-length'] = req.body.length;
-          delete req.headers['content-encoding'];
           next();
         }
       });
@@ -112,71 +110,59 @@ function decompressBody(req, res, next) {
 
 function handleWebSocketUpgrade(req, res, next) {
   if (req.headers['upgrade'] === 'websocket') {
-    wss.handleUpgrade(req, req.socket, Buffer.alloc(0), (ws) => {
-      wss.emit('connection', ws, req);
+    const websocketUrl = req.url;
+    const websocketReq = {
+      ...req,
+      url: websocketUrl,
+    };
+    wss.handleUpgrade(req, res, (ws) => {
+      wss.emit('connection', ws, websocketReq);
     });
   } else {
     next();
   }
 }
 
-function handleProxiedRequest(req, res, next) {
-  const proxiedRequest = {
-    ...req,
-    url: req.url,
-    headers: req.headers,
-    method: req.method,
-    body: req.body,
-  };
-
-  const parsedUrl = new URL(proxiedRequest.url);
-  const protocol = parsedUrl.protocol;
-  const host = parsedUrl.host;
-
-  const options = {
-    target: `${protocol}//${host}`,
-    changeOrigin: true,
-    pathRewrite: { '^/': '' },
-    onProxyReq: (proxyReq) => {
-      proxyReq.headers['content-length'] = proxyReq.body.length;
-    },
-    onProxyRes: (proxyRes) => {
-      res.header('Content-Security-Policy', proxyRes.headers['content-security-policy']);
-      res.header('X-Frame-Options', proxyRes.headers['x-frame-options']);
-      res.header('X-Content-Type-Options', proxyRes.headers['x-content-type-options']);
-    },
-  };
-
-  const proxy = createProxyMiddleware(options);
-  proxy(proxiedRequest, res, next);
-}
+const proxy = createProxyMiddleware({
+  target: 'http://localhost:8081',
+  changeOrigin: true,
+  onProxyReq: (proxyReq, req, res) => {
+    proxyReq.headers['content-length'] = req.body.length;
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    res.headers['content-security-policy'] = "default-src 'self'; script-src 'self' https://cdn.example.com; object-src 'none'";
+  },
+});
 
 app.use(handleEncodedUrl);
+app.use(decompressBody);
 app.use(rewriteHeaders);
 app.use(cookieScope);
-app.use(decompressBody);
 app.use(handleWebSocketUpgrade);
-
-app.use((req, res, next) => {
-  handleProxiedRequest(req, res, next);
-});
+app.use(proxy);
 
 httpsServer.listen(port, () => {
   logger.info(`Server listening on port ${port}`);
 });
 
 wss.on('connection', (ws, req) => {
-  logger.info('WebSocket connection established');
-
   ws.on('message', (message) => {
     logger.info(`Received WebSocket message: ${message}`);
   });
-
-  ws.on('close', () => {
-    logger.info('WebSocket connection closed');
-  });
-
   ws.on('error', (error) => {
     logger.error('WebSocket error:', error);
   });
+  ws.on('close', () => {
+    logger.info('WebSocket connection closed');
+  });
+});
+
+process.on('SIGINT', () => {
+  httpsServer.close();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  httpsServer.close();
+  process.exit(0);
 });
