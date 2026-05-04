@@ -1,177 +1,176 @@
-const { JSDOM } = require('jsdom');
+'use strict';
 
 /**
- * HTML rewriter utility class for handling HTML rewriting, including handling all src/href/action/srcset/data attributes,
- * <base> tag injection, <meta http-equiv="refresh"> rewrites, inline <script> and <style> blocks, and nonce stripping.
+ * HTML rewriter utility class for handling dynamic content rewriting.
  */
-class HTMLRewriterUtils {
+class HTMLRewriter {
   /**
-   * Regular expression to match HTML tags with src attributes.
+   * Regular expression to match src attributes in HTML tags.
    */
-  static SRC_ATTRIBUTE_TAGS = /(?:img|script|iframe|embed|object|video|audio|source|track|link|picture)\s+[^>]*src\s*=\s*["'](.*?)["']/gi;
+  static SRC_ATTRIBUTE_REGEX = /\bsrc\s*=\s*[\'\"](.*?)[\'\"]/g;
 
   /**
-   * Regular expression to match HTML tags with href attributes.
+   * Regular expression to match href attributes in HTML tags.
    */
-  static HREF_ATTRIBUTE_TAGS = /(?:a|link|area|base)\s+[^>]*href\s*=\s*["'](.*?)["']/gi;
+  static HREF_ATTRIBUTE_REGEX = /\bhref\s*=\s*[\'\"](.*?)[\'\"]/g;
 
   /**
-   * Regular expression to match HTML tags with action attributes.
+   * Regular expression to match action attributes in HTML tags.
    */
-  static ACTION_ATTRIBUTE_TAGS = /(?:form)\s+[^>]*action\s*=\s*["'](.*?)["']/gi;
+  static ACTION_ATTRIBUTE_REGEX = /\baction\s*=\s*[\'\"](.*?)[\'\"]/g;
 
   /**
-   * Regular expression to match HTML tags with srcset attributes.
+   * Regular expression to match srcset attributes in HTML tags.
    */
-  static SRCSET_ATTRIBUTE_TAGS = /(?:img|source)\s+[^>]*srcset\s*=\s*["'](.*?)["']/gi;
+  static SRCSET_ATTRIBUTE_REGEX = /\bsrcset\s*=\s*[\'\"](.*?)[\'\"]/g;
 
   /**
-   * Regular expression to match HTML tags with data attributes.
+   * Regular expression to match data attributes in HTML tags.
    */
-  static DATA_ATTRIBUTE_TAGS = /(?:[a-zA-Z0-9_-]+)\s+[^>]*data-([a-zA-Z0-9_-]+)\s*=\s*["'](.*?)["']/gi;
+  static DATA_ATTRIBUTE_REGEX = /\bdata-[\w-]+\s*=\s*[\'\"](.*?)[\'\"]/g;
 
   /**
    * Regular expression to match <base> tags.
    */
-  static BASE_TAG_REGEX = /<base\s+[^>]*href\s*=\s*["'](.*?)["']/gi;
+  static BASE_TAG_REGEX = /<base\s+[^>]*>/g;
 
   /**
-   * Regular expression to match <meta http-equiv="refresh"> tags.
+   * Regular expression to match inline <script> blocks.
    */
-  static META_REFRESH_TAG_REGEX = /<meta\s+http-equiv\s*=\s*["']refresh["']\s+[^>]*content\s*=\s*["'](.*?)["']/gi;
+  static SCRIPT_BLOCK_REGEX = /<script[^>]*>([\s\S]*?)<\/script>/g;
 
   /**
-   * Regular expression to match inline <script> and <style> blocks.
+   * Regular expression to match inline <style> blocks.
    */
-  static INLINE_SCRIPT_STYLE_REGEX = /<(script|style)\s+[^>]*>([\s\S]*?)<\/\1>/gi;
+  static STYLE_BLOCK_REGEX = /<style[^>]*>([\s\S]*?)<\/style>/g;
 
   /**
-   * Rewrites HTML content by handling all src/href/action/srcset/data attributes, <base> tag injection,
-   * <meta http-equiv="refresh"> rewrites, inline <script> and <style> blocks, and nonce stripping.
+   * Rewrites HTML content to handle dynamic content rewriting.
    * @param {string} html - The HTML content to rewrite.
-   * @param {string} proxiedUrl - The URL of the proxied request.
+   * @param {string} proxiedUrl - The proxied URL.
    * @returns {string} The rewritten HTML content.
    */
   static rewriteHTML(html, proxiedUrl) {
-    const dom = new JSDOM(html);
-    const document = dom.window.document;
-
     // Handle <base> tag injection
-    const baseTag = document.querySelector('base');
-    if (!baseTag) {
-      const newBaseTag = document.createElement('base');
-      newBaseTag.href = proxiedUrl;
-      document.head.insertBefore(newBaseTag, document.head.firstChild);
-    } else {
-      baseTag.href = proxiedUrl;
-    }
+    html = HTMLRewriter.injectBaseTag(html, proxiedUrl);
 
-    // Handle src attributes
-    const srcMatches = html.match(HTMLRewriterUtils.SRC_ATTRIBUTE_TAGS);
-    if (srcMatches) {
-      srcMatches.forEach((match) => {
-        const attributeValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
-        const rewrittenAttributeValue = HTMLRewriterUtils.rewriteAttributeValue(attributeValue, proxiedUrl);
-        html = html.replace(match, match.replace(attributeValue, rewrittenAttributeValue));
-      });
-    }
+    // Handle src attributes in HTML tags
+    html = HTMLRewriter.rewriteSrcAttributes(html, proxiedUrl);
 
-    // Handle href attributes
-    const hrefMatches = html.match(HTMLRewriterUtils.HREF_ATTRIBUTE_TAGS);
-    if (hrefMatches) {
-      hrefMatches.forEach((match) => {
-        const attributeValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
-        const rewrittenAttributeValue = HTMLRewriterUtils.rewriteAttributeValue(attributeValue, proxiedUrl);
-        html = html.replace(match, match.replace(attributeValue, rewrittenAttributeValue));
-      });
-    }
+    // Handle href attributes in HTML tags
+    html = HTMLRewriter.rewriteHrefAttributes(html, proxiedUrl);
 
-    // Handle action attributes
-    const actionMatches = html.match(HTMLRewriterUtils.ACTION_ATTRIBUTE_TAGS);
-    if (actionMatches) {
-      actionMatches.forEach((match) => {
-        const attributeValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
-        const rewrittenAttributeValue = HTMLRewriterUtils.rewriteAttributeValue(attributeValue, proxiedUrl);
-        html = html.replace(match, match.replace(attributeValue, rewrittenAttributeValue));
-      });
-    }
+    // Handle action attributes in HTML tags
+    html = HTMLRewriter.rewriteActionAttributes(html, proxiedUrl);
 
-    // Handle srcset attributes
-    const srcsetMatches = html.match(HTMLRewriterUtils.SRCSET_ATTRIBUTE_TAGS);
-    if (srcsetMatches) {
-      srcsetMatches.forEach((match) => {
-        const attributeValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
-        const rewrittenAttributeValue = HTMLRewriterUtils.rewriteAttributeValue(attributeValue, proxiedUrl);
-        html = html.replace(match, match.replace(attributeValue, rewrittenAttributeValue));
-      });
-    }
+    // Handle srcset attributes in HTML tags
+    html = HTMLRewriter.rewriteSrcsetAttributes(html, proxiedUrl);
 
-    // Handle data attributes
-    const dataMatches = html.match(HTMLRewriterUtils.DATA_ATTRIBUTE_TAGS);
-    if (dataMatches) {
-      dataMatches.forEach((match) => {
-        const attributeValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
-        const rewrittenAttributeValue = HTMLRewriterUtils.rewriteAttributeValue(attributeValue, proxiedUrl);
-        html = html.replace(match, match.replace(attributeValue, rewrittenAttributeValue));
-      });
-    }
+    // Handle data attributes in HTML tags
+    html = HTMLRewriter.rewriteDataAttributes(html, proxiedUrl);
 
-    // Handle <meta http-equiv="refresh"> tags
-    const metaRefreshMatches = html.match(HTMLRewriterUtils.META_REFRESH_TAG_REGEX);
-    if (metaRefreshMatches) {
-      metaRefreshMatches.forEach((match) => {
-        const attributeValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
-        const rewrittenAttributeValue = HTMLRewriterUtils.rewriteRefreshAttributeValue(attributeValue, proxiedUrl);
-        html = html.replace(match, match.replace(attributeValue, rewrittenAttributeValue));
-      });
-    }
+    // Handle inline <script> blocks
+    html = HTMLRewriter.rewriteScriptBlocks(html, proxiedUrl);
 
-    // Handle inline <script> and <style> blocks
-    const inlineScriptStyleMatches = html.match(HTMLRewriterUtils.INLINE_SCRIPT_STYLE_REGEX);
-    if (inlineScriptStyleMatches) {
-      inlineScriptStyleMatches.forEach((match) => {
-        const rewrittenMatch = HTMLRewriterUtils.rewriteInlineScriptStyle(match, proxiedUrl);
-        html = html.replace(match, rewrittenMatch);
-      });
-    }
+    // Handle inline <style> blocks
+    html = HTMLRewriter.rewriteStyleBlocks(html, proxiedUrl);
 
     return html;
   }
 
   /**
-   * Rewrites an attribute value by prepending the proxied URL if it's a relative URL.
-   * @param {string} attributeValue - The attribute value to rewrite.
-   * @param {string} proxiedUrl - The URL of the proxied request.
-   * @returns {string} The rewritten attribute value.
+   * Injects a <base> tag into the HTML content.
+   * @param {string} html - The HTML content to inject into.
+   * @param {string} proxiedUrl - The proxied URL.
+   * @returns {string} The HTML content with the injected <base> tag.
    */
-  static rewriteAttributeValue(attributeValue, proxiedUrl) {
-    const url = new URL(attributeValue, proxiedUrl);
-    return url.href;
+  static injectBaseTag(html, proxiedUrl) {
+    return html.replace(/<head>/, `<head><base href="${proxiedUrl}">`);
   }
 
   /**
-   * Rewrites a <meta http-equiv="refresh"> attribute value by updating the URL.
-   * @param {string} attributeValue - The attribute value to rewrite.
-   * @param {string} proxiedUrl - The URL of the proxied request.
-   * @returns {string} The rewritten attribute value.
+   * Rewrites src attributes in HTML tags.
+   * @param {string} html - The HTML content to rewrite.
+   * @param {string} proxiedUrl - The proxied URL.
+   * @returns {string} The rewritten HTML content.
    */
-  static rewriteRefreshAttributeValue(attributeValue, proxiedUrl) {
-    const url = new URL(attributeValue, proxiedUrl);
-    return `${url.pathname}?${url.search}`;
+  static rewriteSrcAttributes(html, proxiedUrl) {
+    return html.replace(HTMLRewriter.SRC_ATTRIBUTE_REGEX, (match, src) => {
+      return `src="${proxiedUrl}/${src}"`;
+    });
   }
 
   /**
-   * Rewrites an inline <script> or <style> block by updating any relative URLs.
-   * @param {string} match - The inline <script> or <style> block to rewrite.
-   * @param {string} proxiedUrl - The URL of the proxied request.
-   * @returns {string} The rewritten inline <script> or <style> block.
+   * Rewrites href attributes in HTML tags.
+   * @param {string} html - The HTML content to rewrite.
+   * @param {string} proxiedUrl - The proxied URL.
+   * @returns {string} The rewritten HTML content.
    */
-  static rewriteInlineScriptStyle(match, proxiedUrl) {
-    return match.replace(/url\(['"](.*?)['"]\)/g, (urlMatch, url) => {
-      const rewrittenUrl = HTMLRewriterUtils.rewriteAttributeValue(url, proxiedUrl);
-      return `url(${rewrittenUrl})`;
+  static rewriteHrefAttributes(html, proxiedUrl) {
+    return html.replace(HTMLRewriter.HREF_ATTRIBUTE_REGEX, (match, href) => {
+      return `href="${proxiedUrl}/${href}"`;
+    });
+  }
+
+  /**
+   * Rewrites action attributes in HTML tags.
+   * @param {string} html - The HTML content to rewrite.
+   * @param {string} proxiedUrl - The proxied URL.
+   * @returns {string} The rewritten HTML content.
+   */
+  static rewriteActionAttributes(html, proxiedUrl) {
+    return html.replace(HTMLRewriter.ACTION_ATTRIBUTE_REGEX, (match, action) => {
+      return `action="${proxiedUrl}/${action}"`;
+    });
+  }
+
+  /**
+   * Rewrites srcset attributes in HTML tags.
+   * @param {string} html - The HTML content to rewrite.
+   * @param {string} proxiedUrl - The proxied URL.
+   * @returns {string} The rewritten HTML content.
+   */
+  static rewriteSrcsetAttributes(html, proxiedUrl) {
+    return html.replace(HTMLRewriter.SRCSET_ATTRIBUTE_REGEX, (match, srcset) => {
+      return `srcset="${srcset.split(',').map((src) => `${proxiedUrl}/${src.trim()}`).join(',')}"`;
+    });
+  }
+
+  /**
+   * Rewrites data attributes in HTML tags.
+   * @param {string} html - The HTML content to rewrite.
+   * @param {string} proxiedUrl - The proxied URL.
+   * @returns {string} The rewritten HTML content.
+   */
+  static rewriteDataAttributes(html, proxiedUrl) {
+    return html.replace(HTMLRewriter.DATA_ATTRIBUTE_REGEX, (match, data) => {
+      return `${match}=${proxiedUrl}/${data}`;
+    });
+  }
+
+  /**
+   * Rewrites inline <script> blocks.
+   * @param {string} html - The HTML content to rewrite.
+   * @param {string} proxiedUrl - The proxied URL.
+   * @returns {string} The rewritten HTML content.
+   */
+  static rewriteScriptBlocks(html, proxiedUrl) {
+    return html.replace(HTMLRewriter.SCRIPT_BLOCK_REGEX, (match, script) => {
+      return `<script>${script.replace(/https?:\/\/[^/]+/g, proxiedUrl)}</script>`;
+    });
+  }
+
+  /**
+   * Rewrites inline <style> blocks.
+   * @param {string} html - The HTML content to rewrite.
+   * @param {string} proxiedUrl - The proxied URL.
+   * @returns {string} The rewritten HTML content.
+   */
+  static rewriteStyleBlocks(html, proxiedUrl) {
+    return html.replace(HTMLRewriter.STYLE_BLOCK_REGEX, (match, style) => {
+      return `<style>${style.replace(/https?:\/\/[^/]+/g, proxiedUrl)}</style>`;
     });
   }
 }
 
-module.exports = HTMLRewriterUtils;
+module.exports = HTMLRewriter;
