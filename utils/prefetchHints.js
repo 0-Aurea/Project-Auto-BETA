@@ -1,72 +1,75 @@
-const { URL } = require('url');
+class PrefetchHints {
+  /**
+   * Prefetch hint cache.
+   */
+  static prefetchCache = new Map();
 
-/**
- * Prefetch hint utility class for handling prefetch hints and improving page loading performance.
- */
-class PrefetchHintUtils {
+  /**
+   * Threshold for prefetching (in milliseconds).
+   */
+  static PREFETCH_THRESHOLD = 1000; // 1 second
+
   /**
    * Regular expression to match prefetch hints.
    */
-  static PREFETCH_HINT_REGEX = /<link\s+rel\s*=\s*["'](prefetch|preload)["']/g;
+  static PREFETCH_REGEX = /<link\s+rel="(?:prefetch|preload)"\s+href="([^"]+)"/gi;
 
   /**
-   * Cache to store prefetched resources.
+   * Parses prefetch hints from HTML and caches them.
+   * @param {string} html - The HTML content.
+   * @param {string} url - The URL of the HTML content.
    */
-  static prefetchCache = {};
+  static async parsePrefetchHints(html, url) {
+    const prefetchHints = [];
+    let match;
 
-  /**
-   * Service worker cache instance.
-   */
-  static swCache;
+    while ((match = PrefetchHints.PREFETCH_REGEX.exec(html)) !== null) {
+      const hintUrl = match[1];
+      const absoluteUrl = new URL(hintUrl, url).href;
+      prefetchHints.push(absoluteUrl);
+    }
 
-  /**
-   * Initialize the prefetch hint utility.
-   * @param {Cache} swCache - The Service Worker cache instance.
-   */
-  static async init(swCache) {
-    PrefetchHintUtils.swCache = swCache;
+    // Cache prefetch hints
+    PrefetchHints.prefetchCache.set(url, prefetchHints);
+
+    // Prefetch resources
+    await Promise.all(prefetchHints.map((hintUrl) => PrefetchHints.prefetchResource(hintUrl)));
   }
 
   /**
-   * Handles prefetch hints by caching prefetched resources.
-   * @param {string} htmlContent - The HTML content to parse for prefetch hints.
-   * @param {string} origin - The origin of the proxied request.
-   * @returns {Promise<void>} A promise that resolves when prefetch hints are handled.
+   * Prefetches a resource.
+   * @param {string} url - The URL of the resource.
    */
-  static async handlePrefetchHints(htmlContent, origin) {
-    const prefetchHints = htmlContent.match(PrefetchHintUtils.PREFETCH_HINT_REGEX);
-
-    if (prefetchHints) {
-      for (const hint of prefetchHints) {
-        const urlMatch = hint.match(/href\s*=\s*["'](.*?)["']/);
-        if (urlMatch) {
-          const prefetchUrl = urlMatch[1];
-          const absoluteUrl = new URL(prefetchUrl, origin).href;
-
-          try {
-            const cachedResponse = await PrefetchHintUtils.swCache.match(absoluteUrl);
-            if (!cachedResponse) {
-              const response = await fetch(absoluteUrl);
-              const cacheResponse = new Response(response.body, response);
-              await PrefetchHintUtils.swCache.put(absoluteUrl, cacheResponse);
-            }
-          } catch (error) {
-            globalThis.console.error(`Error handling prefetch hint: ${error}`);
-          }
-        }
+  static async prefetchResource(url) {
+    try {
+      const response = await fetch(url, { method: 'HEAD' });
+      if (response.ok) {
+        // Cache response headers
+        const cacheKey = new URL(url).href;
+        const cacheEntry = {
+          headers: response.headers,
+          timestamp: Date.now(),
+        };
+        // Use Cache API to cache response
+        const cache = await caches.open('nexus-prefetch-cache');
+        await cache.put(cacheKey, new Response('', { headers: response.headers }));
       }
+    } catch (error) {
+      globalThis.console.error(`Error prefetching ${url}: ${error}`);
     }
   }
 
   /**
-   * Checks if a resource is cached.
-   * @param {string} url - The URL of the resource to check.
-   * @returns {Promise<boolean>} A promise that resolves with a boolean indicating whether the resource is cached.
+   * Checks if a prefetch hint is valid.
+   * @param {string} url - The URL of the prefetch hint.
+   * @returns {boolean} True if the prefetch hint is valid, false otherwise.
    */
-  static async isCached(url) {
-    const cachedResponse = await PrefetchHintUtils.swCache.match(url);
-    return cachedResponse !== undefined;
+  static isValidPrefetchHint(url) {
+    const cacheEntry = PrefetchHints.prefetchCache.get(url);
+    if (!cacheEntry) return false;
+    const age = (Date.now() - cacheEntry.timestamp) / 1000;
+    return age < PrefetchHints.PREFETCH_THRESHOLD;
   }
 }
 
-module.exports = PrefetchHintUtils;
+export default PrefetchHints;
