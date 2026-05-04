@@ -120,15 +120,9 @@ class HTMLRewriterUtils {
     const metaRefreshMatches = html.match(HTMLRewriterUtils.META_REFRESH_TAG_REGEX);
     if (metaRefreshMatches) {
       metaRefreshMatches.forEach((match) => {
-        const contentValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
-        let rewrittenContentValue;
-        if (contentValue.includes(';')) {
-          const [, url] = contentValue.split(';');
-          rewrittenContentValue = `0;url=${HTMLRewriterUtils.rewriteAttributeValue(url.trim(), proxiedUrl)}`;
-        } else {
-          rewrittenContentValue = contentValue;
-        }
-        html = html.replace(match, match.replace(contentValue, rewrittenContentValue));
+        const attributeValue = match.replace(/[^=]*=\s*["'](.*?)["']/, '$1');
+        const rewrittenAttributeValue = HTMLRewriterUtils.rewriteRefreshAttributeValue(attributeValue, proxiedUrl);
+        html = html.replace(match, match.replace(attributeValue, rewrittenAttributeValue));
       });
     }
 
@@ -136,19 +130,10 @@ class HTMLRewriterUtils {
     const inlineScriptStyleMatches = html.match(HTMLRewriterUtils.INLINE_SCRIPT_STYLE_REGEX);
     if (inlineScriptStyleMatches) {
       inlineScriptStyleMatches.forEach((match) => {
-        const tagName = match.replace(/<(\w+).*?>.*?<\/\1>/, '$1');
-        let rewrittenMatch = match;
-        if (tagName === 'script') {
-          rewrittenMatch = HTMLRewriterUtils.rewriteScriptContent(match);
-        } else if (tagName === 'style') {
-          rewrittenMatch = HTMLRewriterUtils.rewriteStyleContent(match);
-        }
+        const rewrittenMatch = HTMLRewriterUtils.rewriteInlineScriptStyle(match, proxiedUrl);
         html = html.replace(match, rewrittenMatch);
       });
     }
-
-    // Remove nonce attributes
-    html = html.replace(/\snonce\s*=\s*["'][^"']*["']/gi, '');
 
     return html;
   }
@@ -165,23 +150,27 @@ class HTMLRewriterUtils {
   }
 
   /**
-   * Rewrites the content of a <script> block.
-   * @param {string} scriptContent - The content of the <script> block.
-   * @returns {string} The rewritten content.
+   * Rewrites a <meta http-equiv="refresh"> attribute value by updating the URL.
+   * @param {string} attributeValue - The attribute value to rewrite.
+   * @param {string} proxiedUrl - The URL of the proxied request.
+   * @returns {string} The rewritten attribute value.
    */
-  static rewriteScriptContent(scriptContent) {
-    // Implement script content rewriting logic here
-    return scriptContent;
+  static rewriteRefreshAttributeValue(attributeValue, proxiedUrl) {
+    const url = new URL(attributeValue, proxiedUrl);
+    return `${url.pathname}?${url.search}`;
   }
 
   /**
-   * Rewrites the content of a <style> block.
-   * @param {string} styleContent - The content of the <style> block.
-   * @returns {string} The rewritten content.
+   * Rewrites an inline <script> or <style> block by updating any relative URLs.
+   * @param {string} match - The inline <script> or <style> block to rewrite.
+   * @param {string} proxiedUrl - The URL of the proxied request.
+   * @returns {string} The rewritten inline <script> or <style> block.
    */
-  static rewriteStyleContent(styleContent) {
-    // Implement style content rewriting logic here
-    return styleContent;
+  static rewriteInlineScriptStyle(match, proxiedUrl) {
+    return match.replace(/url\(['"](.*?)['"]\)/g, (urlMatch, url) => {
+      const rewrittenUrl = HTMLRewriterUtils.rewriteAttributeValue(url, proxiedUrl);
+      return `url(${rewrittenUrl})`;
+    });
   }
 }
 
