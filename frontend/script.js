@@ -54,91 +54,96 @@ const init = () => {
   const settingsToggle = document.getElementById('settings-toggle');
   settingsToggle.addEventListener('click', () => {
     const settingsPanel = document.querySelector('settings-panel');
-    settingsPanel.toggleSettings();
+    if (settingsPanel) {
+      settingsPanel.toggleSettings();
+    } else {
+      console.error('Settings panel not found');
+    }
   });
 
   const bookmarksToggle = document.getElementById('bookmarks-toggle');
   bookmarksToggle.addEventListener('click', () => {
     const bookmarksManager = document.querySelector('bookmarks-manager');
-    bookmarksManager.toggleBookmarks();
+    if (bookmarksManager) {
+      bookmarksManager.toggleBookmarks();
+    } else {
+      console.error('Bookmarks manager not found');
+    }
   });
 
   const proxyHistoryToggle = document.getElementById('proxy-history-toggle');
   proxyHistoryToggle.addEventListener('click', () => {
     const proxyHistory = document.querySelector('proxy-history');
-    proxyHistory.toggleProxyHistory();
+    if (proxyHistory) {
+      proxyHistory.toggleProxyHistory();
+    } else {
+      console.error('Proxy history not found');
+    }
   });
 
   const searchBar = document.querySelector('search-bar');
-  searchBar.addEventListener('search', (query) => {
-    const { searchEngine } = settings;
-    let url;
-    if (searchEngine === 'google') {
-      url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-    } else if (searchEngine === 'bing') {
-      url = `https://www.bing.com/search?q=${encodeURIComponent(query)}`;
-    } else {
-      console.error('Unsupported search engine:', searchEngine);
-      return;
-    }
-    const tab = window.open(url, '_blank');
-    tab.focus();
-  });
+  if (searchBar) {
+    searchBar.addEventListener('search', (query) => {
+      const { searchEngine } = settings;
+      let url;
+      if (searchEngine === 'google') {
+        url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+      } else if (searchEngine === 'bing') {
+        url = `https://www.bing.com/search?q=${encodeURIComponent(query)}`;
+      } else {
+        console.error('Unsupported search engine:', searchEngine);
+        return;
+      }
+      const tab = window.open(url, '_blank');
+      tab.focus();
+    });
+  } else {
+    console.error('Search bar not found');
+  }
 
   const tabBar = document.querySelector('tab-bar');
-  tabBar.addEventListener('tabChange', (tabId) => {
-    const tab = tabBar.getTab(tabId);
-    if (tab) {
-      const url = tab.url;
-      const proxiedUrl = `${proxy}?url=${encodeURIComponent(url)}`;
-      tabBar.updateTab(tabId, { url: proxiedUrl });
-    }
-  });
+  if (tabBar) {
+    tabBar.addEventListener('tabChange', (tabId) => {
+      const tab = tabBar.getTab(tabId);
+      if (tab) {
+        const url = tab.url;
+        const proxiedUrl = `${proxy}?url=${encodeURIComponent(url)}`;
+        tabBar.updateTab(tabId, { url: proxiedUrl });
+      }
+    });
+  } else {
+    console.error('Tab bar not found');
+  }
 
   const bookmarksManager = document.querySelector('bookmarks-manager');
-  bookmarksManager.addEventListener('bookmarkClick', (bookmark) => {
-    const url = bookmark.url;
-    const proxiedUrl = `${proxy}?url=${encodeURIComponent(url)}`;
-    const tab = window.open(proxiedUrl, '_blank');
-    tab.focus();
-  });
+  if (bookmarksManager) {
+    bookmarksManager.addEventListener('bookmarkClick', (bookmark) => {
+      const url = bookmark.url;
+      const proxiedUrl = `${proxy}?url=${encodeURIComponent(url)}`;
+      const tab = window.open(proxiedUrl, '_blank');
+      tab.focus();
+    });
+  } else {
+    console.error('Bookmarks manager not found');
+  }
 };
 
-init();
+document.addEventListener('DOMContentLoaded', init);
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === 'updateSettings') {
-    handleSettingsChange(request.key, request.value);
-  } else if (request.type === 'updateSearchEngine') {
-    handleSearchEngineChange(request.engine);
-  } else if (request.type === 'updateTab') {
-    const tabBar = document.querySelector('tab-bar');
-    tabBar.updateTab(request.tabId, request.tab);
-  } else if (request.type === 'addBookmark') {
-    const bookmarksManager = document.querySelector('bookmarks-manager');
-    bookmarksManager.addBookmark(request.bookmark);
-  }
-});
-
-navigator.serviceWorker.register('service-worker.js')
-  .then((registration) => {
-    console.log('Service worker registered:', registration);
-  })
-  .catch((error) => {
-    console.error('Service worker registration failed:', error);
-  });
-
-document.addEventListener('DOMContentLoaded', () => {
+const handleTabUpdate = (tabId, changeInfo, tab) => {
   const tabBar = document.querySelector('tab-bar');
-  tabBar.init();
-});
-
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
-    connectToProxy();
+  if (tabBar) {
+    tabBar.updateTab(tabId, tab);
   }
-});
+};
 
-setInterval(() => {
-  connectToProxy();
-}, 60000);
+chrome.tabs.onUpdated.addListener(handleTabUpdate);
+
+const handleTabRemove = (tabId) => {
+  const tabBar = document.querySelector('tab-bar');
+  if (tabBar) {
+    tabBar.removeTab(tabId);
+  }
+};
+
+chrome.tabs.onRemoved.addListener(handleTabRemove);
