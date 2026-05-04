@@ -49,7 +49,7 @@ class ProxyEngine {
       return;
     }
 
-    const rewrittenRes = await this.rewriteResponse(targetRes);
+    const rewrittenRes = await this.rewriteResponse(targetRes, req);
     this.rewriteResponseHeaders(res, rewrittenRes.headers);
     res.writeHead(rewrittenRes.statusCode, rewrittenRes.headers);
     rewrittenRes.pipe(res);
@@ -86,48 +86,35 @@ class ProxyEngine {
     });
   }
 
-  async rewriteResponse(targetRes) {
+  async rewriteResponse(targetRes, req) {
     const chunks = [];
     targetRes.on('data', (chunk) => {
       chunks.push(chunk);
     });
     return new Promise((resolve, reject) => {
-      targetRes.on('end', () => {
+      targetRes.on('end', async () => {
         const responseBody = Buffer.concat(chunks);
         const contentType = targetRes.headers['content-type'];
+        let rewrittenBody = responseBody;
+
         if (contentType && contentType.includes('text/html')) {
-          const rewrittenBody = this.rewriteHtml(responseBody.toString());
-          const rewrittenRes = {
-            statusCode: targetRes.statusCode,
-            headers: targetRes.headers,
-            pipe: (res) => {
-              res.writeHead(targetRes.statusCode, targetRes.headers);
-              res.end(rewrittenBody);
-            },
-          };
-          resolve(rewrittenRes);
+          rewrittenBody = await this.rewriteHtml(responseBody.toString(), req);
         } else if (contentType && contentType.includes('application/javascript')) {
-          const rewrittenBody = this.rewriteJs(responseBody.toString());
-          const rewrittenRes = {
-            statusCode: targetRes.statusCode,
-            headers: targetRes.headers,
-            pipe: (res) => {
-              res.writeHead(targetRes.statusCode, targetRes.headers);
-              res.end(rewrittenBody);
-            },
-          };
-          resolve(rewrittenRes);
-        } else {
-          const rewrittenRes = {
-            statusCode: targetRes.statusCode,
-            headers: targetRes.headers,
-            pipe: (res) => {
-              res.writeHead(targetRes.statusCode, targetRes.headers);
-              res.end(responseBody);
-            },
-          };
-          resolve(rewrittenRes);
+          rewrittenBody = await this.rewriteJavascript(responseBody.toString(), req);
+        } else if (contentType && contentType.includes('text/css')) {
+          rewrittenBody = await this.rewriteCss(responseBody.toString(), req);
         }
+
+        const rewrittenRes = {
+          statusCode: targetRes.statusCode,
+          headers: targetRes.headers,
+          pipe: (res) => {
+            res.write(rewrittenBody);
+            res.end();
+          },
+        };
+
+        resolve(rewrittenRes);
       });
       targetRes.on('error', (error) => {
         console.error('Error rewriting response:', error);
@@ -136,45 +123,79 @@ class ProxyEngine {
     });
   }
 
-  rewriteHtml(html) {
+  async rewriteHtml(html, req) {
     const dom = new JSDOM(html);
     const document = dom.window.document;
 
-    // Handle HTML elements
-    const scripts = document.querySelectorAll('script');
-    scripts.forEach((script) => {
-      const rewrittenScript = this.rewriteJs(script.textContent);
-      script.textContent = rewrittenScript;
-    });
-
-    // Handle HTML attributes
-    const images = document.querySelectorAll('img');
-    images.forEach((image) => {
-      const src = image.getAttribute('src');
-      if (src) {
-        image.setAttribute('src', this.rewriteUrl(src));
+    // Handle HTML meta refresh
+    const metaRefresh = document.querySelector('meta[http-equiv="refresh"]');
+    if (metaRefresh) {
+      const content = metaRefresh.getAttribute('content');
+      if (content) {
+        const url = new URL(content, req.url);
+        metaRefresh.setAttribute('content', url.href);
       }
+    }
+
+    // Handle HTML base tag
+    const baseTag = document.querySelector('base');
+    if (baseTag) {
+      const href = baseTag.getAttribute('href');
+      if (href) {
+        const url = new URL(href, req.url);
+        baseTag.setAttribute('href', url.href);
+      }
+    }
+
+    // Handle HTML src/href/action/srcset/data attributes
+    const tags = document.querySelectorAll('*[src],[href],[action],[srcset],[data]');
+    tags.forEach((tag) => {
+      Array.prototype.forEach.call(tag.attributes, (attribute) => {
+        if (attribute.name === 'src' || attribute.name === 'href' || attribute.name === 'action' || attribute.name === 'srcset' || attribute.name === 'data') {
+          const value = attribute.value;
+          if (value) {
+            const url = new URL(value, req.url);
+            attribute.value = url.href;
+          }
+        }
+      });
     });
 
     return dom.serialize();
   }
 
-  rewriteJs(js) {
-    // Simple JS rewriting, handle eval(), Function(), etc.
-    return js.replace(/eval\(/g, 'eval.call(navigator,');
+  async rewriteJavascript(js, req) {
+    // Handle dynamic JS imports
+    const importRegex = /import\(['"]([^'"]+)['"]\)/g;
+    return js.replace(importRegex, (match, importUrl) => {
+      const url = new URL(importUrl, req.url);
+      return `import('${url.href}');`;
+    });
   }
 
-  rewriteUrl(url) {
-    // Simple URL rewriting
-    return url.replace(/^\/\//, 'https://');
+  async rewriteCss(css, req) {
+    // Handle CSS url() and @import
+    const urlRegex = /url\(['"]([^'"]+)['"]\)/g;
+    const importRegex = /@import\s+['"]([^'"]+)['"]/g;
+    return css.replace(urlRegex, (match, url) => {
+      const rewrittenUrl = new URL(url, req.url).href;
+      return `url('${rewrittenUrl}');`;
+    }).replace(importRegex, (match, importUrl) => {
+      const rewrittenUrl = new URL(importUrl, req.url).href;
+      return `@import '${rewrittenUrl}';`;
+    });
   }
 
   rewriteResponseHeaders(res, headers) {
-    for (const [key, value] of Object.entries(headers)) {
-      if (key.toLowerCase() !== 'transfer-encoding') {
-        res.setHeader(key, value);
-      }
-    }
+    // Strip CSP, HSTS, X-Frame-Options
+    delete headers['content-security-policy'];
+    delete headers['strict-transport-security'];
+    delete headers['x-frame-options'];
+
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   }
 
   async handleUpgrade(req, socket, head) {
@@ -185,25 +206,23 @@ class ProxyEngine {
       return;
     }
 
-    const targetSocket = await this.connectToTarget(targetHost);
-    if (!targetSocket) {
+    const targetWs = new WebSocket(`ws://${targetHost}${req.url}`);
+    targetWs.on('open', () => {
+      this.wss.emit('connection', targetWs, req, socket, head);
+    });
+    targetWs.on('message', (message) => {
+      socket.send(message);
+    });
+    socket.on('message', (message) => {
+      targetWs.send(message);
+    });
+    targetWs.on('error', (error) => {
+      console.error('Error handling WebSocket upgrade:', error);
       socket.destroy();
-      return;
-    }
-
-    socket.pipe(targetSocket);
-    targetSocket.pipe(socket);
-  }
-
-  async connectToTarget(targetHost) {
-    return new Promise((resolve, reject) => {
-      const targetSocket = require('net').connect(targetHost, (stream) => {
-        resolve(stream);
-      });
-      targetSocket.on('error', (error) => {
-        console.error('Error connecting to target:', error);
-        reject(error);
-      });
+    });
+    socket.on('error', (error) => {
+      console.error('Error handling WebSocket upgrade:', error);
+      targetWs.terminate();
     });
   }
 }
