@@ -1,183 +1,120 @@
+const { URL } = require('url');
+
 /**
- * Security utility class for handling advanced security-related tasks.
+ * WebRTC ICE candidate scrubber utility class for handling WebRTC IP leaks.
+ */
+class WebRTCIceCandidateScrubber {
+  /**
+   * Regular expression to match WebRTC ICE candidate messages.
+   */
+  static ICE_CANDIDATE_REGEX = /^candidate:.*$/;
+
+  /**
+   * Scrub WebRTC ICE candidate messages to prevent IP leaks.
+   * @param {string} candidate - The WebRTC ICE candidate message.
+   * @returns {string} The scrubbed WebRTC ICE candidate message.
+   */
+  static scrubIceCandidate(candidate) {
+    if (WebRTCIceCandidateScrubber.ICE_CANDIDATE_REGEX.test(candidate)) {
+      return 'candidate:fake';
+    }
+    return candidate;
+  }
+}
+
+/**
+ * Cookie scoping utility class for handling cookie isolation.
+ */
+class CookieScopingUtils {
+  /**
+   * Regular expression to match cookie headers.
+   */
+  static COOKIE_HEADER_REGEX = /^Cookie:.*$/i;
+
+  /**
+   * Regular expression to match set-cookie headers.
+   */
+  static SET_COOKIE_HEADER_REGEX = /^Set-Cookie:.*$/i;
+
+  /**
+   * Isolate cookies per proxied origin to prevent cookie leakage.
+   * @param {object} request - The request object.
+   * @param {object} response - The response object.
+   * @param {string} origin - The proxied origin.
+   */
+  static isolateCookies(request, response, origin) {
+    const cookieHeader = request.headers['cookie'];
+    if (cookieHeader) {
+      const isolatedCookieHeader = CookieScopingUtils.isolateCookieHeader(cookieHeader, origin);
+      request.headers['cookie'] = isolatedCookieHeader;
+    }
+
+    const setCookieHeader = response.headers['set-cookie'];
+    if (setCookieHeader) {
+      const isolatedSetCookieHeader = CookieScopingUtils.isolateSetCookieHeader(setCookieHeader, origin);
+      response.headers['set-cookie'] = isolatedSetCookieHeader;
+    }
+  }
+
+  /**
+   * Isolate a cookie header for a specific origin.
+   * @param {string} cookieHeader - The cookie header.
+   * @param {string} origin - The origin.
+   * @returns {string} The isolated cookie header.
+   */
+  static isolateCookieHeader(cookieHeader, origin) {
+    const cookies = cookieHeader.split(';');
+    const isolatedCookies = cookies.filter((cookie) => {
+      const [name, value] = cookie.trim().split('=');
+      return CookieScopingUtils.isCookieForOrigin(name, origin);
+    });
+    return isolatedCookies.join(';');
+  }
+
+  /**
+   * Isolate a set-cookie header for a specific origin.
+   * @param {string} setCookieHeader - The set-cookie header.
+   * @param {string} origin - The origin.
+   * @returns {string} The isolated set-cookie header.
+   */
+  static isolateSetCookieHeader(setCookieHeader, origin) {
+    const isolatedSetCookieHeader = setCookieHeader.replace(/Domain=[^;]*/g, `Domain=${new URL(origin).hostname}`);
+    return isolatedSetCookieHeader;
+  }
+
+  /**
+   * Check if a cookie is for a specific origin.
+   * @param {string} cookieName - The cookie name.
+   * @param {string} origin - The origin.
+   * @returns {boolean} True if the cookie is for the origin, false otherwise.
+   */
+  static isCookieForOrigin(cookieName, origin) {
+    const cookieDomain = new URL(origin).hostname;
+    return cookieName.includes(cookieDomain);
+  }
+}
+
+/**
+ * Security utility class for handling various security-related tasks.
  */
 class SecurityUtils {
   /**
-   * Sanitizes HTML to prevent XSS attacks.
-   * @param {string} html - The HTML code to sanitize.
-   * @returns {string} The sanitized HTML code.
+   * Scrub WebRTC ICE candidate messages to prevent IP leaks.
+   * @param {string} candidate - The WebRTC ICE candidate message.
+   * @returns {string} The scrubbed WebRTC ICE candidate message.
    */
-  static sanitizeHtml(html) {
-    const DOMParser = require('dom-parser');
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-    const elements = doc.getElementsByTagName('*');
-
-    // Remove all script and style elements
-    for (let i = elements.length - 1; i >= 0; i--) {
-      const element = elements[i];
-      if (element.tagName === 'SCRIPT' || element.tagName === 'STYLE') {
-        element.parentNode.removeChild(element);
-      }
-    }
-
-    // Remove all inline event handlers
-    for (let i = elements.length - 1; i >= 0; i--) {
-      const element = elements[i];
-      for (let j = 0; j < element.attributes.length; j++) {
-        const attribute = element.attributes[j];
-        if (attribute.name.startsWith('on')) {
-          element.removeAttribute(attribute.name);
-        }
-      }
-    }
-
-    // Remove all comments
-    const commentRegex = /<!--.*?-->/g;
-    html = doc.documentElement.outerHTML.replace(commentRegex, '');
-
-    // Remove all disallowed tags
-    const disallowedTags = ['iframe', 'frame', 'frameset', 'object', 'embed'];
-    for (const tag of disallowedTags) {
-      const tags = doc.getElementsByTagName(tag);
-      for (let i = tags.length - 1; i >= 0; i--) {
-        const element = tags[i];
-        element.parentNode.removeChild(element);
-      }
-    }
-
-    // Remove all disallowed attributes
-    const disallowedAttributes = ['onload', 'onerror', 'onclick', 'onmouseover', 'onmouseout'];
-    for (let i = elements.length - 1; i >= 0; i--) {
-      const element = elements[i];
-      for (let j = 0; j < element.attributes.length; j++) {
-        const attribute = element.attributes[j];
-        if (disallowedAttributes.includes(attribute.name)) {
-          element.removeAttribute(attribute.name);
-        }
-      }
-    }
-
-    return doc.documentElement.outerHTML;
+  static scrubWebRTCIceCandidate(candidate) {
+    return WebRTCIceCandidateScrubber.scrubIceCandidate(candidate);
   }
 
   /**
-   * Manages Content Security Policy (CSP) headers.
+   * Isolate cookies per proxied origin to prevent cookie leakage.
+   * @param {object} request - The request object.
+   * @param {object} response - The response object.
+   * @param {string} origin - The proxied origin.
    */
-  static CSPUtils = {
-    /**
-     * Default CSP policy.
-     */
-    defaultPolicy: {
-      'default-src': ["'self'"],
-      'script-src': ["'self'"],
-      'style-src': ["'self'"],
-      'object-src': ["'none'"],
-      'frame-src': ["'none'"],
-      'child-src': ["'none'"],
-    },
-
-    /**
-     * Merges two CSP policies.
-     * @param {object} policy1 - The first CSP policy.
-     * @param {object} policy2 - The second CSP policy.
-     * @returns {object} The merged CSP policy.
-     */
-    mergePolicies(policy1, policy2) {
-      const mergedPolicy = { ...policy1 };
-      for (const directive in policy2) {
-        if (!mergedPolicy[directive]) {
-          mergedPolicy[directive] = policy2[directive];
-        } else {
-          mergedPolicy[directive] = [...new Set([...mergedPolicy[directive], ...policy2[directive]])];
-        }
-      }
-      return mergedPolicy;
-    },
-
-    /**
-     * Validates a CSP policy.
-     * @param {object} policy - The CSP policy to validate.
-     * @returns {boolean} True if the policy is valid, false otherwise.
-     */
-    validatePolicy(policy) {
-      const requiredDirectives = ['default-src', 'script-src', 'style-src', 'object-src', 'frame-src', 'child-src'];
-      for (const directive of requiredDirectives) {
-        if (!policy[directive]) {
-          return false;
-        }
-      }
-      return true;
-    },
-  };
-
-  /**
-   * Validates a TLS certificate.
-   * @param {string} cert - The TLS certificate to validate.
-   * @returns {boolean} True if the certificate is valid, false otherwise.
-   */
-  static validateTlsCertificate(cert) {
-    try {
-      const tls = require('tls');
-      const crypto = require('crypto');
-      const certBuffer = Buffer.from(cert, 'utf8');
-      const parsedCert = crypto.parseCert(certBuffer);
-      const now = new Date();
-      if (parsedCert.notBefore > now || parsedCert.notAfter < now) {
-        return false;
-      }
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }
-
-  /**
-   * Checks if a URL is secure (HTTPS).
-   * @param {string} url - The URL to check.
-   * @returns {boolean} True if the URL is secure, false otherwise.
-   */
-  static isUrlSecure(url) {
-    try {
-      const { URL } = require('url');
-      const parsedUrl = new URL(url);
-      return parsedUrl.protocol === 'https:';
-    } catch (error) {
-      return false;
-    }
-  }
-
-  /**
-   * Generates a random salt for XOR encoding.
-   * @returns {string} A random salt.
-   */
-  static generateSalt() {
-    const crypto = require('crypto');
-    return crypto.randomBytes(16).toString('hex');
-  }
-
-  /**
-   * XOR encodes a string with a salt.
-   * @param {string} str - The string to encode.
-   * @param {string} salt - The salt to use.
-   * @returns {string} The encoded string.
-   */
-  static xorEncode(str, salt) {
-    const encodedStr = [];
-    for (let i = 0; i < str.length; i++) {
-      encodedStr.push(String.fromCharCode(str.charCodeAt(i) ^ salt.charCodeAt(i % salt.length)));
-    }
-    return encodedStr.join('');
-  }
-
-  /**
-   * XOR decodes a string with a salt.
-   * @param {string} str - The string to decode.
-   * @param {string} salt - The salt to use.
-   * @returns {string} The decoded string.
-   */
-  static xorDecode(str, salt) {
-    return SecurityUtils.xorEncode(str, salt);
+  static isolateCookies(request, response, origin) {
+    return CookieScopingUtils.isolateCookies(request, response, origin);
   }
 }
 
