@@ -137,13 +137,18 @@ const TabBar = () => {
           onDragOver={(event) => handleDragOver(event, index)}
           onDrop={(event) => handleDrop(event, index)}
         >
-          <span className="tab-title">{tab.title}</span>
-          <button className="close-button" onClick={() => removeTab(tab.id)}>
-            ×
-          </button>
+          <img src={tab.icon} alt={tab.title} />
+          <span>{tab.title}</span>
+          <button onClick={() => removeTab(tab.id)}>X</button>
+          <div
+            className="tab-content"
+            onClick={() => handleTabClick(tab.id)}
+          >
+            {tabContent[tab.id]}
+          </div>
         </div>
       ))}
-      <button className="add-button" onClick={() => addTab('', '', '', '')}>
+      <button className="add-tab" onClick={() => addTab('', '', '', '')}>
         +
       </button>
     </div>
