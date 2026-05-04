@@ -1,154 +1,126 @@
 import React, { useState, useEffect } from 'react';
 import './TabBar.css';
+import Tab from './Tab';
 
 const TabBar = () => {
-  const [tabs, setTabs] = useState([]);
+  const [tabs, setTabs] = useState(() => {
+    const storedTabs = localStorage.getItem('tabs');
+    return storedTabs ? JSON.parse(storedTabs) : [];
+  });
   const [activeTab, setActiveTab] = useState(null);
   const [tabTitle, setTabTitle] = useState('');
   const [tabIcon, setTabIcon] = useState('');
-  const [tabContent, setTabContent] = useState({});
-  const [dragging, setDragging] = useState(null);
-  const [dragoverIndex, setDragoverIndex] = useState(null);
-
-  useEffect(() => {
-    const storedTabs = localStorage.getItem('tabs');
-    if (storedTabs) {
-      const tabsArray = JSON.parse(storedTabs);
-      setTabs(tabsArray);
-      if (tabsArray.length > 0) {
-        setActiveTab(tabsArray[0].id);
-        tabsArray.forEach((tab) => {
-          setTabContent((prevContent) => ({
-            ...prevContent,
-            [tab.id]: tab.content,
-          }));
-        });
-      }
-    }
-  }, []);
+  const [newTabUrl, setNewTabUrl] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('tabs', JSON.stringify(tabs));
   }, [tabs]);
 
-  const addTab = (url, title, icon, content) => {
-    const newTab = {
-      id: Date.now(),
-      url,
-      title,
-      icon,
-      content,
-    };
-    setTabs([...tabs, newTab]);
-    setActiveTab(newTab.id);
-    setTabContent((prevContent) => ({
-      ...prevContent,
-      [newTab.id]: content,
-    }));
+  useEffect(() => {
+    if (tabs.length > 0 && !activeTab) {
+      setActiveTab(tabs[0]);
+    }
+  }, [tabs, activeTab]);
+
+  const handleTabClick = (tab) => {
+    setActiveTab(tab);
   };
 
-  const removeTab = (id) => {
-    const updatedTabs = tabs.filter((tab) => tab.id !== id);
+  const handleTabClose = (tab) => {
+    const updatedTabs = tabs.filter((t) => t.id !== tab.id);
     setTabs(updatedTabs);
-    setTabContent((prevContent) => {
-      const newContent = { ...prevContent };
-      delete newContent[id];
-      return newContent;
-    });
-    if (activeTab === id && updatedTabs.length > 0) {
-      setActiveTab(updatedTabs[0].id);
-    } else if (updatedTabs.length === 0) {
-      setActiveTab(null);
+    if (tab.id === activeTab.id) {
+      setActiveTab(updatedTabs.length > 0 ? updatedTabs[0] : null);
     }
   };
 
-  const updateTabTitle = (id, title) => {
-    const updatedTabs = tabs.map((tab) => {
-      if (tab.id === id) {
-        return { ...tab, title };
+  const handleTabReload = (tab) => {
+    // Reload the tab content
+    const updatedTabs = tabs.map((t) => {
+      if (t.id === tab.id) {
+        return { ...t, reload: true };
       }
-      return tab;
+      return t;
     });
     setTabs(updatedTabs);
   };
 
-  const updateTabIcon = (id, icon) => {
-    const updatedTabs = tabs.map((tab) => {
-      if (tab.id === id) {
-        return { ...tab, icon };
-      }
-      return tab;
-    });
-    setTabs(updatedTabs);
+  const handleNewTab = () => {
+    const newTab = {
+      id: Date.now(),
+      title: tabTitle,
+      icon: tabIcon,
+      url: newTabUrl,
+      reload: false,
+    };
+    setTabs([...tabs, newTab]);
+    setTabTitle('');
+    setTabIcon('');
+    setNewTabUrl('');
+    setActiveTab(newTab);
   };
 
-  const updateTabContent = (id, content) => {
-    setTabContent((prevContent) => ({
-      ...prevContent,
-      [id]: content,
-    }));
-    const updatedTabs = tabs.map((tab) => {
-      if (tab.id === id) {
-        return { ...tab, content };
-      }
-      return tab;
-    });
-    setTabs(updatedTabs);
-  };
-
-  const handleTabClick = (id) => {
-    setActiveTab(id);
-  };
-
-  const handleDragStart = (event, index) => {
-    setDragging(index);
-  };
-
-  const handleDragOver = (event, index) => {
-    event.preventDefault();
-    setDragoverIndex(index);
+  const handleDragStart = (tab) => {
+    setIsDragging(true);
   };
 
   const handleDragEnd = () => {
-    if (dragging !== null && dragoverIndex !== null) {
-      const tabsArray = [...tabs];
-      const draggedTab = tabsArray[dragging];
-      tabsArray.splice(dragging, 1);
-      tabsArray.splice(dragoverIndex, 0, draggedTab);
-      setTabs(tabsArray);
-      setDragging(null);
-      setDragoverIndex(null);
-    }
+    setIsDragging(false);
   };
 
-  const handleDrop = (event, index) => {
-    event.preventDefault();
-    handleDragEnd();
+  const handleDragOver = (e, tab) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e, tab) => {
+    e.preventDefault();
+    const updatedTabs = tabs.map((t) => {
+      if (t.id === tab.id) {
+        return { ...t, url: newTabUrl };
+      }
+      return t;
+    });
+    setTabs(updatedTabs);
   };
 
   return (
     <div className="tab-bar">
-      {tabs.map((tab, index) => (
-        <div
+      {tabs.map((tab) => (
+        <Tab
           key={tab.id}
-          className={`tab ${activeTab === tab.id ? 'active' : ''}`}
-          draggable
-          onDragStart={(event) => handleDragStart(event, index)}
-          onDragOver={(event) => handleDragOver(event, index)}
-          onDrop={(event) => handleDrop(event, index)}
-        >
-          <img src={tab.icon} alt={tab.title} />
-          <span>{tab.title}</span>
-          <button onClick={() => removeTab(tab.id)}>×</button>
-          <div
-            className="tab-content"
-            dangerouslySetInnerHTML={{ __html: tab.content }}
-          />
-        </div>
+          tab={tab}
+          active={tab.id === activeTab.id}
+          onClick={() => handleTabClick(tab)}
+          onClose={() => handleTabClose(tab)}
+          onReload={() => handleTabReload(tab)}
+          onDragStart={() => handleDragStart(tab)}
+          onDragEnd={handleDragEnd}
+          onDragOver={(e) => handleDragOver(e, tab)}
+          onDrop={(e) => handleDrop(e, tab)}
+        />
       ))}
-      <button className="add-tab" onClick={() => addTab('', '', '', '')}>
-        +
-      </button>
+      <div className="new-tab">
+        <input
+          type="text"
+          placeholder="Enter tab title"
+          value={tabTitle}
+          onChange={(e) => setTabTitle(e.target.value)}
+        />
+        <input
+          type="text"
+          placeholder="Enter tab icon"
+          value={tabIcon}
+          onChange={(e) => setTabIcon(e.target.value)}
+        />
+        <input
+          type="text"
+          placeholder="Enter new tab URL"
+          value={newTabUrl}
+          onChange={(e) => setNewTabUrl(e.target.value)}
+        />
+        <button onClick={handleNewTab}>New Tab</button>
+      </div>
     </div>
   );
 };
