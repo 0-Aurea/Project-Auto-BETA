@@ -1,30 +1,29 @@
 import React, { useState, useEffect } from 'react';
+import './ProxyHistory.css';
 
 const ProxyHistory = () => {
-  const [history, setHistory] = useState([]);
-  const [filteredHistory, setFilteredHistory] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-
-  useEffect(() => {
+  const [history, setHistory] = useState(() => {
     const storedHistory = localStorage.getItem('proxyHistory');
-    if (storedHistory) {
-      const historyArray = JSON.parse(storedHistory);
-      setHistory(historyArray);
-      setFilteredHistory(historyArray);
-    }
-  }, []);
+    return storedHistory ? JSON.parse(storedHistory) : [];
+  });
+  const [filteredHistory, setFilteredHistory] = useState(history);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('title');
+  const [sortOrder, setSortOrder] = useState('asc');
 
   useEffect(() => {
     localStorage.setItem('proxyHistory', JSON.stringify(history));
   }, [history]);
 
-  const handleSearch = (event) => {
-    const searchTerm = event.target.value.toLowerCase();
-    setSearchTerm(searchTerm);
+  useEffect(() => {
     const filteredHistory = history.filter((item) => {
-      return item.url.toLowerCase().includes(searchTerm) || item.title.toLowerCase().includes(searchTerm);
+      return item.url.toLowerCase().includes(searchTerm.toLowerCase()) || item.title.toLowerCase().includes(searchTerm.toLowerCase());
     });
     setFilteredHistory(filteredHistory);
+  }, [searchTerm, history]);
+
+  const handleSearch = (event) => {
+    setSearchTerm(event.target.value);
   };
 
   const handleClearHistory = () => {
@@ -36,9 +35,21 @@ const ProxyHistory = () => {
   const handleRemoveFromHistory = (url) => {
     const updatedHistory = history.filter((item) => item.url !== url);
     setHistory(updatedHistory);
-    setFilteredHistory(updatedHistory.filter((item) => {
-      return item.url.toLowerCase().includes(searchTerm) || item.title.toLowerCase().includes(searchTerm);
-    }));
+  };
+
+  const handleSort = (sortBy) => {
+    setSortBy(sortBy);
+    const sortedHistory = [...history].sort((a, b) => {
+      if (sortBy === 'title') {
+        return sortOrder === 'asc' ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title);
+      } else if (sortBy === 'url') {
+        return sortOrder === 'asc' ? a.url.localeCompare(b.url) : b.url.localeCompare(a.url);
+      } else {
+        return 0;
+      }
+    });
+    setHistory(sortedHistory);
+    setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
   };
 
   return (
@@ -50,6 +61,10 @@ const ProxyHistory = () => {
         onChange={handleSearch}
         placeholder="Search history"
       />
+      <div className="history-toolbar">
+        <button onClick={() => handleSort('title')}>Sort by Title {sortBy === 'title' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
+        <button onClick={() => handleSort('url')}>Sort by URL {sortBy === 'url' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
+      </div>
       <ul>
         {filteredHistory.map((item, index) => (
           <li key={index}>
