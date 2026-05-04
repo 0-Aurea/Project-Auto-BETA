@@ -1,25 +1,11 @@
 const { caches } = globalThis;
 const { URL } = require('url');
+const { CACHE_NAME, MAX_CACHE_AGE, PREFETCH_THRESHOLD } = require('./constants');
 
 /**
  * Cache manager utility class for handling Service Worker Cache API operations.
  */
 class CacheManager {
-  /**
-   * Cache name for storing proxied responses.
-   */
-  static CACHE_NAME = 'nexus-cache';
-
-  /**
-   * Regular expression to match cacheable response statuses.
-   */
-  static CACHEABLE_STATUS_REGEX = /^https?:\/\/.*$/;
-
-  /**
-   * TTL (time to live) for cache entries in seconds.
-   */
-  static TTL = 3600; // 1 hour
-
   /**
    * Cache instance.
    */
@@ -29,7 +15,7 @@ class CacheManager {
    * Initialize the cache manager.
    */
   static async init() {
-    CacheManager.cache = await caches.open(CacheManager.CACHE_NAME);
+    CacheManager.cache = await caches.open(CACHE_NAME);
   }
 
   /**
@@ -38,7 +24,7 @@ class CacheManager {
    * @returns {boolean} True if the response is cacheable, false otherwise.
    */
   static isCacheableResponse(response) {
-    return CacheManager.CACHEABLE_STATUS_REGEX.test(response.url) && response.status >= 200 && response.status < 300;
+    return response.url.startsWith('https://') && response.status >= 200 && response.status < 300;
   }
 
   /**
@@ -79,7 +65,9 @@ class CacheManager {
       cacheEntry = new Response(response.body, response);
     }
 
-    cacheEntry.headers.set('Cache-Control', `public, max-age=${CacheManager.TTL}`);
+    const ttl = response.headers.get('cache-control')?.includes('max-age') ? 
+      parseInt(response.headers.get('cache-control').split('max-age=')[1].split(',')[0]) : MAX_CACHE_AGE;
+    cacheEntry.headers.set('Cache-Control', `public, max-age=${ttl}`);
 
     await CacheManager.cache.put(request, cacheEntry);
   }
@@ -104,51 +92,42 @@ class CacheManager {
   }
 
   /**
-   * Clears all cached responses.
-   * @returns {Promise<void>} A promise that resolves when the cache is cleared.
+   * Caches prefetch hints.
+   * @param {HTMLLinkElement} linkElement - The link element to cache.
+   * @returns {Promise<void>} A promise that resolves when the prefetch hint is cached.
    */
-  static async clearCache() {
-    await CacheManager.cache.keys().then(async (keys) => {
-      for (const key of keys) {
-        await CacheManager.cache.delete(key);
+  static async cachePrefetchHint(linkElement) {
+    if (linkElement.rel === 'prefetch' || linkElement.rel === 'preload') {
+      const href = linkElement.href;
+      if (href.startsWith('https://') && !href.includes('localhost')) {
+        const prefetchRequest = new Request(href, { method: 'HEAD' });
+        const prefetchResponse = await CacheManager.getCachedResponse(prefetchRequest);
+        if (!prefetchResponse) {
+          const response = await fetch(href, { method: 'HEAD' });
+          await CacheManager.cacheResponse(prefetchRequest, response);
+        }
       }
-    });
-  }
-
-  /**
-   * Prefetches a response and caches it.
-   * @param {Request} request - The request to prefetch and cache.
-   * @returns {Promise<void>} A promise that resolves when the response is prefetched and cached.
-   */
-  static async prefetchResponse(request) {
-    try {
-      const response = await globalThis.fetch(request);
-      await CacheManager.cacheResponse(request, response, true);
-    } catch (error) {
-      globalThis.console.error(`Error prefetching response: ${error}`);
     }
   }
 
   /**
-   * Handles prefetch hints by parsing <link rel="prefetch/preload"> tags.
-   * @param {HTMLDocument} document - The HTML document to parse.
-   * @returns {Promise<void>} A promise that resolves when prefetch hints are handled.
+   * Periodically cleans up expired cache entries.
    */
-  static async handlePrefetchHints(document) {
-    const prefetchLinks = document.querySelectorAll('link[rel="prefetch"], link[rel="preload"]');
-    for (const link of prefetchLinks) {
-      const href = link.href;
-      if (href) {
-        const request = new Request(href, {
-          method: 'GET',
-          headers: {
-            'Accept': '*/*',
-          },
-        });
-        await CacheManager.prefetchResponse(request);
+  static async cleanupExpiredEntries() {
+    const cacheKeys = await CacheManager.cache.keys();
+    for (const cacheKey of cacheKeys) {
+      const cachedResponse = await CacheManager.cache.match(cacheKey);
+      if (cachedResponse) {
+        const cacheControl = cachedResponse.headers.get('cache-control');
+        if (cacheControl) {
+          const maxAge = parseInt(cacheControl.split('max-age=')[1].split(',')[0]);
+          if (maxAge < MAX_CACHE_AGE) {
+            await CacheManager.removeCachedResponse(cacheKey);
+          }
+        }
       }
     }
   }
 }
 
-export default CacheManager;
+module.exports = CacheManager;
