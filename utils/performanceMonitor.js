@@ -1,95 +1,58 @@
 const { performance } = require('perf_hooks');
-const { setTimeout, clearTimeout } = require('timers');
 
 /**
- * Performance monitor utility class for monitoring and analyzing performance metrics.
+ * Performance Monitor utility class for monitoring performance metrics and optimizing the proxy.
  */
 class PerformanceMonitor {
   /**
-   * Performance metrics object.
+   * Map to store performance metrics.
    */
-  static metrics = {};
+  static metrics = new Map();
 
   /**
-   * Timer for tracking duration of events.
+   * Start measuring a performance metric.
+   * @param {string} name - The name of the metric.
    */
-  static timers = {};
-
-  /**
-   * Start tracking a performance metric.
-   * @param {string} eventName - The name of the event to track.
-   */
-  static startTracking(eventName) {
-    if (!PerformanceMonitor.timers[eventName]) {
-      PerformanceMonitor.timers[eventName] = performance.now();
-      PerformanceMonitor.metrics[eventName] = {
-        startTime: PerformanceMonitor.timers[eventName],
-        duration: 0,
-      };
+  static startMetric(name) {
+    if (PerformanceMonitor.metrics.has(name)) {
+      throw new Error(`Metric ${name} already exists.`);
     }
+    PerformanceMonitor.metrics.set(name, performance.now());
   }
 
   /**
-   * Stop tracking a performance metric.
-   * @param {string} eventName - The name of the event to stop tracking.
+   * End measuring a performance metric and calculate the duration.
+   * @param {string} name - The name of the metric.
+   * @returns {number} The duration of the metric in milliseconds.
    */
-  static stopTracking(eventName) {
-    if (PerformanceMonitor.timers[eventName]) {
-      const endTime = performance.now();
-      PerformanceMonitor.metrics[eventName].duration = endTime - PerformanceMonitor.timers[eventName];
-      delete PerformanceMonitor.timers[eventName];
+  static endMetric(name) {
+    if (!PerformanceMonitor.metrics.has(name)) {
+      throw new Error(`Metric ${name} does not exist.`);
     }
+    const startTime = PerformanceMonitor.metrics.get(name);
+    const duration = performance.now() - startTime;
+    PerformanceMonitor.metrics.delete(name);
+    return duration;
   }
 
   /**
-   * Get the performance metrics for a specific event.
-   * @param {string} eventName - The name of the event to retrieve metrics for.
-   * @returns {Object} The performance metrics for the specified event.
+   * Get the duration of a performance metric.
+   * @param {string} name - The name of the metric.
+   * @returns {number|null} The duration of the metric in milliseconds, or null if the metric does not exist.
    */
-  static getMetrics(eventName) {
-    return PerformanceMonitor.metrics[eventName];
+  static getMetricDuration(name) {
+    if (!PerformanceMonitor.metrics.has(name)) {
+      return null;
+    }
+    return performance.now() - PerformanceMonitor.metrics.get(name);
   }
 
   /**
-   * Reset all performance metrics.
+   * Clear all performance metrics.
    */
-  static resetMetrics() {
-    PerformanceMonitor.metrics = {};
-    PerformanceMonitor.timers = {};
-  }
-
-  /**
-   * Log performance metrics to the console.
-   */
-  static logMetrics() {
-    globalThis.console.log('Performance Metrics:');
-    Object.keys(PerformanceMonitor.metrics).forEach((eventName) => {
-      const metrics = PerformanceMonitor.metrics[eventName];
-      globalThis.console.log(`  ${eventName}:`);
-      globalThis.console.log(`    Start Time: ${metrics.startTime}`);
-      globalThis.console.log(`    Duration: ${metrics.duration}ms`);
-    });
+  static clearMetrics() {
+    PerformanceMonitor.metrics.clear();
   }
 }
 
-/**
- * Automatically log performance metrics at a specified interval.
- * @param {number} interval - The interval in milliseconds to log metrics.
- */
-function autoLogMetrics(interval) {
-  const logMetricsTimeout = setTimeout(() => {
-    PerformanceMonitor.logMetrics();
-    autoLogMetrics(interval);
-  }, interval);
-
-  return logMetricsTimeout;
-}
-
-// Example usage:
-const logMetricsInterval = 60000; // Log metrics every 1 minute
-const logMetricsTimeout = autoLogMetrics(logMetricsInterval);
-
-// Stop logging metrics after 5 minutes
-setTimeout(() => {
-  clearTimeout(logMetricsTimeout);
-}, 300000);
+module.exports = PerformanceMonitor;
