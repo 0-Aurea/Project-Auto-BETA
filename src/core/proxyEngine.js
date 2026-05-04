@@ -4,6 +4,8 @@ const http = require('http');
 const url = require('url');
 const LRU = require('lru-cache');
 const crypto = require('crypto');
+const tls = require('tls');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -82,15 +84,114 @@ function handleWebSocketUpgrade(req, socket, head) {
   });
 }
 
+function handleHttpRequest(req, res) {
+  const decodedUrl = decodeUrl(req);
+  if (!decodedUrl) return res.status(400).send('Bad Request');
+
+  const options = {
+    method: req.method,
+    headers: rewriteHeaders(req),
+    path: decodedUrl
+  };
+
+  const proxyReq = http.request(options, (proxyRes) => {
+    const headers = rewriteHeaders(proxyRes.headers);
+    res.set(headers);
+    res.status(proxyRes.statusCode).on('finish', () => {
+      cache.set(req.url, {
+        headers: res.getHeaders(),
+        statusCode: res.statusCode,
+        body: res.body
+      });
+    });
+    proxyRes.on('data', (chunk) => {
+      res.write(chunk);
+    });
+    proxyRes.on('end', () => {
+      res.end();
+    });
+  });
+
+  req.on('data', (chunk) => {
+    proxyReq.write(chunk);
+  });
+
+  req.on('end', () => {
+    proxyReq.end();
+  });
+
+  req.on('error', (err) => {
+    console.error(err);
+    res.status(500).send('Internal Server Error');
+  });
+}
+
+function handleHttpsRequest(req, res) {
+  const decodedUrl = decodeUrl(req);
+  if (!decodedUrl) return res.status(400).send('Bad Request');
+
+  const options = {
+    method: req.method,
+    headers: rewriteHeaders(req),
+    path: decodedUrl,
+    rejectUnauthorized: false
+  };
+
+  const serverName = url.parse(decodedUrl).hostname;
+  const tlsOptions = {
+    servername: serverName,
+    rejectUnauthorized: false
+  };
+
+  const tlsSocket = tls.connect(decodedUrl, tlsOptions, () => {
+    const proxyReq = http.request(options, (proxyRes) => {
+      const headers = rewriteHeaders(proxyRes.headers);
+      res.set(headers);
+      res.status(proxyRes.statusCode).on('finish', () => {
+        cache.set(req.url, {
+          headers: res.getHeaders(),
+          statusCode: res.statusCode,
+          body: res.body
+        });
+      });
+      proxyRes.on('data', (chunk) => {
+        res.write(chunk);
+      });
+      proxyRes.on('end', () => {
+        res.end();
+      });
+    });
+
+    req.on('data', (chunk) => {
+      proxyReq.write(chunk);
+    });
+
+    req.on('end', () => {
+      proxyReq.end();
+    });
+
+    req.on('error', (err) => {
+      console.error(err);
+      res.status(500).send('Internal Server Error');
+    });
+  });
+
+  tlsSocket.on('error', (err) => {
+    console.error(err);
+    res.status(500).send('Internal Server Error');
+  });
+}
+
 wss.on('connection', (ws, req) => {
   handleWebSocketUpgrade(req, ws._socket, ws._socket.remoteAddress);
 });
 
 app.use((req, res, next) => {
-  const decodedUrl = decodeUrl(req);
-  if (!decodedUrl) return res.status(400).send('Bad Request');
-  req.url = decodedUrl;
-  next();
+  if (req.url.startsWith('/')) {
+    handleHttpRequest(req, res);
+  } else {
+    next();
+  }
 });
 
 app.use((req, res, next) => {
@@ -106,72 +207,20 @@ app.get('*', (req, res) => {
     res.set(cachedResponse.headers);
     res.status(cachedResponse.statusCode).send(cachedResponse.body);
   } else {
-    http.get(req.url, (upstreamRes) => {
-      const headers = rewriteHeaders(upstreamRes.headers);
-      res.set(headers);
-      upstreamRes.on('data', (chunk) => {
-        res.write(chunk);
-      });
-      upstreamRes.on('end', () => {
-        res.end();
-        cache.set(cacheKey, {
-          headers: res.getHeaders(),
-          statusCode: res.statusCode,
-          body: res.getContent()
-        });
-      });
-    }).on('error', (err) => {
-      console.error(err);
-      res.status(500).send('Internal Server Error');
-    });
-  }
-});
-
-app.post('*', (req, res) => {
-  const cacheKey = req.url;
-  if (cache.has(cacheKey)) {
-    const cachedResponse = cache.get(cacheKey);
-    res.set(cachedResponse.headers);
-    res.status(cachedResponse.statusCode).send(cachedResponse.body);
-  } else {
-    const options = {
-      method: req.method,
-      url: req.url,
-      headers: req.headers
-    };
-
-    const upstreamReq = http.request(options, (upstreamRes) => {
-      const headers = rewriteHeaders(upstreamRes.headers);
-      res.set(headers);
-      upstreamRes.on('data', (chunk) => {
-        res.write(chunk);
-      });
-      upstreamRes.on('end', () => {
-        res.end();
-        cache.set(cacheKey, {
-          headers: res.getHeaders(),
-          statusCode: res.statusCode,
-          body: res.getContent()
-        });
-      });
-    });
-
-    upstreamReq.on('error', (err) => {
-      console.error(err);
-      res.status(500).send('Internal Server Error');
-    });
-
-    req.on('data', (chunk) => {
-      upstreamReq.write(chunk);
-    });
-
-    req.on('end', () => {
-      upstreamReq.end();
-    });
+    handleHttpsRequest(req, res);
   }
 });
 
 server.listen(8080, () => {
   console.log('Proxy server listening on port 8080');
 });
-module.exports = app;
+
+process.on('SIGINT', () => {
+  server.close();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  server.close();
+  process.exit(0);
+});
