@@ -1,22 +1,46 @@
 const express = require('express');
 const https = require('https');
 const WebSocket = require('ws');
-const cookieParser = require('cookie-parser');
+const http = require('http');
 const config = require('./lib/config');
-const cookieScoping = require('./lib/cookieScoping');
 const logger = require('./lib/logger');
+const cookieParser = require('cookie-parser');
+const cookieScoping = require('./lib/cookieScoping');
 
 const app = express();
-const httpsServer = https.createServer({
-  key: config.server.https.key,
-  cert: config.server.https.cert,
-}, app);
-
-const wss = new WebSocket.Server({ server: httpsServer });
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
+let connections = {};
+
+wss.on('connection', (ws, req) => {
+  const { hostname: proxiedHost } = req.headers['x-nexus-proxied-host'];
+  if (!proxiedHost) {
+    ws.close(1000, 'Bad Request');
+    return;
+  }
+
+  connections[proxiedHost] = ws;
+
+  ws.on('message', (message) => {
+    logger.info(`Received message from ${proxiedHost}: ${message}`);
+  });
+
+  ws.on('close', () => {
+    delete connections[proxiedHost];
+  });
+
+  ws.on('error', (error) => {
+    logger.error(`Error occurred for ${proxiedHost}: ${error}`);
+  });
+});
+
+app.use(cookieScoping);
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -24,139 +48,64 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cookieScoping);
+const handleProxyRequest = async (req, res) => {
+  try {
+    const { hostname: proxiedHost } = req.headers['x-nexus-proxied-host'];
+    if (!proxiedHost) {
+      return res.status(400).send({ error: 'Bad Request' });
+    }
 
-app.use((req, res, next) => {
-  if (req.headers['x-nexus-proxied-host']) {
-    req.headers['host'] = req.headers['x-nexus-proxied-host'];
-  }
-  next();
-});
+    const targetHost = req.headers['x-nexus-target-host'];
+    const targetPort = req.headers['x-nexus-target-port'];
 
-const handleProxiedRequest = (req, res) => {
-  const { hostname: proxiedHost } = req.headers['x-nexus-proxied-host'];
-  const { path, query, method, headers } = req;
+    if (!targetHost || !targetPort) {
+      return res.status(400).send({ error: 'Bad Request' });
+    }
 
-  const options = {
-    hostname: proxiedHost,
-    path: `${path}${query}`,
-    method,
-    headers: { ...headers },
-  };
+    const targetUrl = `http://${targetHost}:${targetPort}${req.url}`;
 
-  delete options.headers['x-nexus-proxied-host'];
-
-  const proxiedReq = https.request(options, (proxiedRes) => {
-    Object.keys(proxiedRes.headers).forEach((header) => {
-      if (header !== 'transfer-encoding') {
-        res.set(header, proxiedRes.headers[header]);
-      }
+    const targetReq = http.request(targetUrl, (targetRes) => {
+      res.writeHead(targetRes.statusCode, targetRes.headers);
+      targetRes.pipe(res);
     });
 
-    res.statusCode = proxiedRes.statusCode;
-    res.statusMessage = proxiedRes.statusMessage;
+    req.pipe(targetReq);
 
-    proxiedRes.on('data', (chunk) => {
-      res.write(chunk);
+    targetReq.on('error', (error) => {
+      logger.error(`Error occurred while proxying request to ${targetUrl}: ${error}`);
+      res.status(500).send({ error: 'Internal Server Error' });
     });
-
-    proxiedRes.on('end', () => {
-      res.end();
-    });
-  });
-
-  proxiedReq.on('error', (error) => {
-    logger.error('Proxied request error:', error);
+  } catch (error) {
+    logger.error(`Error occurred while handling proxy request: ${error}`);
     res.status(500).send({ error: 'Internal Server Error' });
-  });
-
-  req.on('data', (chunk) => {
-    proxiedReq.write(chunk);
-  });
-
-  req.on('end', () => {
-    proxiedReq.end();
-  });
+  }
 };
 
-app.use((req, res) => {
-  if (req.url.startsWith('/')) {
-    handleProxiedRequest(req, res);
-  } else {
-    res.status(404).send({ error: 'Not Found' });
-  }
-});
+app.all('*', handleProxyRequest);
 
-wss.on('connection', (ws, req) => {
-  const { hostname: proxiedHost } = req.headers['x-nexus-proxied-host'];
-
-  if (!proxiedHost) {
-    return ws.close(1000, 'Bad Request');
-  }
-
-  const wsOptions = {
-    hostname: proxiedHost,
-    port: 443,
-    secure: true,
-  };
-
-  const proxiedWs = new WebSocket(`wss://${proxiedHost}`, wsOptions);
-
-  ws.on('message', (message) => {
-    proxiedWs.send(message);
-  });
-
-  ws.on('close', () => {
-    proxiedWs.close();
-  });
-
-  ws.on('error', (error) => {
-    logger.error('WebSocket error:', error);
-    proxiedWs.close(1000, 'Internal Server Error');
-  });
-
-  proxiedWs.on('message', (message) => {
-    ws.send(message);
-  });
-
-  proxiedWs.on('close', () => {
-    ws.close();
-  });
-
-  proxiedWs.on('error', (error) => {
-    logger.error('Proxied WebSocket error:', error);
-    ws.close(1000, 'Internal Server Error');
-  });
-
-  // WebRTC ICE candidate scrubbing
-  ws.on('message', (message) => {
-    try {
-      const data = JSON.parse(message);
-      if (data.type === 'candidate') {
-        const { candidate } = data;
-        if (candidate) {
-          const scrubbedCandidate = scrubIceCandidate(candidate);
-          if (scrubbedCandidate !== candidate) {
-            data.candidate = scrubbedCandidate;
-            ws.send(JSON.stringify(data));
-          }
-        }
-      }
-    } catch (error) {
-      logger.error('Error parsing WebSocket message:', error);
-    }
-  });
-
-  const scrubIceCandidate = (candidate) => {
-    const regex = /a=ice-ufrag:([^\s]+)/g;
-    const match = candidate.match(regex);
-    if (match) {
-      return candidate.replace(regex, 'a=ice-ufrag:xxxxxxxx');
-    }
-    return candidate;
-  };
-});
+const httpsServer = https.createServer({
+  key: fs.readFileSync(config.server.https.key),
+  cert: fs.readFileSync(config.server.https.cert),
+}, app);
 
 httpsServer.listen(config.server.port, config.server.host, () => {
-  logger.info(`NEXUS proxy server listening on ${config.server.host}:${config.server.port}`);
+  logger.info(`Server listening on ${config.server.host}:${config.server.port}`);
+});
+
+server.listen(config.server.port + 1, () => {
+  logger.info(`Fallback HTTP server listening on ${config.server.host}:${config.server.port + 1}`);
+});
+
+process.on('SIGINT', () => {
+  logger.info('Received SIGINT, shutting down...');
+  httpsServer.close();
+  server.close();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  logger.info('Received SIGTERM, shutting down...');
+  httpsServer.close();
+  server.close();
+  process.exit(0);
 });
