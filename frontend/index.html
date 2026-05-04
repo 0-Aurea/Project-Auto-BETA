@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NEXUS Proxy</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
 </head>
 <body>
     <div class="container">
@@ -21,6 +22,16 @@
             <div class="search-bar">
                 <input type="search" id="search-input" placeholder="Search...">
                 <button id="search-button">Go</button>
+                <div class="search-options">
+                    <label>
+                        <input type="radio" id="search-engine-google" name="search-engine" checked>
+                        Google
+                    </label>
+                    <label>
+                        <input type="radio" id="search-engine-bing" name="search-engine">
+                        Bing
+                    </label>
+                </div>
             </div>
             <div class="tab-bar" id="tab-bar">
                 <div id="tab-bar-component"></div>
