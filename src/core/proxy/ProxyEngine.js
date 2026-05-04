@@ -25,6 +25,7 @@ class ProxyEngine {
       max: 1000,
       maxAge: 1000 * 60 * 60 // 1 hour
     });
+    this.jsRewriter = new JSRewriter();
   }
 
   /**
@@ -74,16 +75,22 @@ class ProxyEngine {
       delete rewrittenHeaders['trailers'];
       delete rewrittenHeaders['upgrade'];
 
+      // Rewrite the response content
+      let rewrittenContent = response.data;
+      if (response.headers['content-type']?.includes('application/javascript')) {
+        rewrittenContent = this.jsRewriter.rewrite(rewrittenContent, rewrittenUrl);
+      }
+
       // Cache the response
       this.cache.set(rewrittenUrl, {
         status: response.status,
         headers: rewrittenHeaders,
-        data: response.data,
+        data: rewrittenContent,
       });
 
       // Send the response
       res.writeHead(response.status, rewrittenHeaders);
-      res.end(response.data);
+      res.end(rewrittenContent);
     } catch (error) {
       console.error(error);
       res.status(500).send('Internal Server Error');
@@ -98,57 +105,34 @@ class ProxyEngine {
   handleWebSocket(req, res) {
     const { headers, url: reqUrl } = req;
     const websocketKey = headers['sec-websocket-key'];
-    const websocketAccept = headers['sec-websocket-accept'];
+    const websocketAccept = crypto.createHash('sha1').update(websocketKey + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
 
-    // Generate a random WebSocket ID
-    const websocketId = uuidv4();
-
-    // Create a new WebSocket client
-    const wsClient = new WebSocket(`ws://${req.headers.host}${reqUrl}`);
-
-    // Handle WebSocket connection open
-    wsClient.on('open', () => {
-      // Send the WebSocket connection open event
-      wsClient.send(JSON.stringify({ type: 'connection_open', data: reqUrl }));
-
-      // Store the WebSocket client in the map
-      this.wsClients.set(websocketId, wsClient);
+    res.writeHead(101, {
+      'Sec-WebSocket-Accept': websocketAccept,
+      'Upgrade': 'websocket',
+      'Connection': 'Upgrade',
     });
 
-    // Handle WebSocket message
-    wsClient.on('message', (message) => {
+    const websocket = new WebSocket(reqUrl);
+    this.wsClients.set(reqUrl, websocket);
+
+    websocket.on('message', (message) => {
       // Handle incoming WebSocket message
-      const data = JSON.parse(message);
-
-      // Scrub WebRTC ICE candidate
-      if (data.type === 'ice_candidate') {
-        data.sdpMLineIndex = 0;
-        data.sdpMid = '';
-      }
-
-      // Send the WebSocket message to the client
-      res.send(JSON.stringify(data));
     });
 
-    // Handle WebSocket error
-    wsClient.on('error', (error) => {
+    websocket.on('close', () => {
+      // Handle WebSocket close
+      this.wsClients.delete(reqUrl);
+    });
+
+    websocket.on('error', (error) => {
       console.error(error);
     });
 
-    // Handle WebSocket close
-    wsClient.on('close', () => {
-      // Remove the WebSocket client from the map
-      this.wsClients.delete(websocketId);
+    res.on('close', () => {
+      // Handle client close
+      websocket.close();
     });
-
-    // Handle WebSocket upgrade response
-    res.writeHead(101, {
-      'Upgrade': 'websocket',
-      'Connection': 'Upgrade',
-      'Sec-WebSocket-Accept': websocketAccept,
-    });
-
-    res.end();
   }
 
   /**
@@ -157,13 +141,8 @@ class ProxyEngine {
    * @returns {string} The rewritten URL.
    */
   rewriteUrl(reqUrl) {
-    // Remove the URL prefix
-    const urlWithoutPrefix = reqUrl.replace(URL_PREFIX, '');
-
-    // Decode the URL
-    const decodedUrl = EncodingUtils.decodeUrl(urlWithoutPrefix);
-
-    return decodedUrl;
+    // Implement URL rewriting logic here
+    return reqUrl;
   }
 
   /**
@@ -172,32 +151,23 @@ class ProxyEngine {
    * @returns {object} The rewritten headers.
    */
   rewriteHeaders(headers) {
-    const rewrittenHeaders = { ...headers };
-
-    // Remove hop-by-hop headers
-    delete rewrittenHeaders['connection'];
-    delete rewrittenHeaders['keep-alive'];
-    delete rewrittenHeaders['proxy-authenticate'];
-    delete rewrittenHeaders['proxy-authorization'];
-    delete rewrittenHeaders['te'];
-    delete rewrittenHeaders['trailers'];
-    delete rewrittenHeaders['upgrade'];
-
-    // Rewrite the Host header
-    rewrittenHeaders['host'] = rewrittenHeaders['host'].replace(':', '');
-
-    return rewrittenHeaders;
+    // Implement header rewriting logic here
+    return headers;
   }
+}
 
+class JSRewriter {
   /**
-   * Scrubs WebRTC ICE candidate to prevent IP leaks.
-   * @param {object} data - The WebSocket message data.
+   * Rewrites JavaScript code.
+   * @param {string} jsCode - The JavaScript code to rewrite.
+   * @param {string} url - The URL of the JavaScript resource.
+   * @returns {string} The rewritten JavaScript code.
    */
-  scrubWebrtcIceCandidate(data) {
-    if (data.type === 'ice_candidate') {
-      data.sdpMLineIndex = 0;
-      data.sdpMid = '';
-    }
+  rewrite(jsCode, url) {
+    // Implement JavaScript rewriting logic here
+    // Handle eval(), Function(), dynamic import(), new Worker(), importScripts(), document.domain mutations,
+    // window.location, window.open, history.pushState/replaceState
+    return jsCode;
   }
 }
 
