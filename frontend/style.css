@@ -140,10 +140,6 @@ body.dark-mode #search-input {
   transition: background-color var(--transition-duration) ease-in-out;
 }
 
-body.dark-mode #search-button {
-  background-color: var(--dark-mode-tab-bg);
-}
-
 #search-button:hover {
   background-color: var(--secondary-color);
 }
@@ -151,112 +147,168 @@ body.dark-mode #search-button {
 .tab-bar {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   padding: 10px;
   border-bottom: 1px solid #ccc;
-  transition: border-color var(--transition-duration) ease-in-out;
 }
 
-body.dark-mode .tab-bar {
-  border-color: #555;
-}
-
-.tab {
-  padding: var(--tab-padding);
-  margin: var(--tab-margin);
+.tab-bar .tab {
+  margin-right: 20px;
+  padding: 10px;
   border: 1px solid #ccc;
-  border-radius: var(--tab-border-radius);
+  border-radius: 5px 5px 0 0;
   background-color: #fff;
-  transition: background-color var(--transition-duration) ease-in-out, border-color var(--transition-duration) ease-in-out;
+  transition: background-color var(--transition-duration) ease-in-out;
 }
 
-body.dark-mode .tab {
-  background-color: var(--dark-mode-tab-bg);
-  border-color: #555;
+.tab-bar .tab:hover {
+  background-color: #f0f0f0;
 }
 
-.tab iframe {
-  width: 100%;
-  height: 500px;
-  border: none;
+.tab-bar .tab.active {
+  background-color: var(--primary-color);
+  color: #fff;
 }
 
-.settings-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  background-color: #fff;
-  padding: 20px;
-  border: 1px solid #ccc;
-  border-radius: 10px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  transition: background-color var(--transition-duration) ease-in-out, box-shadow var(--transition-duration) ease-in-out;
+.tab-bar .tab .tab-title {
+  font-size: 18px;
+  margin-right: 10px;
 }
 
-body.dark-mode .settings-panel {
-  background-color: var(--dark-mode-bg);
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-}
-
-.settings-panel ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.settings-panel li {
-  margin-bottom: 10px;
-}
-
-.settings-panel label {
-  display: block;
-  margin-bottom: 5px;
-}
-
-.settings-panel input[type="checkbox"] {
+.tab-bar .tab .tab-icon {
+  width: 20px;
+  height: 20px;
   margin-right: 10px;
 }
 
 .proxy-history {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #fff;
+  border: 1px solid #ccc;
   padding: 20px;
+  overflow-y: auto;
 }
 
-.proxy-history ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.proxy-history .history-item {
+  padding: 10px;
+  border-bottom: 1px solid #ccc;
 }
 
-.proxy-history li {
+.proxy-history .history-item:last-child {
+  border-bottom: none;
+}
+
+.proxy-history .history-item .title {
+  font-size: 18px;
   margin-bottom: 10px;
 }
 
-.bookmarks {
+.proxy-history .history-item .url {
+  font-size: 16px;
+  color: #666;
+}
+
+.settings-panel {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #fff;
+  border: 1px solid #ccc;
   padding: 20px;
 }
 
-.bookmarks ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.settings-panel .settings-section {
+  margin-bottom: 20px;
 }
 
-.bookmarks li {
+.settings-panel .settings-section .title {
+  font-size: 18px;
   margin-bottom: 10px;
 }
 
-.dark-mode-toggle {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
+.settings-panel .settings-section .description {
+  font-size: 16px;
+  color: #666;
+  margin-bottom: 20px;
+}
+
+.settings-panel .settings-section .settings-item {
+  margin-bottom: 20px;
+}
+
+.settings-panel .settings-item .label {
+  font-size: 18px;
+  margin-right: 10px;
+}
+
+.settings-panel .settings-item .value {
+  font-size: 18px;
+}
+
+.bookmarks-panel {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  padding: 20px;
+}
+
+.bookmarks-panel .bookmark-item {
+  padding: 10px;
+  border-bottom: 1px solid #ccc;
+}
+
+.bookmarks-panel .bookmark-item:last-child {
+  border-bottom: none;
+}
+
+.bookmarks-panel .bookmark-item .title {
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.bookmarks-panel .bookmark-item .url {
+  font-size: 16px;
+  color: #666;
+}
+
+.dark-mode .tab-bar .tab {
+  background-color: var(--dark-mode-bg);
+  border-color: #555;
+}
+
+.dark-mode .tab-bar .tab:hover {
+  background-color: #444;
+}
+
+.dark-mode .tab-bar .tab.active {
   background-color: var(--primary-color);
   color: #fff;
-  padding: 10px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background-color var(--transition-duration) ease-in-out;
 }
 
-.dark-mode-toggle:hover {
-  background-color: var(--secondary-color);
+.dark-mode .proxy-history {
+  background-color: var(--dark-mode-bg);
+  border-color: #555;
+}
+
+.dark-mode .settings-panel {
+  background-color: var(--dark-mode-bg);
+  border-color: #555;
+}
+
+.dark-mode .bookmarks-panel {
+  background-color: var(--dark-mode-bg);
+  border-color: #555;
 }
