@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import './SearchBar.css';
 
 const SearchBar = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -31,7 +32,26 @@ const SearchBar = () => {
       const params = new URLSearchParams({
         q: searchValue,
       });
-      window.open(`${url}?${params.toString()}`, '_blank');
+      // Connect to the proxy engine
+      fetch('/proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url: `${url}?${params.toString()}`,
+          headers: {
+            'User-Agent': 'Mozilla/5.0',
+          },
+        }),
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          window.open(data.url, '_blank');
+        })
+        .catch((error) => {
+          console.error(error);
+        });
     }
   };
 
@@ -106,28 +126,25 @@ const SearchBar = () => {
             ))}
           </ul>
         )}
-        <div className="search-history">
-          {historyExpanded && (
-            <ul>
-              {searchHistory.map((historyItem, index) => (
-                <li key={index} onClick={() => handleHistoryClick(historyItem)}>
-                  {historyItem}
-                </li>
-              ))}
-            </ul>
-          )}
-          <button type="button" onClick={handleHistoryToggle}>
-            {historyExpanded ? 'Hide' : 'Show'} History
-          </button>
-          <button type="button" onClick={handleHistoryClear}>
-            Clear History
-          </button>
-        </div>
         <select value={searchEngine} onChange={handleSearchEngineChange}>
           <option value="google">Google</option>
           <option value="bing">Bing</option>
         </select>
       </form>
+      <div className="search-history">
+        <h3>Search History</h3>
+        <ul>
+          {searchHistory.map((historyItem, index) => (
+            <li key={index} onClick={() => handleHistoryClick(historyItem)}>
+              {historyItem}
+            </li>
+          ))}
+        </ul>
+        <button onClick={handleHistoryClear}>Clear History</button>
+        <button onClick={handleHistoryToggle}>
+          {historyExpanded ? 'Hide' : 'Show'} History
+        </button>
+      </div>
     </div>
   );
 };
