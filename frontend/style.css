@@ -4,6 +4,9 @@
   --dark-color: #2c3e50;
   --light-color: #ecf0f1;
   --font-family: Arial, sans-serif;
+  --dark-mode-bg: #333;
+  --dark-mode-text: #fff;
+  --dark-mode-tab-bg: #444;
 }
 
 * {
@@ -16,6 +19,12 @@ body {
   font-family: var(--font-family);
   background-color: var(--light-color);
   line-height: 1.6;
+  transition: background-color 0.3s ease-in-out;
+}
+
+body.dark-mode {
+  background-color: var(--dark-color);
+  color: var(--dark-mode-text);
 }
 
 .container {
@@ -26,6 +35,12 @@ body {
   border: 1px solid #ddd;
   border-radius: 10px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  transition: background-color 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+body.dark-mode .container {
+  background-color: var(--dark-mode-bg);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 header {
@@ -33,6 +48,11 @@ header {
   color: #fff;
   padding: 10px;
   border-bottom: 1px solid #ccc;
+  transition: background-color 0.3s ease-in-out;
+}
+
+body.dark-mode header {
+  background-color: var(--dark-mode-tab-bg);
 }
 
 header nav ul {
@@ -50,9 +70,18 @@ header nav ul li {
 header nav a {
   color: #fff;
   text-decoration: none;
+  transition: color 0.3s ease-in-out;
 }
 
 header nav a:hover {
+  color: var(--secondary-color);
+}
+
+body.dark-mode header nav a {
+  color: var(--dark-mode-text);
+}
+
+body.dark-mode header nav a:hover {
   color: var(--secondary-color);
 }
 
@@ -60,6 +89,13 @@ header nav a:hover {
   display: flex;
   justify-content: center;
   padding: 20px;
+  transition: padding 0.3s ease-in-out;
+}
+
+body.dark-mode .search-bar {
+  background-color: var(--dark-mode-bg);
+  padding: 20px;
+  border-bottom: 1px solid #555;
 }
 
 #search-input {
@@ -68,6 +104,13 @@ header nav a:hover {
   font-size: 18px;
   border: 1px solid #ccc;
   border-radius: 5px 0 0 5px;
+  transition: border-color 0.3s ease-in-out, background-color 0.3s ease-in-out;
+}
+
+body.dark-mode #search-input {
+  background-color: var(--dark-mode-bg);
+  border-color: #555;
+  color: var(--dark-mode-text);
 }
 
 #search-button {
@@ -79,6 +122,11 @@ header nav a:hover {
   border: none;
   border-radius: 0 5px 5px 0;
   cursor: pointer;
+  transition: background-color 0.3s ease-in-out;
+}
+
+body.dark-mode #search-button {
+  background-color: var(--dark-mode-tab-bg);
 }
 
 #search-button:hover {
@@ -90,6 +138,11 @@ header nav a:hover {
   justify-content: space-between;
   padding: 10px;
   border-bottom: 1px solid #ccc;
+  transition: border-color 0.3s ease-in-out;
+}
+
+body.dark-mode .tab-bar {
+  border-bottom: 1px solid #555;
 }
 
 .tab-bar .tab {
@@ -99,6 +152,13 @@ header nav a:hover {
   border-radius: 5px;
   margin-right: 10px;
   cursor: pointer;
+  transition: background-color 0.3s ease-in-out, border-color 0.3s ease-in-out;
+}
+
+body.dark-mode .tab-bar .tab {
+  background-color: var(--dark-mode-tab-bg);
+  border-color: #555;
+  color: var(--dark-mode-text);
 }
 
 .tab-bar .tab.active {
@@ -111,7 +171,21 @@ header nav a:hover {
   color: #fff;
 }
 
+body.dark-mode .tab-bar .tab.active {
+  background-color: var(--dark-mode-tab-bg);
+}
+
+body.dark-mode .tab-bar .tab:hover {
+  background-color: var(--dark-mode-tab-bg);
+}
+
 #tab-content {
+  padding: 20px;
+  transition: padding 0.3s ease-in-out;
+}
+
+body.dark-mode #tab-content {
+  background-color: var(--dark-mode-bg);
   padding: 20px;
 }
 
@@ -125,6 +199,12 @@ header nav a:hover {
   border-radius: 5px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   display: none;
+  transition: background-color 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+body.dark-mode .settings-panel {
+  background-color: var(--dark-mode-bg);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 .settings-panel.show {
@@ -154,6 +234,12 @@ header nav a:hover {
   border-radius: 5px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   display: none;
+  transition: background-color 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+body.dark-mode .bookmarks-panel {
+  background-color: var(--dark-mode-bg);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 .bookmarks-panel.show {
@@ -167,52 +253,74 @@ header nav a:hover {
 .bookmarks-panel .bookmark a {
   text-decoration: none;
   color: var(--primary-color);
+  transition: color 0.3s ease-in-out;
+}
+
+body.dark-mode .bookmarks-panel .bookmark a {
+  color: var(--dark-mode-text);
 }
 
 .bookmarks-panel .bookmark a:hover {
   color: var(--secondary-color);
 }
 
-.dark-mode {
-  background-color: var(--dark-color);
-  color: #fff;
+.animate-search-bar {
+  animation: search-bar-animation 0.5s ease-in-out;
 }
 
-.dark-mode .container {
-  background-color: #333;
+@keyframes search-bar-animation {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
-.dark-mode .tab-bar .tab {
-  background-color: #444;
-  color: #fff;
+.animate-tab-bar {
+  animation: tab-bar-animation 0.5s ease-in-out;
 }
 
-.dark-mode .tab-bar .tab.active {
-  background-color: var(--primary-color);
+@keyframes tab-bar-animation {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.dark-mode .settings-panel {
-  background-color: #333;
+.animate-settings-panel {
+  animation: settings-panel-animation 0.5s ease-in-out;
 }
 
-.dark-mode .bookmarks-panel {
-  background-color: #333;
+@keyframes settings-panel-animation {
+  0% {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @media (max-width: 768px) {
   .container {
     max-width: 90%;
+    margin: 20px auto;
   }
   .search-bar {
-    flex-direction: column;
+    padding: 10px;
   }
-  #search-input {
-    width: 100%;
-    border-radius: 5px;
+  .tab-bar {
+    padding: 5px;
   }
-  #search-button {
-    width: 100%;
-    border-radius: 5px;
-    margin-top: 10px;
+  .tab-bar .tab {
+    margin-right: 5px;
   }
 }
