@@ -110,11 +110,11 @@ class JSRewriter {
     });
 
     js = js.replace(this.historyPushStateRegex, (match) => {
-      return `history.pushState(${this.rewriteHistoryPushState(match)})`;
+      return `history.pushState(${this.rewriteHistoryState(match)})`;
     });
 
     js = js.replace(this.historyReplaceStateRegex, (match) => {
-      return `history.replaceState(${this.rewriteHistoryReplaceState(match)})`;
+      return `history.replaceState(${this.rewriteHistoryState(match)})`;
     });
 
     return js;
@@ -129,22 +129,19 @@ class JSRewriter {
   }
 
   rewriteDynamicImport(match) {
-    return match.slice(7, -1);
-  }
-
-  rewriteRequire(match) {
-    return match.slice(8, -1);
-  }
-
-  rewriteURL(url) {
-    return url;
-  }
-
-  rewriteHistoryPushState(match) {
     return match;
   }
 
-  rewriteHistoryReplaceState(match) {
+  rewriteRequire(match) {
+    return match;
+  }
+
+  rewriteURL(url) {
+    const salt = rotatingSalt[rotatingSalt.length - 1];
+    return xorBase64Encode(url, salt);
+  }
+
+  rewriteHistoryState(match) {
     return match;
   }
 }
@@ -183,7 +180,8 @@ class HTMLRewriter {
   }
 
   rewriteURL(url) {
-    return url;
+    const salt = rotatingSalt[rotatingSalt.length - 1];
+    return xorBase64Encode(url, salt);
   }
 }
 
@@ -200,7 +198,7 @@ class CSSRewriter {
     });
 
     css = css.replace(this.importRegex, (match, p1) => {
-      return `@import "${this.rewriteURL(p1)}"`;
+      return `@import ${this.rewriteURL(p1)}`;
     });
 
     css = css.replace(this.contentRegex, (match, p1) => {
@@ -211,58 +209,104 @@ class CSSRewriter {
   }
 
   rewriteURL(url) {
-    return url;
+    const salt = rotatingSalt[rotatingSalt.length - 1];
+    return xorBase64Encode(url, salt);
   }
 }
 
-async function handleFetch(event) {
-  const request = event.request;
+async function handleRequest(request) {
   const url = new URL(request.url);
+  const salt = generateSalt();
 
   if (request.method === 'GET') {
     const response = await getResponse(request);
     if (response) {
-      event.respondWith(response);
-      return;
+      const contentType = response.headers.get('Content-Type');
+      if (contentType && contentType.includes('text/html')) {
+        const html = await response.text();
+        const rewriter = new HTMLRewriter();
+        const rewrittenHtml = rewriter.rewriteHTML(html);
+        const newResponse = new Response(rewrittenHtml, {
+          headers: {
+            'Content-Type': 'text/html',
+          },
+        });
+        await putResponse(request, newResponse);
+        return newResponse;
+      } else if (contentType && contentType.includes('application/javascript')) {
+        const js = await response.text();
+        const rewriter = new JSRewriter();
+        const rewrittenJs = rewriter.rewriteJS(js);
+        const newResponse = new Response(rewrittenJs, {
+          headers: {
+            'Content-Type': 'application/javascript',
+          },
+        });
+        await putResponse(request, newResponse);
+        return newResponse;
+      } else if (contentType && contentType.includes('text/css')) {
+        const css = await response.text();
+        const rewriter = new CSSRewriter();
+        const rewrittenCss = rewriter.rewriteCSS(css);
+        const newResponse = new Response(rewrittenCss, {
+          headers: {
+            'Content-Type': 'text/css',
+          },
+        });
+        await putResponse(request, newResponse);
+        return newResponse;
+      }
     }
   }
 
-  const salt = generateSalt();
-  const encodedUrl = xorBase64Encode(url.href, salt);
-  const proxiedRequest = new Request(`/${encodedUrl}`, {
-    method: request.method,
-    headers: request.headers,
-    body: request.body,
+  if (request.method === 'WS') {
+    const websocketUrl = url.origin + url.pathname;
+    const websocketRequest = new Request(websocketUrl, {
+      method: 'GET',
+      headers: {
+        'Upgrade': 'websocket',
+        'Connection': 'Upgrade',
+      },
+    });
+    const websocketResponse = await getResponse(websocketRequest);
+    if (websocketResponse) {
+      const websocket = new WebSocket(websocketUrl);
+      websocket.onmessage = (event) => {
+        const salt = rotatingSalt[rotatingSalt.length - 1];
+        const decodedData = xorBase64Decode(event.data, salt);
+        websocket.send(decodedData);
+      };
+      websocket.onopen = () => {
+        websocketResponse.headers.forEach((value, key) => {
+          websocket.send(`header:${key}:${value}`);
+        });
+      };
+      return websocket;
+    }
+  }
+
+  return new Response('Not Found', {
+    status: 404,
+    headers: {
+      'Content-Type': 'text/plain',
+    },
   });
-
-  const proxiedResponse = await fetch(proxiedRequest);
-  const cache = await getCache();
-  await cache.put(request, proxiedResponse.clone());
-
-  event.respondWith(proxiedResponse);
 }
 
-async function handlePrefetch(event) {
-  const url = new URL(event.url);
-  const request = new Request(url.href, {
-    method: 'GET',
-  });
+self.addEventListener('fetch', (event) => {
+  event.respondWith(handleRequest(event.request));
+});
 
-  const response = await fetch(request);
-  const cache = await getCache();
-  await cache.put(request, response);
-}
+self.addEventListener('worker', (event) => {
+  event.ports[0].onmessage = (event) => {
+    const salt = rotatingSalt[rotatingSalt.length - 1];
+    const decodedData = xorBase64Decode(event.data, salt);
+    event.ports[0].postMessage(decodedData);
+  };
+});
 
-self.addEventListener('fetch', handleFetch);
-self.addEventListener('prefetch', handlePrefetch);
-
-self.addEventListener('activate', async (event) => {
-  event.waitUntil(getCache().then((cache) => cache.keys()).then((keys) => {
+self.addEventListener('activate', (event) => {
+  event.waitUntil(getCache().then((cache) => cache.keys().then((keys) => {
     keys.forEach((key) => cache.delete(key));
-  }));
+  })));
 });
-
-self.addEventListener('install', async (event) => {
-  event.waitUntil(getCache());
-});
-```
