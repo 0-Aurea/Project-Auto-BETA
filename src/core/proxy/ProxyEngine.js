@@ -111,50 +111,91 @@ class ProxyEngine {
     const cookieHeader = req.headers.cookie;
     if (cookieHeader) {
       const cookies = cookieHeader.split(';');
-      const isolatedCookies = cookies.map((cookie) => {
-        const [key, value] = cookie.trim().split('=');
-        return `${key}=${value}; Secure; Path=/`;
+      const isolatedCookies = [];
+
+      cookies.forEach((cookie) => {
+        const [name, value] = cookie.trim().split('=');
+        isolatedCookies.push(`${name}=${value}; Domain=${url.parse(req.url).hostname}; Path=/`);
       });
+
       res.setHeader('Set-Cookie', isolatedCookies);
     }
   }
 
   /**
-   * Handles incoming HTTP requests.
+   * Handles HTTPS CONNECT requests.
+   * @param {http.IncomingMessage} req - The incoming request.
+   * @param {http.ServerResponse} res - The outgoing response.
+   */
+  handleHttpsConnect(req, res) {
+    const targetHost = req.headers['host'];
+    const targetPort = 443;
+
+    const targetSocket = tls.connect(targetHost, targetPort, () => {
+      res.writeHead(200, {
+        'Content-Type': 'text/plain'
+      });
+      res.end();
+
+      req.pipe(targetSocket);
+      targetSocket.pipe(res);
+    });
+
+    targetSocket.on('error', (error) => {
+      console.error('Target HTTPS error:', error);
+      res.destroy();
+    });
+
+    req.on('error', (error) => {
+      console.error('Client HTTPS error:', error);
+      targetSocket.destroy();
+    });
+  }
+
+  /**
+   * Handles incoming requests and upgrades them to WebSocket or HTTPS connections if necessary.
    * @param {http.IncomingMessage} req - The incoming request.
    * @param {http.ServerResponse} res - The outgoing response.
    */
   handleRequest(req, res) {
-    const targetUrl = this.decodeUrl(req.url);
-    const targetOptions = {
-      hostname: url.parse(targetUrl).hostname,
-      port: url.parse(targetUrl).port,
-      path: url.parse(targetUrl).path,
-      headers: req.headers
-    };
+    if (req.method === 'CONNECT') {
+      this.handleHttpsConnect(req, res);
+    } else if (req.headers['upgrade'] === 'websocket') {
+      this.handleWebSocket(new WebSocket(req, res), req);
+    } else {
+      const targetUrl = this.decodeUrl(req.url);
+      const targetOptions = {
+        hostname: url.parse(targetUrl).hostname,
+        port: url.parse(targetUrl).port,
+        path: url.parse(targetUrl).path,
+        headers: req.headers
+      };
 
-    const targetReq = http.request(targetOptions, (targetRes) => {
-      res.writeHead(targetRes.statusCode, targetRes.headers);
-      targetRes.pipe(res);
-    });
+      const targetReq = http.request(targetOptions, (targetRes) => {
+        res.writeHead(targetRes.statusCode, targetRes.headers);
+        targetRes.pipe(res);
+      });
 
-    req.pipe(targetReq);
+      req.pipe(targetReq);
 
-    targetReq.on('error', (error) => {
-      console.error('Target request error:', error);
-    });
+      targetReq.on('error', (error) => {
+        console.error('Target request error:', error);
+        res.destroy();
+      });
+
+      req.on('error', (error) => {
+        console.error('Client request error:', error);
+        targetReq.destroy();
+      });
+    }
   }
 
   /**
    * Starts the proxy server.
    */
   start() {
-    this.app.use((req, res) => {
-      if (req.url.startsWith('/_nexus')) {
-        this.handleRequest(req, res);
-      } else if (req.url.startsWith('/_nexus/ws')) {
-        this.handleWebSocket(req.ws, req);
-      }
+    this.server.on('request', (req, res) => {
+      this.handleRequest(req, res);
     });
 
     this.server.listen(8080, () => {
