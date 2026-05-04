@@ -139,13 +139,11 @@ const TabBar = () => {
         >
           <img src={tab.icon} alt={tab.title} />
           <span>{tab.title}</span>
-          <button onClick={() => removeTab(tab.id)}>X</button>
+          <button onClick={() => removeTab(tab.id)}>×</button>
           <div
             className="tab-content"
-            onClick={() => handleTabClick(tab.id)}
-          >
-            {tabContent[tab.id]}
-          </div>
+            dangerouslySetInnerHTML={{ __html: tab.content }}
+          />
         </div>
       ))}
       <button className="add-tab" onClick={() => addTab('', '', '', '')}>
