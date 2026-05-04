@@ -1,6 +1,7 @@
 const { URL } = require('url');
 const { Encoding } = require('./encoding');
 const { SecurityUtils } = require('./securityUtils');
+const { DEFAULT_TAB_TITLE, DEFAULT_TAB_ICON } = require('./constants');
 
 /**
  * Tab manager utility class for handling multiple tabs and their corresponding proxied pages.
@@ -17,6 +18,11 @@ class TabManager {
   static db;
 
   /**
+   * Tab history store.
+   */
+  static store;
+
+  /**
    * Opens the IndexedDB database and creates the tab history store if it doesn't exist.
    * @returns {Promise<void>}
    */
@@ -28,11 +34,12 @@ class TabManager {
 
       request.onupgradeneeded = (event) => {
         TabManager.db = event.target.result;
-        TabManager.db.createObjectStore('tabHistory', { keyPath: 'id', autoIncrement: true });
+        TabManager.store = TabManager.db.createObjectStore('tabHistory', { keyPath: 'id', autoIncrement: true });
       };
 
       request.onsuccess = (event) => {
         TabManager.db = event.target.result;
+        TabManager.store = TabManager.db.objectStore('tabHistory');
         resolve();
       };
 
@@ -47,16 +54,17 @@ class TabManager {
    * @param {string} title - The title of the tab.
    * @param {string} url - The URL of the tab.
    * @param {string} encodedUrl - The encoded URL of the tab.
+   * @param {string} [icon] - The icon of the tab.
    * @returns {Promise<void>}
    */
-  static async addTab(title, url, encodedUrl) {
+  static async addTab(title, url, encodedUrl, icon = DEFAULT_TAB_ICON) {
     await TabManager.openDB();
 
     return new Promise((resolve, reject) => {
       const transaction = TabManager.db.transaction('tabHistory', 'readwrite');
       const store = transaction.objectStore('tabHistory');
 
-      const request = store.add({ title, url, encodedUrl });
+      const request = store.add({ title, url, encodedUrl, icon });
 
       request.onsuccess = () => {
         resolve();
@@ -70,7 +78,7 @@ class TabManager {
 
   /**
    * Retrieves all tabs from the tab history.
-   * @returns {Promise<Array<{ id: number, title: string, url: string, encodedUrl: string }>>}
+   * @returns {Promise<Array<{ id: number, title: string, url: string, encodedUrl: string, icon: string }>>}
    */
   static async getTabs() {
     await TabManager.openDB();
@@ -97,9 +105,10 @@ class TabManager {
    * @param {string} title - The new title of the tab.
    * @param {string} url - The new URL of the tab.
    * @param {string} encodedUrl - The new encoded URL of the tab.
+   * @param {string} [icon] - The new icon of the tab.
    * @returns {Promise<void>}
    */
-  static async updateTab(id, title, url, encodedUrl) {
+  static async updateTab(id, title, url, encodedUrl, icon) {
     await TabManager.openDB();
 
     return new Promise((resolve, reject) => {
@@ -113,6 +122,7 @@ class TabManager {
         tab.title = title;
         tab.url = url;
         tab.encodedUrl = encodedUrl;
+        if (icon) tab.icon = icon;
 
         const updateRequest = store.put(tab);
 
@@ -179,41 +189,4 @@ class TabManager {
   }
 }
 
-/**
- * Tab class representing a single tab with its corresponding proxied page.
- */
-class Tab {
-  /**
-   * Creates a new Tab instance.
-   * @param {string} id - The ID of the tab.
-   * @param {string} title - The title of the tab.
-   * @param {string} url - The URL of the tab.
-   * @param {string} encodedUrl - The encoded URL of the tab.
-   */
-  constructor(id, title, url, encodedUrl) {
-    this.id = id;
-    this.title = title;
-    this.url = url;
-    this.encodedUrl = encodedUrl;
-  }
-
-  /**
-   * Encodes the URL of the tab using the provided salt.
-   * @param {string} salt - The salt to use for encoding.
-   * @returns {string} The encoded URL.
-   */
-  encodeUrl(salt) {
-    return SecurityUtils.xorEncode(this.url, salt);
-  }
-
-  /**
-   * Decodes the URL of the tab using the provided salt.
-   * @param {string} salt - The salt to use for decoding.
-   * @returns {string} The decoded URL.
-   */
-  decodeUrl(salt) {
-    return SecurityUtils.xorEncode(this.encodedUrl, salt);
-  }
-}
-
-module.exports = { TabManager, Tab };
+module.exports = TabManager;
