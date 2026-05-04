@@ -106,23 +106,19 @@ const SearchBar = () => {
             ))}
           </ul>
         )}
-        <div className="search-history">
-          {historyExpanded && (
-            <ul>
-              {searchHistory.map((historyItem, index) => (
-                <li key={index}>
-                  <button onClick={() => handleHistoryClick(historyItem)}>
-                    {historyItem}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <button onClick={handleHistoryToggle}>
-            {historyExpanded ? 'Hide' : 'Show'} History
-          </button>
-          <button onClick={handleHistoryClear}>Clear History</button>
-        </div>
+        {historyExpanded && (
+          <ul className="search-history">
+            {searchHistory.map((historyItem, index) => (
+              <li key={index} onClick={() => handleHistoryClick(historyItem)}>
+                {historyItem}
+              </li>
+            ))}
+            <li onClick={handleHistoryClear}>Clear History</li>
+          </ul>
+        )}
+        <button type="button" onClick={handleHistoryToggle}>
+          {historyExpanded ? 'Hide History' : 'View History'}
+        </button>
         <select value={searchEngine} onChange={handleSearchEngineChange}>
           <option value="google">Google</option>
           <option value="bing">Bing</option>
