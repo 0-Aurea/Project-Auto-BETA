@@ -98,17 +98,17 @@ class JSRewriterUtils {
 
     // Handle document.domain mutations
     jsString = jsString.replace(JSRewriterUtils.DOCUMENT_DOMAIN_REGEX, (match, p1) => {
-      return `document.domain = ${JSON.stringify(UrlUtils.getHostname(baseUrl))}`;
+      return `document.domain = ${JSON.stringify(p1)};`;
     });
 
     // Handle window.location assignments
     jsString = jsString.replace(JSRewriterUtils.WINDOW_LOCATION_REGEX, (match, p1) => {
-      return `window.location = ${JSON.stringify(UrlUtils.getUrl(baseUrl, p1))}`;
+      return `window.location = ${JSON.stringify(p1)};`;
     });
 
     // Handle window.open calls
     jsString = jsString.replace(JSRewriterUtils.WINDOW_OPEN_REGEX, (match, p1) => {
-      return `window.open(${JSON.stringify(UrlUtils.getUrl(baseUrl, p1))})`;
+      return `window.open(${JSON.stringify(p1)})`;
     });
 
     // Handle history.pushState and history.replaceState calls
@@ -120,45 +120,25 @@ class JSRewriterUtils {
   }
 
   /**
-   * Rewrites a URL to ensure it is proxied through the Nexus proxy.
+   * Rewrites a URL by applying XOR + base64 URL encoding with a rotating salt.
    * @param {string} url - The URL to rewrite.
    * @param {string} baseUrl - The base URL of the JavaScript file.
    * @returns {string} The rewritten URL.
    */
   static rewriteUrl(url, baseUrl) {
-    const urlObject = new URL(url, baseUrl);
-    const rewrittenUrl = UrlUtils.getUrl(baseUrl, urlObject.href);
-    return rewrittenUrl;
+    const absoluteUrl = new URL(url, baseUrl).href;
+    const encodedUrl = UrlUtils.encodeUrl(absoluteUrl, 'rotating_salt');
+    return encodedUrl;
   }
 
   /**
    * Strips sourceMappingURL comments from a JavaScript string.
    * @param {string} jsString - The JavaScript string to strip.
-   * @returns {string} The stripped JavaScript string.
+   * @returns {string} The JavaScript string with sourceMappingURL comments stripped.
    */
-  static stripSourceMappingURL(jsString) {
+  static stripSourceMappingUrl(jsString) {
     return jsString.replace(JSRewriterUtils.SOURCE_MAP_REGEX, '');
-  }
-
-  /**
-   * Rewrites inline event handlers to ensure they are proxied through the Nexus proxy.
-   * @param {string} jsString - The JavaScript string to rewrite.
-   * @param {string} baseUrl - The base URL of the JavaScript file.
-   * @returns {string} The rewritten JavaScript string.
-   */
-  static rewriteInlineEventHandlers(jsString, baseUrl) {
-    const dom = new JSDOM(jsString);
-    const elements = dom.window.document.querySelectorAll('[on*=""]');
-    elements.forEach((element) => {
-      const attributeName = Array.from(element.attributes).find((attribute) => attribute.name.startsWith('on'));
-      if (attributeName) {
-        const attributeValue = element.getAttribute(attributeName.name);
-        const rewrittenAttributeValue = JSRewriterUtils.rewriteUrl(attributeValue, baseUrl);
-        element.setAttribute(attributeName.name, rewrittenAttributeValue);
-      }
-    });
-    return dom.serialize();
   }
 }
 
-module.exports = JSRewriterUtils;
+module.exports = { JSRewriterUtils };
