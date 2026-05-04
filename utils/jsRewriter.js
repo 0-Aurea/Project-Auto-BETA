@@ -2,6 +2,7 @@ const { URL } = require('url');
 const { JSDOM } = require('jsdom');
 const { EncodingUtils } = require('./encoding');
 const { UrlUtils } = require('./urlUtils');
+const { SourceMapUtils } = require('./sourceMapUtils');
 
 /**
  * JavaScript rewriter utility class for handling complex JavaScript rewriting,
@@ -29,13 +30,18 @@ class JSRewriterUtils {
   static WEB_WORKER_REGEX = /new\s+Worker\s*\(\s*['"](.*?)['"]\s*\)/g;
 
   /**
+   * Regular expression to match WebSocket creation.
+   */
+  static WEB_SOCKET_REGEX = /new\s+WebSocket\s*\(\s*['"](.*?)['"]\s*\)/g;
+
+  /**
    * Regular expression to match source map URLs.
    */
   static SOURCE_MAP_REGEX = /#sourceMappingURL=(.*?)(\s|$)/g;
 
   /**
    * Rewrites a JavaScript string by handling eval(), Function(), dynamic import(),
-   * WebWorker creation, and source map URL stripping.
+   * WebWorker creation, WebSocket creation, and source map URL stripping.
    * @param {string} jsString - The JavaScript string to rewrite.
    * @param {string} baseUrl - The base URL of the JavaScript file.
    * @returns {string} The rewritten JavaScript string.
@@ -59,8 +65,14 @@ class JSRewriterUtils {
       return `new Worker(${JSON.stringify(rewrittenUrl)})`;
     });
 
+    // Handle WebSocket creation
+    jsString = jsString.replace(JSRewriterUtils.WEB_SOCKET_REGEX, (match, p1) => {
+      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p1, baseUrl);
+      return `new WebSocket(${JSON.stringify(rewrittenUrl)})`;
+    });
+
     // Handle source map URL stripping
-    jsString = jsString.replace(JSRewriterUtils.SOURCE_MAP_REGEX, () => '');
+    jsString = SourceMapUtils.stripJsSourceMap(jsString);
 
     // Handle document.domain mutations
     jsString = jsString.replace(/document\.domain\s*=\s*['"](.*?)['"]/g, (match, p1) => {
@@ -78,41 +90,27 @@ class JSRewriterUtils {
     });
 
     // Handle history.pushState and history.replaceState
-    jsString = jsString.replace(/history\.pushState\s*\(\s*.*?\s*,\s*['"](.*?)['"]/g, (match, p1) => {
+    jsString = jsString.replace(/history\.pushState\s*\(\s*[^,]+,\s*[^,]+,\s*['"](.*?)['"]/g, (match, p1) => {
       const rewrittenUrl = JSRewriterUtils.rewriteUrl(p1, baseUrl);
-      return `history.pushState(${JSON.stringify(rewrittenUrl)})`;
+      return `history.pushState({}, '', ${JSON.stringify(rewrittenUrl)})`;
     });
-    jsString = jsString.replace(/history\.replaceState\s*\(\s*.*?\s*,\s*['"](.*?)['"]/g, (match, p1) => {
+    jsString = jsString.replace(/history\.replaceState\s*\(\s*[^,]+,\s*[^,]+,\s*['"](.*?)['"]/g, (match, p1) => {
       const rewrittenUrl = JSRewriterUtils.rewriteUrl(p1, baseUrl);
-      return `history.replaceState(${JSON.stringify(rewrittenUrl)})`;
+      return `history.replaceState({}, '', ${JSON.stringify(rewrittenUrl)})`;
     });
 
     return jsString;
   }
 
   /**
-   * Rewrites a URL by applying the proxy's URL rewriting rules.
+   * Rewrites a URL to ensure it is proxied through the Nexus proxy.
    * @param {string} url - The URL to rewrite.
    * @param {string} baseUrl - The base URL of the JavaScript file.
    * @returns {string} The rewritten URL.
    */
   static rewriteUrl(url, baseUrl) {
-    const dom = new URL(url, baseUrl);
-    let rewrittenUrl = `${dom.protocol}//${dom.host}${dom.pathname}`;
-
-    if (dom.search) {
-      rewrittenUrl += dom.search;
-    }
-
-    if (dom.hash) {
-      rewrittenUrl += dom.hash;
-    }
-
-    // Apply URL rewriting rules here
-    const salt = EncodingUtils.getSalt();
-    rewrittenUrl = UrlUtils.encodeUrl(rewrittenUrl, salt);
-
-    return rewrittenUrl;
+    const absoluteUrl = new URL(url, baseUrl).href;
+    return UrlUtils.getProxiedUrl(absoluteUrl);
   }
 }
 
