@@ -1,167 +1,162 @@
 const express = require('express');
 const https = require('https');
-const fs = require('fs');
 const WebSocket = require('ws');
-const url = require('url');
-const { createProxyMiddleware } = require('http-proxy-middleware');
-const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
-const { encodeUrl, decodeUrl: decodeUrlUtil } = require('./utils/encoding');
-const zlib = require('zlib');
-const brotli = require('iltorb');
 const config = require('./lib/config');
+const cookieScoping = require('./lib/cookieScoping');
 const logger = require('./lib/logger');
-const TLSHandler = require('./lib/TLSHandler');
-const authMiddleware = require('./middleware/auth');
-const { URL } = require('url');
 
 const app = express();
-const serverConfig = config.server;
-const port = serverConfig.port;
+const httpsServer = https.createServer({
+  key: config.server.https.key,
+  cert: config.server.https.cert,
+}, app);
 
-const tlsHandler = new TLSHandler({
-  key: fs.readFileSync(serverConfig.https.key),
-  cert: fs.readFileSync(serverConfig.https.cert),
-  allowHTTP2: serverConfig.https.allowHTTP2,
-  tls: {
-    requestCert: false,
-    rejectUnauthorized: false,
-  },
-});
-
-const httpsServer = https.createServer(tlsHandler.options, app);
 const wss = new WebSocket.Server({ server: httpsServer });
 
-let rotatingSalt = Math.random().toString(36).substr(2, 10);
-
-app.use(helmet());
-app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(authMiddleware);
+app.use(cookieParser());
 
-function rewriteHeaders(req, res, next) {
+app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  res.header('Cache-Control', 'no-cache');
-  res.header('Pragma', 'no-cache');
-  res.header('Expires', 0);
-  res.header('Content-Security-Policy', "default-src 'self'; script-src 'self' https://cdn.example.com; object-src 'none'");
-  res.header('X-Frame-Options', 'DENY');
-  res.header('X-Content-Type-Options', 'nosniff');
   next();
-}
-
-function cookieScope(req, res, next) {
-  const cookieHeader = req.headers.cookie;
-  if (cookieHeader) {
-    const cookies = cookieHeader.split(';');
-    const scopedCookies = cookies.map((cookie) => {
-      const [key, value] = cookie.trim().split('=');
-      return `${key}=${value}; Domain=${req.headers.host}; Path=/; Secure; HttpOnly`;
-    });
-    res.header('Set-Cookie', scopedCookies);
-  }
-  next();
-}
-
-function handleEncodedUrl(req, res, next) {
-  const encodedUrl = req.path.substring(1);
-  try {
-    const decodedUrl = decodeUrlUtil(encodedUrl, rotatingSalt);
-    req.url = decodedUrl;
-    req.path = decodedUrl;
-    next();
-  } catch (error) {
-    logger.error('Error decoding URL:', error);
-    res.status(400).send('Invalid encoded URL');
-  }
-}
-
-function decompressBody(req, res, next) {
-  if (req.headers['content-encoding']) {
-    if (req.headers['content-encoding'].includes('gzip')) {
-      zlib.unzip(req.body, (err, buffer) => {
-        if (err) {
-          logger.error('Error decompressing body:', err);
-          next(err);
-        } else {
-          req.body = buffer;
-          req.headers['content-length'] = req.body.length;
-          next();
-        }
-      });
-    } else if (req.headers['content-encoding'].includes('br')) {
-      brotli.decompress(req.body, (err, buffer) => {
-        if (err) {
-          logger.error('Error decompressing body:', err);
-          next(err);
-        } else {
-          req.body = buffer;
-          req.headers['content-length'] = req.body.length;
-          next();
-        }
-      });
-    }
-  } else {
-    next();
-  }
-}
-
-function handleWebSocket(req, res, next) {
-  if (req.headers['upgrade'] === 'websocket') {
-    const websocketUrl = req.url;
-    const websocketReq = {
-      ...req,
-      url: websocketUrl,
-    };
-    wss.handleUpgrade(req, res, (ws) => {
-      wss.emit('connection', ws, websocketReq);
-    });
-  } else {
-    next();
-  }
-}
-
-const proxy = createProxyMiddleware({
-  target: 'http://localhost:8081',
-  changeOrigin: true,
-  onProxyReq: (proxyReq, req, res) => {
-    rewriteHeaders(req, res, () => {});
-    decompressBody(req, res, () => {});
-  },
-  onProxyRes: (proxyRes, req, res) => {
-    cookieScope(req, res, () => {});
-    res.headers['access-control-allow-origin'] = '*';
-  },
 });
 
-app.use(handleEncodedUrl);
-app.use(handleWebSocket);
-app.use(proxy);
+app.use(cookieScoping);
 
-httpsServer.listen(port, () => {
-  logger.info(`Server listening on port ${port}`);
+app.use((req, res, next) => {
+  if (req.headers['x-nexus-proxied-host']) {
+    req.headers['host'] = req.headers['x-nexus-proxied-host'];
+  }
+  next();
+});
+
+const handleProxiedRequest = (req, res) => {
+  const { hostname: proxiedHost } = req.headers['x-nexus-proxied-host'];
+  const { path, query, method, headers } = req;
+
+  const options = {
+    hostname: proxiedHost,
+    path: `${path}${query}`,
+    method,
+    headers: { ...headers },
+  };
+
+  delete options.headers['x-nexus-proxied-host'];
+
+  const proxiedReq = https.request(options, (proxiedRes) => {
+    Object.keys(proxiedRes.headers).forEach((header) => {
+      if (header !== 'transfer-encoding') {
+        res.set(header, proxiedRes.headers[header]);
+      }
+    });
+
+    res.statusCode = proxiedRes.statusCode;
+    res.statusMessage = proxiedRes.statusMessage;
+
+    proxiedRes.on('data', (chunk) => {
+      res.write(chunk);
+    });
+
+    proxiedRes.on('end', () => {
+      res.end();
+    });
+  });
+
+  proxiedReq.on('error', (error) => {
+    logger.error('Proxied request error:', error);
+    res.status(500).send({ error: 'Internal Server Error' });
+  });
+
+  req.on('data', (chunk) => {
+    proxiedReq.write(chunk);
+  });
+
+  req.on('end', () => {
+    proxiedReq.end();
+  });
+};
+
+app.use((req, res) => {
+  if (req.url.startsWith('/')) {
+    handleProxiedRequest(req, res);
+  } else {
+    res.status(404).send({ error: 'Not Found' });
+  }
 });
 
 wss.on('connection', (ws, req) => {
+  const { hostname: proxiedHost } = req.headers['x-nexus-proxied-host'];
+
+  if (!proxiedHost) {
+    return ws.close(1000, 'Bad Request');
+  }
+
+  const wsOptions = {
+    hostname: proxiedHost,
+    port: 443,
+    secure: true,
+  };
+
+  const proxiedWs = new WebSocket(`wss://${proxiedHost}`, wsOptions);
+
   ws.on('message', (message) => {
-    logger.info(`Received WebSocket message: ${message}`);
+    proxiedWs.send(message);
   });
+
   ws.on('close', () => {
-    logger.info('WebSocket connection closed');
+    proxiedWs.close();
   });
+
   ws.on('error', (error) => {
     logger.error('WebSocket error:', error);
+    proxiedWs.close(1000, 'Internal Server Error');
   });
+
+  proxiedWs.on('message', (message) => {
+    ws.send(message);
+  });
+
+  proxiedWs.on('close', () => {
+    ws.close();
+  });
+
+  proxiedWs.on('error', (error) => {
+    logger.error('Proxied WebSocket error:', error);
+    ws.close(1000, 'Internal Server Error');
+  });
+
+  // WebRTC ICE candidate scrubbing
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+      if (data.type === 'candidate') {
+        const { candidate } = data;
+        if (candidate) {
+          const scrubbedCandidate = scrubIceCandidate(candidate);
+          if (scrubbedCandidate !== candidate) {
+            data.candidate = scrubbedCandidate;
+            ws.send(JSON.stringify(data));
+          }
+        }
+      }
+    } catch (error) {
+      logger.error('Error parsing WebSocket message:', error);
+    }
+  });
+
+  const scrubIceCandidate = (candidate) => {
+    const regex = /a=ice-ufrag:([^\s]+)/g;
+    const match = candidate.match(regex);
+    if (match) {
+      return candidate.replace(regex, 'a=ice-ufrag:xxxxxxxx');
+    }
+    return candidate;
+  };
 });
 
-process.on('SIGINT', () => {
-  httpsServer.close();
-  process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-  httpsServer.close();
-  process.exit(0);
+httpsServer.listen(config.server.port, config.server.host, () => {
+  logger.info(`NEXUS proxy server listening on ${config.server.host}:${config.server.port}`);
 });
