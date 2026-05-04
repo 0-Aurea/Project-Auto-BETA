@@ -1,6 +1,7 @@
 const tls = require('tls');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 /**
  * TLS utility class for handling TLS connections and certificate management.
@@ -10,15 +11,18 @@ class TlsUtils {
    * Create a new TLS server context.
    * @param {string} certPath - The path to the TLS certificate file.
    * @param {string} keyPath - The path to the TLS private key file.
+   * @param {string} caPath - The path to the CA certificate file.
    * @returns {tls.TLSServer} The TLS server context.
    */
-  static createTlsServerContext(certPath, keyPath) {
+  static createTlsServerContext(certPath, keyPath, caPath) {
     const cert = fs.readFileSync(certPath, 'utf8');
     const key = fs.readFileSync(keyPath, 'utf8');
+    const ca = fs.readFileSync(caPath, 'utf8');
     const options = {
       cert,
       key,
-      rejectUnauthorized: false,
+      ca,
+      rejectUnauthorized: true,
     };
     return tls.createServer(options, (socket) => {
       socket.destroy();
@@ -29,15 +33,18 @@ class TlsUtils {
    * Create a new TLS client context.
    * @param {string} certPath - The path to the TLS certificate file.
    * @param {string} keyPath - The path to the TLS private key file.
+   * @param {string} caPath - The path to the CA certificate file.
    * @returns {tls.TLSSocket} The TLS client context.
    */
-  static createTlsClientContext(certPath, keyPath) {
+  static createTlsClientContext(certPath, keyPath, caPath) {
     const cert = fs.readFileSync(certPath, 'utf8');
     const key = fs.readFileSync(keyPath, 'utf8');
+    const ca = fs.readFileSync(caPath, 'utf8');
     const options = {
       cert,
       key,
-      rejectUnauthorized: false,
+      ca,
+      rejectUnauthorized: true,
     };
     return tls.connect(options, () => {});
   }
@@ -50,13 +57,30 @@ class TlsUtils {
    * @returns {object} The generated certificate.
    */
   static generateSelfSignedCert(country, organization, commonName) {
-    const openssl = require('openssl');
-    const cert = openssl.createCertificate({
-      country,
-      organization,
-      commonName,
+    const key = crypto.createPrivateKey({
+      type: 'RSA',
+      modulusLength: 2048,
     });
-    return cert;
+    const cert = crypto.createCertificate({
+      serialNumber: '01',
+      validity: {
+        notBefore: new Date(),
+        notAfter: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      },
+      subject: {
+        C: country,
+        O: organization,
+        CN: commonName,
+      },
+      issuer: {
+        C: country,
+        O: organization,
+        CN: commonName,
+      },
+      publicKey: key,
+      serial: '01',
+    });
+    return { key, cert };
   }
 
   /**
@@ -66,8 +90,8 @@ class TlsUtils {
    * @param {string} keyPath - The path to save the private key file.
    */
   static saveCertToFile(cert, certPath, keyPath) {
-    fs.writeFileSync(certPath, cert.export({ type: 'spki' }));
-    fs.writeFileSync(keyPath, cert.export({ type: 'pkcs8' }));
+    fs.writeFileSync(certPath, cert.cert.export({ type: 'spki' }));
+    fs.writeFileSync(keyPath, cert.key.export({ type: 'pkcs8' }));
   }
 
   /**
@@ -94,6 +118,16 @@ class TlsUtils {
       }
     });
     return true;
+  }
+
+  /**
+   * Get the TLS certificate fingerprint.
+   * @param {string} cert - The certificate to get the fingerprint for.
+   * @returns {string} The certificate fingerprint.
+   */
+  static getCertFingerprint(cert) {
+    const fingerprint = crypto.createHash('sha256').update(cert).digest('hex');
+    return fingerprint;
   }
 }
 
