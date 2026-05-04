@@ -2,10 +2,14 @@ const express = require('express');
 const https = require('https');
 const WebSocket = require('ws');
 const http = require('http');
+const fs = require('fs');
 const config = require('./lib/config');
 const logger = require('./lib/logger');
 const cookieParser = require('cookie-parser');
 const cookieScoping = require('./lib/cookieScoping');
+const { URL } = require('url');
+const BrotliDecompress = require('brotli-decompress');
+const zlib = require('zlib');
 
 const app = express();
 
@@ -65,8 +69,25 @@ const handleProxyRequest = async (req, res) => {
     const targetUrl = `http://${targetHost}:${targetPort}${req.url}`;
 
     const targetReq = http.request(targetUrl, (targetRes) => {
-      res.writeHead(targetRes.statusCode, targetRes.headers);
-      targetRes.pipe(res);
+      const encoding = targetRes.headers['content-encoding'];
+      let decompressedResponse;
+
+      if (encoding === 'br') {
+        decompressedResponse = new BrotliDecompress();
+      } else if (encoding === 'gzip') {
+        decompressedResponse = zlib.createGunzip();
+      }
+
+      if (decompressedResponse) {
+        targetRes.pipe(decompressedResponse).pipe(res);
+      } else {
+        res.writeHead(targetRes.statusCode, targetRes.headers);
+        targetRes.pipe(res);
+      }
+
+      targetRes.on('end', () => {
+        res.end();
+      });
     });
 
     req.pipe(targetReq);
@@ -81,7 +102,48 @@ const handleProxyRequest = async (req, res) => {
   }
 };
 
-app.all('*', handleProxyRequest);
+const handleWebSocketProxyRequest = async (req, res) => {
+  try {
+    const { hostname: proxiedHost } = req.headers['x-nexus-proxied-host'];
+    if (!proxiedHost) {
+      return res.status(400).send({ error: 'Bad Request' });
+    }
+
+    const targetHost = req.headers['x-nexus-target-host'];
+    const targetPort = req.headers['x-nexus-target-port'];
+
+    if (!targetHost || !targetPort) {
+      return res.status(400).send({ error: 'Bad Request' });
+    }
+
+    const targetUrl = `ws://${targetHost}:${targetPort}${req.url}`;
+
+    const targetWs = new WebSocket(targetUrl);
+
+    req.ws = targetWs;
+
+    targetWs.on('open', () => {
+      req.pipe(targetWs);
+      targetWs.pipe(res);
+    });
+
+    targetWs.on('error', (error) => {
+      logger.error(`Error occurred while proxying WebSocket request to ${targetUrl}: ${error}`);
+      res.status(500).send({ error: 'Internal Server Error' });
+    });
+  } catch (error) {
+    logger.error(`Error occurred while handling WebSocket proxy request: ${error}`);
+    res.status(500).send({ error: 'Internal Server Error' });
+  }
+};
+
+app.all('*', (req, res, next) => {
+  if (req.headers['upgrade'] === 'websocket') {
+    handleWebSocketProxyRequest(req, res);
+  } else {
+    handleProxyRequest(req, res);
+  }
+});
 
 const httpsServer = https.createServer({
   key: fs.readFileSync(config.server.https.key),
