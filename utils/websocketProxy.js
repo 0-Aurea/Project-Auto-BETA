@@ -17,7 +17,7 @@ class WebSocketProxyUtils {
    * Options for the WebSocket proxy.
    */
   static options = {
-    // Add WebSocket proxy options here
+    // No additional options are required for now
   };
 
   /**
@@ -40,6 +40,7 @@ class WebSocketProxyUtils {
         const targetWs = new WebSocket(origin, {
           headers: this.rewriteHeaders(headers, origin),
         });
+
         targetWs.on('open', () => {
           targetWs.send(rewrittenMessage);
         });
@@ -54,6 +55,7 @@ class WebSocketProxyUtils {
 
         targetWs.on('error', (error) => {
           console.error('Target WebSocket error:', error);
+          ws.close();
         });
 
         targetWs.on('close', () => {
@@ -63,6 +65,7 @@ class WebSocketProxyUtils {
 
       ws.on('error', (error) => {
         console.error('Client WebSocket error:', error);
+        ws.close();
       });
 
       ws.on('close', () => {
@@ -79,13 +82,17 @@ class WebSocketProxyUtils {
    * @returns {string} The rewritten WebSocket message.
    */
   static rewriteMessage(message, headers, origin) {
-    // Implement WebSocket message rewriting logic here
-    // For example, rewrite Cookie headers to isolate cookies per proxied origin
+    // Isolate cookies per proxied origin
     const cookieHeader = headers['cookie'];
     if (cookieHeader) {
       const rewrittenCookieHeader = CookieScopingUtils.isolateCookies(cookieHeader, origin);
       headers['cookie'] = rewrittenCookieHeader;
     }
+
+    // Remove sensitive headers
+    REQUEST_HEADER_REWRITE_LIST.forEach((header) => {
+      delete headers[header];
+    });
 
     // Encode URL using current salt
     const encodedOrigin = Encoding.encodeUrl(origin);
@@ -95,48 +102,36 @@ class WebSocketProxyUtils {
   }
 
   /**
-   * Rewrite WebSocket request and response headers.
-   * @param {object} headers - The WebSocket request or response headers.
+   * Rewrite WebSocket request headers.
+   * @param {object} headers - The WebSocket request headers.
    * @param {string} origin - The origin of the WebSocket request.
-   * @returns {object} The rewritten WebSocket headers.
+   * @returns {object} The rewritten WebSocket request headers.
    */
   static rewriteHeaders(headers, origin) {
-    const rewrittenHeaders = {};
+    // Isolate cookies per proxied origin
+    const cookieHeader = headers['cookie'];
+    if (cookieHeader) {
+      const rewrittenCookieHeader = CookieScopingUtils.isolateCookies(cookieHeader, origin);
+      headers['cookie'] = rewrittenCookieHeader;
+    }
 
-    // Rewrite request headers
-    Object.keys(headers).forEach((header) => {
-      if (REQUEST_HEADER_REWRITE_LIST.includes(header)) {
-        // Strip sensitive headers
-        return;
-      }
-
-      if (header.toLowerCase() === 'cookie') {
-        const rewrittenCookieHeader = CookieScopingUtils.isolateCookies(headers[header], origin);
-        rewrittenHeaders[header] = rewrittenCookieHeader;
-      } else {
-        rewrittenHeaders[header] = headers[header];
-      }
+    // Remove sensitive headers
+    REQUEST_HEADER_REWRITE_LIST.forEach((header) => {
+      delete headers[header];
     });
 
-    // Add WebSocket-specific headers
-    rewrittenHeaders['sec-websocket-protocol'] = 'nexus-proxy';
+    // Add or modify headers as needed
+    headers['sec-websocket-protocol'] = 'nexus-proxy';
 
-    return rewrittenHeaders;
+    return headers;
   }
 
   /**
-   * Handle WebSocket upgrade proxying.
-   * @param {object} req - The HTTP request object.
-   * @param {object} res - The HTTP response object.
+   * Handle WebSocket errors.
+   * @param {Error} error - The WebSocket error.
    */
-  static handleUpgrade(req, res) {
-    const { headers, url } = req;
-    const { origin, pathname } = new URL(url, 'http://example.com');
-
-    // Perform WebSocket upgrade
-    this.wss.handleUpgrade(req, res, (ws) => {
-      this.wss.emit('connection', ws, req);
-    });
+  static handleError(error) {
+    console.error('WebSocket error:', error);
   }
 }
 
