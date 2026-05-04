@@ -1,112 +1,219 @@
+const { URL } = require('url');
+const { Encoding } = require('./encoding');
+const { SecurityUtils } = require('./securityUtils');
+
+/**
+ * Tab manager utility class for handling multiple tabs and their corresponding proxied pages.
+ */
 class TabManager {
   /**
-   * Tab bar state.
+   * Storage name for tab history.
    */
-  static tabState = {};
+  static STORAGE_NAME = 'nexus-tab-history';
 
   /**
-   * Active tab ID.
-   */
-  static activeTabId;
-
-  /**
-   * Tab history.
-   */
-  static tabHistory = {};
-
-  /**
-   * IndexedDB instance for storing proxy history.
+   * IndexedDB database instance.
    */
   static db;
 
   /**
-   * Opens a new tab with the given URL.
-   * @param {string} url - The URL to open in the new tab.
-   * @param {string} title - The title of the new tab.
-   * @returns {string} The ID of the new tab.
+   * Opens the IndexedDB database and creates the tab history store if it doesn't exist.
+   * @returns {Promise<void>}
    */
-  static openTab(url, title) {
-    const tabId = Math.random().toString(36).substr(2, 9);
-    TabManager.tabState[tabId] = { url, title };
-    TabManager.activeTabId = tabId;
-    TabManager.tabHistory[tabId] = [];
-    return tabId;
+  static async openDB() {
+    if (TabManager.db) return;
+
+    return new Promise((resolve, reject) => {
+      const request = globalThis.indexedDB.open(TabManager.STORAGE_NAME, 1);
+
+      request.onupgradeneeded = (event) => {
+        TabManager.db = event.target.result;
+        TabManager.db.createObjectStore('tabHistory', { keyPath: 'id', autoIncrement: true });
+      };
+
+      request.onsuccess = (event) => {
+        TabManager.db = event.target.result;
+        resolve();
+      };
+
+      request.onerror = (event) => {
+        reject(event.target.error);
+      };
+    });
   }
 
   /**
-   * Closes a tab with the given ID.
-   * @param {string} tabId - The ID of the tab to close.
+   * Adds a new tab to the tab history.
+   * @param {string} title - The title of the tab.
+   * @param {string} url - The URL of the tab.
+   * @param {string} encodedUrl - The encoded URL of the tab.
+   * @returns {Promise<void>}
    */
-  static closeTab(tabId) {
-    delete TabManager.tabState[tabId];
-    if (TabManager.activeTabId === tabId) {
-      TabManager.activeTabId = null;
-    }
+  static async addTab(title, url, encodedUrl) {
+    await TabManager.openDB();
+
+    return new Promise((resolve, reject) => {
+      const transaction = TabManager.db.transaction('tabHistory', 'readwrite');
+      const store = transaction.objectStore('tabHistory');
+
+      const request = store.add({ title, url, encodedUrl });
+
+      request.onsuccess = () => {
+        resolve();
+      };
+
+      request.onerror = (event) => {
+        reject(event.target.error);
+      };
+    });
   }
 
   /**
-   * Updates the URL of a tab with the given ID.
-   * @param {string} tabId - The ID of the tab to update.
+   * Retrieves all tabs from the tab history.
+   * @returns {Promise<Array<{ id: number, title: string, url: string, encodedUrl: string }>>}
+   */
+  static async getTabs() {
+    await TabManager.openDB();
+
+    return new Promise((resolve, reject) => {
+      const transaction = TabManager.db.transaction('tabHistory', 'readonly');
+      const store = transaction.objectStore('tabHistory');
+
+      const request = store.getAll();
+
+      request.onsuccess = (event) => {
+        resolve(event.target.result);
+      };
+
+      request.onerror = (event) => {
+        reject(event.target.error);
+      };
+    });
+  }
+
+  /**
+   * Updates a tab in the tab history.
+   * @param {number} id - The ID of the tab to update.
+   * @param {string} title - The new title of the tab.
    * @param {string} url - The new URL of the tab.
+   * @param {string} encodedUrl - The new encoded URL of the tab.
+   * @returns {Promise<void>}
    */
-  static updateTabUrl(tabId, url) {
-    if (TabManager.tabState[tabId]) {
-      TabManager.tabState[tabId].url = url;
-    }
+  static async updateTab(id, title, url, encodedUrl) {
+    await TabManager.openDB();
+
+    return new Promise((resolve, reject) => {
+      const transaction = TabManager.db.transaction('tabHistory', 'readwrite');
+      const store = transaction.objectStore('tabHistory');
+
+      const request = store.get(id);
+
+      request.onsuccess = (event) => {
+        const tab = event.target.result;
+        tab.title = title;
+        tab.url = url;
+        tab.encodedUrl = encodedUrl;
+
+        const updateRequest = store.put(tab);
+
+        updateRequest.onsuccess = () => {
+          resolve();
+        };
+
+        updateRequest.onerror = (event) => {
+          reject(event.target.error);
+        };
+      };
+
+      request.onerror = (event) => {
+        reject(event.target.error);
+      };
+    });
   }
 
   /**
-   * Gets the current tab state.
-   * @returns {object} The current tab state.
+   * Removes a tab from the tab history.
+   * @param {number} id - The ID of the tab to remove.
+   * @returns {Promise<void>}
    */
-  static getTabState() {
-    return TabManager.tabState;
+  static async removeTab(id) {
+    await TabManager.openDB();
+
+    return new Promise((resolve, reject) => {
+      const transaction = TabManager.db.transaction('tabHistory', 'readwrite');
+      const store = transaction.objectStore('tabHistory');
+
+      const request = store.delete(id);
+
+      request.onsuccess = () => {
+        resolve();
+      };
+
+      request.onerror = (event) => {
+        reject(event.target.error);
+      };
+    });
   }
 
   /**
-   * Initializes the IndexedDB instance for storing proxy history.
+   * Clears all tabs from the tab history.
+   * @returns {Promise<void>}
    */
-  static async initHistoryDB() {
-    if (!TabManager.db) {
-      TabManager.db = await openDB('proxy-history', 1, {
-        upgrade: (db) => {
-          db.createObjectStore('history', { keyPath: 'id', autoIncrement: true });
-        },
-      });
-    }
-  }
+  static async clearTabs() {
+    await TabManager.openDB();
 
-  /**
-   * Adds a new entry to the proxy history.
-   * @param {string} tabId - The ID of the tab.
-   * @param {string} url - The URL of the proxied resource.
-   */
-  static async addHistoryEntry(tabId, url) {
-    if (TabManager.db) {
-      const tx = TabManager.db.transaction('history', 'readwrite');
-      const store = tx.objectStore('history');
-      await store.add({ tabId, url });
-    }
-  }
+    return new Promise((resolve, reject) => {
+      const transaction = TabManager.db.transaction('tabHistory', 'readwrite');
+      const store = transaction.objectStore('tabHistory');
 
-  /**
-   * Clears the proxy history for a given tab.
-   * @param {string} tabId - The ID of the tab.
-   */
-  static async clearHistory(tabId) {
-    if (TabManager.db) {
-      const tx = TabManager.db.transaction('history', 'readwrite');
-      const store = tx.objectStore('history');
-      await store.delete(tabId);
-    }
+      const request = store.clear();
+
+      request.onsuccess = () => {
+        resolve();
+      };
+
+      request.onerror = (event) => {
+        reject(event.target.error);
+      };
+    });
   }
 }
 
-async function openDB(name, version, upgradeCallback) {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(name, version);
-    request.onupgradeneeded = (e) => upgradeCallback(e.target.result);
-    request.onsuccess = (e) => resolve(e.target.result);
-    request.onerror = (e) => reject(e.target.error);
-  });
+/**
+ * Tab class representing a single tab with its corresponding proxied page.
+ */
+class Tab {
+  /**
+   * Creates a new Tab instance.
+   * @param {string} id - The ID of the tab.
+   * @param {string} title - The title of the tab.
+   * @param {string} url - The URL of the tab.
+   * @param {string} encodedUrl - The encoded URL of the tab.
+   */
+  constructor(id, title, url, encodedUrl) {
+    this.id = id;
+    this.title = title;
+    this.url = url;
+    this.encodedUrl = encodedUrl;
+  }
+
+  /**
+   * Encodes the URL of the tab using the provided salt.
+   * @param {string} salt - The salt to use for encoding.
+   * @returns {string} The encoded URL.
+   */
+  encodeUrl(salt) {
+    return SecurityUtils.xorEncode(this.url, salt);
+  }
+
+  /**
+   * Decodes the URL of the tab using the provided salt.
+   * @param {string} salt - The salt to use for decoding.
+   * @returns {string} The decoded URL.
+   */
+  decodeUrl(salt) {
+    return SecurityUtils.xorEncode(this.encodedUrl, salt);
+  }
 }
+
+module.exports = { TabManager, Tab };
