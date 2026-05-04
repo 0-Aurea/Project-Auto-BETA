@@ -106,16 +106,16 @@ class EncodingUtils {
   }
 
   /**
-   * Generates a random salt.
-   * @returns {Buffer} A random salt.
+   * Generates a random salt and updates the current salt and last rotation timestamp.
    */
-  static generateRandomSalt() {
-    return crypto.randomBytes(EncodingUtils.SALT_SIZE);
+  static rotateSalt() {
+    EncodingUtils.salt = crypto.randomBytes(EncodingUtils.SALT_SIZE);
+    EncodingUtils.lastSaltRotation = Date.now();
   }
 
   /**
-   * Validates an encoded URL.
-   * @param {string} encodedStr The encoded URL to validate.
+   * Verifies if a given encoded URL is valid.
+   * @param {string} encodedStr The encoded URL to verify.
    * @returns {boolean} True if the encoded URL is valid, false otherwise.
    */
   static isValidEncodedUrl(encodedStr) {
