@@ -5,6 +5,7 @@ const TabBar = () => {
   const [activeTab, setActiveTab] = useState(null);
   const [tabTitle, setTabTitle] = useState('');
   const [tabIcon, setTabIcon] = useState('');
+  const [tabContent, setTabContent] = useState({});
 
   useEffect(() => {
     const storedTabs = localStorage.getItem('tabs');
@@ -13,6 +14,12 @@ const TabBar = () => {
       setTabs(tabsArray);
       if (tabsArray.length > 0) {
         setActiveTab(tabsArray[0].id);
+        tabsArray.forEach((tab) => {
+          setTabContent((prevContent) => ({
+            ...prevContent,
+            [tab.id]: tab.content,
+          }));
+        });
       }
     }
   }, []);
@@ -21,20 +28,30 @@ const TabBar = () => {
     localStorage.setItem('tabs', JSON.stringify(tabs));
   }, [tabs]);
 
-  const addTab = (url, title, icon) => {
+  const addTab = (url, title, icon, content) => {
     const newTab = {
       id: Date.now(),
       url,
       title,
       icon,
+      content,
     };
     setTabs([...tabs, newTab]);
     setActiveTab(newTab.id);
+    setTabContent((prevContent) => ({
+      ...prevContent,
+      [newTab.id]: content,
+    }));
   };
 
   const removeTab = (id) => {
     const updatedTabs = tabs.filter((tab) => tab.id !== id);
     setTabs(updatedTabs);
+    setTabContent((prevContent) => {
+      const newContent = { ...prevContent };
+      delete newContent[id];
+      return newContent;
+    });
     if (activeTab === id && updatedTabs.length > 0) {
       setActiveTab(updatedTabs[0].id);
     } else if (updatedTabs.length === 0) {
@@ -62,6 +79,20 @@ const TabBar = () => {
     setTabs(updatedTabs);
   };
 
+  const updateTabContent = (id, content) => {
+    setTabContent((prevContent) => ({
+      ...prevContent,
+      [id]: content,
+    }));
+    const updatedTabs = tabs.map((tab) => {
+      if (tab.id === id) {
+        return { ...tab, content };
+      }
+      return tab;
+    });
+    setTabs(updatedTabs);
+  };
+
   const handleTabClick = (id) => {
     setActiveTab(id);
   };
@@ -81,9 +112,14 @@ const TabBar = () => {
           </button>
         </div>
       ))}
-      <button className="new-tab" onClick={() => addTab('', '', '')}>
+      <button className="new-tab" onClick={() => addTab('', '', '', '')}>
         +
       </button>
+      {activeTab && (
+        <div className="tab-content">
+          {tabContent[activeTab]}
+        </div>
+      )}
     </div>
   );
 };
