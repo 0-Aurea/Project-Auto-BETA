@@ -10,10 +10,15 @@ const SearchBar = () => {
     return storedHistory ? JSON.parse(storedHistory) : [];
   });
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [searchEngine, setSearchEngine] = useState(() => {
+    const storedEngine = localStorage.getItem('searchEngine');
+    return storedEngine ? storedEngine : 'google';
+  });
 
   useEffect(() => {
     localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
-  }, [searchHistory]);
+    localStorage.setItem('searchEngine', searchEngine);
+  }, [searchHistory, searchEngine]);
 
   const handleSearch = (event) => {
     event.preventDefault();
@@ -22,22 +27,11 @@ const SearchBar = () => {
       const updatedHistory = [...searchHistory, searchValue];
       setSearchHistory(updatedHistory);
       setSearchQuery('');
-      // Call the proxy service to handle the search query
-      fetch('/proxy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ query: searchValue }),
-      })
-        .then((response) => response.json())
-        .then((data) => {
-          console.log(data);
-          // Handle the response data
-        })
-        .catch((error) => {
-          console.error(error);
-        });
+      const url = searchEngine === 'google' ? 'https://www.google.com/search' : 'https://www.bing.com/search';
+      const params = new URLSearchParams({
+        q: searchValue,
+      });
+      window.open(`${url}?${params.toString()}`, '_blank');
     }
   };
 
@@ -86,6 +80,10 @@ const SearchBar = () => {
     setHistoryExpanded(!historyExpanded);
   };
 
+  const handleSearchEngineChange = (event) => {
+    setSearchEngine(event.target.value);
+  };
+
   return (
     <div className="search-bar">
       <form onSubmit={handleSearch}>
@@ -108,27 +106,27 @@ const SearchBar = () => {
             ))}
           </ul>
         )}
-        {searchHistory.length > 0 && (
-          <div className="search-history-container">
-            <button className="history-toggle" onClick={handleHistoryToggle}>
-              {historyExpanded ? 'Hide' : 'Show'} History
-            </button>
-            {historyExpanded && (
-              <ul className="search-history">
-                {searchHistory.map((historyItem, index) => (
-                  <li key={index}>
-                    <button onClick={() => handleHistoryClick(historyItem)}>
-                      {historyItem}
-                    </button>
-                  </li>
-                ))}
-                <li>
-                  <button onClick={handleHistoryClear}>Clear History</button>
+        <div className="search-history">
+          {historyExpanded && (
+            <ul>
+              {searchHistory.map((historyItem, index) => (
+                <li key={index}>
+                  <button onClick={() => handleHistoryClick(historyItem)}>
+                    {historyItem}
+                  </button>
                 </li>
-              </ul>
-            )}
-          </div>
-        )}
+              ))}
+            </ul>
+          )}
+          <button onClick={handleHistoryToggle}>
+            {historyExpanded ? 'Hide' : 'Show'} History
+          </button>
+          <button onClick={handleHistoryClear}>Clear History</button>
+        </div>
+        <select value={searchEngine} onChange={handleSearchEngineChange}>
+          <option value="google">Google</option>
+          <option value="bing">Bing</option>
+        </select>
       </form>
     </div>
   );
