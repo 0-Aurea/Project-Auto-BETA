@@ -1,211 +1,210 @@
-const express = require('express');
-const WebSocket = require('ws');
-const http = require('http');
-const url = require('url');
-const LRU = require('lru-cache');
-const crypto = require('crypto');
-const tls = require('tls');
-const fs = require('fs');
-const { EncodingUtils } = require('../utils/encodingUtils');
-const { URL_PREFIX, DEFAULT_ENCODING } = require('../config/constants');
+import { EncodingUtils } from '../utils/encodingUtils.js';
+import { URL_PREFIX, DEFAULT_ENCODING } from '../config/constants.js';
+import { createReadStream, createWriteStream, readFileSync } from 'fs';
+import { join } from 'path';
+import { promisify } from 'util';
+import axios from 'axios';
 
-const app = express();
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
-
-const cache = new LRU({
-  max: 1000,
-  maxAge: 1000 * 60 * 60 // 1 hour
-});
+const pipeline = promisify(require('stream').pipeline);
 
 class ProxyEngine {
   /**
    * Creates a new ProxyEngine instance.
    */
   constructor() {
-    this.app = app;
-    this.server = server;
-    this.wss = wss;
-    this.cache = cache;
+    this.cache = new Map();
   }
 
   /**
-   * Generates an encoded URL using XOR + base64 encoding with a rotating salt.
-   * @param {http.IncomingMessage} req - The incoming request.
-   * @returns {string} The encoded URL.
+   * Handles an incoming request and returns a response.
+   * @param {object} req - The incoming request object.
+   * @param {object} res - The outgoing response object.
+   * @returns {Promise<void>} A promise that resolves when the response is sent.
    */
-  generateEncodedUrl(req) {
-    const salt = EncodingUtils.getSalt().toString('hex');
-    const xorEncodedUrl = this.xorEncode(req.url, salt);
-    const base64EncodedUrl = Buffer.from(xorEncodedUrl).toString('base64');
-    return `/${URL_PREFIX}/${DEFAULT_ENCODING}/${salt}/${base64EncodedUrl}`;
-  }
+  async handleRequest(req, res) {
+    const { url: reqUrl, headers, method } = req;
 
-  /**
-   * XOR encodes a URL with a given salt.
-   * @param {string} url - The URL to encode.
-   * @param {string} salt - The salt to use for encoding.
-   * @returns {string} The XOR encoded URL.
-   */
-  xorEncode(url, salt) {
-    const urlBuffer = Buffer.from(url);
-    const saltBuffer = Buffer.from(salt, 'hex');
-    const encodedBuffer = Buffer.alloc(urlBuffer.length);
-
-    for (let i = 0; i < urlBuffer.length; i++) {
-      encodedBuffer[i] = urlBuffer[i] ^ saltBuffer[i % saltBuffer.length];
+    // Check if the request is for a proxied resource
+    if (!reqUrl.startsWith(URL_PREFIX)) {
+      return this.handleDirectRequest(req, res);
     }
 
-    return encodedBuffer.toString();
+    // Decode the URL
+    const decodedUrl = this.decodeUrl(reqUrl);
+
+    // Check if the decoded URL is valid
+    if (!decodedUrl) {
+      return this.handleError(req, res, 400, 'Invalid URL');
+    }
+
+    // Get the cached response if available
+    const cachedResponse = await this.getCachedResponse(decodedUrl);
+    if (cachedResponse) {
+      return this.sendResponse(req, res, cachedResponse);
+    }
+
+    try {
+      // Forward the request to the target server
+      const targetResponse = await this.forwardRequest(decodedUrl, req);
+
+      // Cache the response
+      await this.cacheResponse(decodedUrl, targetResponse);
+
+      // Send the response
+      return this.sendResponse(req, res, targetResponse);
+    } catch (error) {
+      return this.handleError(req, res, 500, 'Internal Server Error');
+    }
   }
 
   /**
-   * Handles incoming WebSocket connections.
-   * @param {WebSocket} ws - The WebSocket object.
-   * @param {http.IncomingMessage} req - The incoming request.
-   */
-  handleWebSocket(ws, req) {
-    const targetUrl = this.decodeUrl(req.url);
-    const targetOptions = {
-      hostname: url.parse(targetUrl).hostname,
-      port: url.parse(targetUrl).port,
-      path: url.parse(targetUrl).path,
-      headers: req.headers
-    };
-
-    const targetWs = new WebSocket(targetUrl);
-
-    ws.on('message', (message) => {
-      targetWs.send(message);
-    });
-
-    targetWs.on('message', (message) => {
-      ws.send(message);
-    });
-
-    targetWs.on('error', (error) => {
-      console.error('Target WebSocket error:', error);
-    });
-
-    ws.on('error', (error) => {
-      console.error('Client WebSocket error:', error);
-    });
-
-    ws.on('close', () => {
-      targetWs.close();
-    });
-
-    targetWs.on('close', () => {
-      ws.close();
-    });
-  }
-
-  /**
-   * Decodes a URL encoded using XOR + base64 encoding with a rotating salt.
+   * Decodes a URL encoded with XOR + base64.
    * @param {string} encodedUrl - The encoded URL.
-   * @returns {string} The decoded URL.
+   * @returns {string} The decoded URL or null if invalid.
    */
   decodeUrl(encodedUrl) {
-    const urlParts = encodedUrl.split('/');
-    if (urlParts.length < 5 || urlParts[1] !== URL_PREFIX) {
-      throw new Error('Invalid encoded URL');
+    const encodedPath = encodedUrl.substring(URL_PREFIX.length);
+    const decodedPath = EncodingUtils.decode(encodedPath);
+
+    // Validate the decoded URL
+    if (!decodedPath || !decodedPath.startsWith('http')) {
+      return null;
     }
 
-    const encoding = urlParts[2];
-    const salt = urlParts[3];
-    const base64EncodedUrl = urlParts.slice(4).join('/');
-    const xorEncodedUrl = Buffer.from(base64EncodedUrl, 'base64').toString();
-    const decodedUrl = this.xorDecode(xorEncodedUrl, salt);
-
-    return decodedUrl;
+    return decodedPath;
   }
 
   /**
-   * XOR decodes a URL with a given salt.
-   * @param {string} xorEncodedUrl - The XOR encoded URL.
-   * @param {string} salt - The salt to use for decoding.
-   * @returns {string} The decoded URL.
+   * Forwards a request to the target server.
+   * @param {string} targetUrl - The URL of the target server.
+   * @param {object} req - The incoming request object.
+   * @returns {Promise<object>} A promise that resolves with the target server's response.
    */
-  xorDecode(xorEncodedUrl, salt) {
-    const xorBuffer = Buffer.from(xorEncodedUrl);
-    const saltBuffer = Buffer.from(salt, 'hex');
-    const decodedBuffer = Buffer.alloc(xorBuffer.length);
+  async forwardRequest(targetUrl, req) {
+    const { method, headers, body } = req;
 
-    for (let i = 0; i < xorBuffer.length; i++) {
-      decodedBuffer[i] = xorBuffer[i] ^ saltBuffer[i % saltBuffer.length];
-    }
+    // Create a new request to the target server
+    const targetReq = axios({
+      method,
+      url: targetUrl,
+      headers: this.rewriteHeaders(headers),
+      data: body,
+    });
 
-    return decodedBuffer.toString();
+    // Handle the response from the target server
+    const targetResponse = await targetReq;
+
+    // Rewrite the response headers
+    const rewrittenHeaders = this.rewriteHeaders(targetResponse.headers);
+
+    // Return the rewritten response
+    return {
+      status: targetResponse.status,
+      headers: rewrittenHeaders,
+      data: targetResponse.data,
+    };
   }
 
   /**
-   * Sets up the integrated HTTPS tunnel.
+   * Rewrites the headers of a request or response.
+   * @param {object} headers - The headers to rewrite.
+   * @returns {object} The rewritten headers.
    */
-  setupHttpsTunnel() {
-    const options = {
-      key: fs.readFileSync('path/to/tls/key'),
-      cert: fs.readFileSync('path/to/tls/cert')
+  rewriteHeaders(headers) {
+    const rewrittenHeaders = {};
+
+    // Remove sensitive headers
+    for (const [key, value] of Object.entries(headers)) {
+      if (key.toLowerCase() !== 'cookie' && key.toLowerCase() !== 'authorization') {
+        rewrittenHeaders[key] = value;
+      }
+    }
+
+    // Add or modify headers as needed
+    rewrittenHeaders['Access-Control-Allow-Origin'] = '*';
+    rewrittenHeaders['Access-Control-Allow-Headers'] = 'Origin, X-Requested-With, Content-Type, Accept';
+
+    return rewrittenHeaders;
+  }
+
+  /**
+   * Caches a response.
+   * @param {string} url - The URL of the response.
+   * @param {object} response - The response to cache.
+   * @returns {Promise<void>} A promise that resolves when the response is cached.
+   */
+  async cacheResponse(url, response) {
+    const { status, headers, data } = response;
+
+    // Create a cache entry
+    const cacheEntry = {
+      status,
+      headers,
+      data,
+      ttl: Date.now() + 60 * 60 * 1000, // 1 hour
     };
 
-    const httpsServer = https.createServer(options, (req, res) => {
-      const targetUrl = this.decodeUrl(req.url);
-      const targetOptions = {
-        hostname: url.parse(targetUrl).hostname,
-        port: url.parse(targetUrl).port,
-        path: url.parse(targetUrl).path,
-        headers: req.headers
-      };
-
-      const targetReq = http.request(targetOptions, (targetRes) => {
-        res.writeHead(targetRes.statusCode, targetRes.headers);
-        targetRes.pipe(res);
-      });
-
-      req.pipe(targetReq);
-    });
-
-    httpsServer.listen(443, () => {
-      console.log('Integrated HTTPS tunnel listening on port 443');
-    });
+    // Store the cache entry
+    this.cache.set(url, cacheEntry);
   }
 
   /**
-   * Starts the proxy engine.
+   * Gets a cached response.
+   * @param {string} url - The URL of the response.
+   * @returns {Promise<object|null>} A promise that resolves with the cached response or null if not found.
    */
-  start() {
-    this.app.use((req, res) => {
-      if (req.url.startsWith(`/${URL_PREFIX}`)) {
-        const targetUrl = this.decodeUrl(req.url);
-        const targetOptions = {
-          hostname: url.parse(targetUrl).hostname,
-          port: url.parse(targetUrl).port,
-          path: url.parse(targetUrl).path,
-          headers: req.headers
-        };
+  async getCachedResponse(url) {
+    const cacheEntry = this.cache.get(url);
 
-        const targetReq = http.request(targetOptions, (targetRes) => {
-          res.writeHead(targetRes.statusCode, targetRes.headers);
-          targetRes.pipe(res);
-        });
+    // Check if the cache entry is valid
+    if (cacheEntry && cacheEntry.ttl > Date.now()) {
+      return cacheEntry;
+    }
 
-        req.pipe(targetReq);
-      } else {
-        res.statusCode = 404;
-        res.end('Not Found');
-      }
-    });
+    return null;
+  }
 
-    this.wss.on('connection', (ws, req) => {
-      this.handleWebSocket(ws, req);
-    });
+  /**
+   * Sends a response to the client.
+   * @param {object} req - The incoming request object.
+   * @param {object} res - The outgoing response object.
+   * @param {object} response - The response to send.
+   * @returns {Promise<void>} A promise that resolves when the response is sent.
+   */
+  async sendResponse(req, res, response) {
+    const { status, headers, data } = response;
 
-    this.server.listen(8080, () => {
-      console.log('Proxy engine listening on port 8080');
-    });
+    // Set the response status and headers
+    res.status(status);
+    for (const [key, value] of Object.entries(headers)) {
+      res.set(key, value);
+    }
 
-    this.setupHttpsTunnel();
+    // Send the response data
+    res.send(data);
+  }
+
+  /**
+   * Handles a direct request (not proxied).
+   * @param {object} req - The incoming request object.
+   * @param {object} res - The outgoing response object.
+   * @returns {Promise<void>} A promise that resolves when the response is sent.
+   */
+  async handleDirectRequest(req, res) {
+    // Implement direct request handling logic here
+  }
+
+  /**
+   * Handles an error.
+   * @param {object} req - The incoming request object.
+   * @param {object} res - The outgoing response object.
+   * @param {number} status - The error status code.
+   * @param {string} message - The error message.
+   * @returns {Promise<void>} A promise that resolves when the error response is sent.
+   */
+  async handleError(req, res, status, message) {
+    res.status(status).send(message);
   }
 }
 
-const proxyEngine = new ProxyEngine();
-proxyEngine.start();
+export { ProxyEngine };
