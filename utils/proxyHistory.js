@@ -23,7 +23,10 @@ class ProxyHistory {
    * Initialize the proxy history utility.
    */
   static async init() {
-    ProxyHistory.db = await openDB(ProxyHistory.DB_NAME, ProxyHistory.OBJECT_STORE_NAME);
+    ProxyHistory.db = await openDB(ProxyHistory.DB_NAME, ProxyHistory.OBJECT_STORE_NAME, {
+      keyPath: 'url',
+      autoIncrement: false,
+    });
   }
 
   /**
@@ -33,6 +36,9 @@ class ProxyHistory {
    * @param {string} icon - The icon of the page.
    */
   static async addEntry(title, url, icon) {
+    if (!title || !url || !icon) {
+      throw new Error('Title, URL, and icon are required');
+    }
     const tx = ProxyHistory.db.transaction(ProxyHistory.OBJECT_STORE_NAME, 'readwrite');
     const store = tx.objectStore(ProxyHistory.OBJECT_STORE_NAME);
     await store.add({ title, url, icon, timestamp: Date.now() });
@@ -58,6 +64,9 @@ class ProxyHistory {
    * @returns {Promise<*>} A proxy history entry.
    */
   static async getEntryByUrl(url) {
+    if (!url) {
+      throw new Error('URL is required');
+    }
     const tx = ProxyHistory.db.transaction(ProxyHistory.OBJECT_STORE_NAME, 'readonly');
     const store = tx.objectStore(ProxyHistory.OBJECT_STORE_NAME);
     const request = store.get(url);
@@ -73,6 +82,9 @@ class ProxyHistory {
    * @param {object} data - The updated data.
    */
   static async updateEntry(url, data) {
+    if (!url || !data) {
+      throw new Error('URL and data are required');
+    }
     const tx = ProxyHistory.db.transaction(ProxyHistory.OBJECT_STORE_NAME, 'readwrite');
     const store = tx.objectStore(ProxyHistory.OBJECT_STORE_NAME);
     const request = store.get(url);
@@ -92,17 +104,20 @@ class ProxyHistory {
   }
 
   /**
-   * Deletes an entry from the proxy history by its URL.
+   * Deletes an entry from the proxy history.
    * @param {string} url - The URL of the page.
    */
   static async deleteEntry(url) {
+    if (!url) {
+      throw new Error('URL is required');
+    }
     const tx = ProxyHistory.db.transaction(ProxyHistory.OBJECT_STORE_NAME, 'readwrite');
     const store = tx.objectStore(ProxyHistory.OBJECT_STORE_NAME);
     await store.delete(url);
   }
 
   /**
-   * Clears the entire proxy history.
+   * Clears all entries from the proxy history.
    */
   static async clearHistory() {
     const tx = ProxyHistory.db.transaction(ProxyHistory.OBJECT_STORE_NAME, 'readwrite');
@@ -110,8 +125,5 @@ class ProxyHistory {
     await store.clear();
   }
 }
-
-// Initialize the proxy history utility
-ProxyHistory.init();
 
 module.exports = ProxyHistory;
