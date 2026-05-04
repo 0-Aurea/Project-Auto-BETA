@@ -10,7 +10,9 @@ const { encodeUrl, decodeUrl: decodeUrlUtil } = require('./utils/encoding');
 const zlib = require('zlib');
 const brotli = require('iltorb');
 const config = require('./lib/config');
+const logger = require('./lib/logger');
 const TLSHandler = require('./lib/TLSHandler');
+const authMiddleware = require('./middleware/auth');
 
 const app = express();
 const serverConfig = config.server;
@@ -36,6 +38,7 @@ app.use(helmet());
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(authMiddleware);
 
 function rewriteHeaders(req, res, next) {
   res.header('Access-Control-Allow-Origin', '*');
@@ -43,7 +46,6 @@ function rewriteHeaders(req, res, next) {
   res.header('Cache-Control', 'no-cache');
   res.header('Pragma', 'no-cache');
   res.header('Expires', 0);
-  // res.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   res.header('Content-Security-Policy', "default-src 'self'; script-src 'self' https://cdn.example.com; object-src 'none'");
   res.header('X-Frame-Options', 'DENY');
   res.header('X-Content-Type-Options', 'nosniff');
@@ -71,6 +73,7 @@ function handleEncodedUrl(req, res, next) {
     req.path = decodedUrl;
     next();
   } catch (error) {
+    logger.error('Error decoding URL:', error);
     res.status(400).send('Invalid encoded URL');
   }
 }
@@ -80,6 +83,7 @@ function decompressBody(req, res, next) {
     if (req.headers['content-encoding'].includes('gzip')) {
       zlib.unzip(req.body, (err, buffer) => {
         if (err) {
+          logger.error('Error decompressing body:', err);
           next(err);
         } else {
           req.body = buffer;
@@ -91,6 +95,7 @@ function decompressBody(req, res, next) {
     } else if (req.headers['content-encoding'].includes('br')) {
       brotli.decompress(req.body, (err, buffer) => {
         if (err) {
+          logger.error('Error decompressing body:', err);
           next(err);
         } else {
           req.body = buffer;
@@ -99,6 +104,8 @@ function decompressBody(req, res, next) {
           next();
         }
       });
+    } else {
+      next();
     }
   } else {
     next();
@@ -115,10 +122,7 @@ const proxyOptions = {
   changeOrigin: true,
   pathRewrite: { '^/': '' },
   onProxyReq: (proxyReq, req, res) => {
-    proxyReq.headers['content-encoding'] = req.headers['content-encoding'];
-  },
-  onProxyRes: (proxyRes, req, res) => {
-    proxyRes.headers['content-encoding'] = req.headers['content-encoding'];
+    logger.info('Proxying request:', proxyReq.path);
   },
 };
 
@@ -126,53 +130,28 @@ const proxy = createProxyMiddleware(proxyOptions);
 
 app.use(proxy);
 
-wss.on('connection', (ws, req) => {
-  const { hostname, port } = url.parse(req.url, true);
-  const target = `${hostname}:${port}`;
-
-  const wsProxy = new WebSocket(target);
-
+wss.on('connection', (ws) => {
+  logger.info('WebSocket connection established');
   ws.on('message', (message) => {
-    wsProxy.send(message);
+    logger.info('Received WebSocket message:', message);
   });
-
-  wsProxy.on('message', (message) => {
-    ws.send(message);
-  });
-
   ws.on('close', () => {
-    wsProxy.close();
-  });
-
-  wsProxy.on('close', () => {
-    ws.close();
-  });
-
-  ws.on('error', (error) => {
-    console.error('WebSocket error:', error);
-  });
-
-  wsProxy.on('error', (error) => {
-    console.error('WebSocket proxy error:', error);
+    logger.info('WebSocket connection closed');
   });
 });
 
 httpsServer.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
+  logger.info(`Server listening on port ${port}`);
 });
 
 process.on('SIGINT', () => {
+  logger.info('Server shutting down');
   httpsServer.close();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
+  logger.info('Server shutting down');
   httpsServer.close();
   process.exit(0);
-});
-
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught exception:', err);
-  httpsServer.close();
-  process.exit(1);
 });
