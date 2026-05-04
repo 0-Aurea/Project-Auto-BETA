@@ -1,6 +1,7 @@
 const { caches } = globalThis;
 const { URL } = require('url');
 const { CACHE_NAME, MAX_CACHE_AGE, PREFETCH_THRESHOLD } = require('./constants');
+const { performance } = require('perf_hooks');
 
 /**
  * Cache manager utility class for handling Service Worker Cache API operations.
@@ -92,38 +93,43 @@ class CacheManager {
   }
 
   /**
-   * Caches prefetch hints.
-   * @param {HTMLLinkElement} linkElement - The link element to cache.
-   * @returns {Promise<void>} A promise that resolves when the prefetch hint is cached.
+   * Checks if the cache has reached its maximum size.
+   * @returns {Promise<boolean>} A promise that resolves with true if the cache is full, false otherwise.
    */
-  static async cachePrefetchHint(linkElement) {
-    if (linkElement.rel === 'prefetch' || linkElement.rel === 'preload') {
-      const href = linkElement.href;
-      if (href.startsWith('https://') && !href.includes('localhost')) {
-        const prefetchRequest = new Request(href, { method: 'HEAD' });
-        const prefetchResponse = await CacheManager.getCachedResponse(prefetchRequest);
-        if (!prefetchResponse) {
-          const response = await fetch(href, { method: 'HEAD' });
-          await CacheManager.cacheResponse(prefetchRequest, response);
-        }
-      }
-    }
+  static async isCacheFull() {
+    const cache = await CacheManager.cache.keys();
+    const cacheSize = Array.from(cache).length;
+    return cacheSize >= 1000; // arbitrary cache size limit
   }
 
   /**
-   * Periodically cleans up expired cache entries.
+   * Evicts the least recently used cache entry.
+   * @returns {Promise<void>} A promise that resolves when the cache entry is evicted.
    */
-  static async cleanupExpiredEntries() {
-    const cacheKeys = await CacheManager.cache.keys();
-    for (const cacheKey of cacheKeys) {
-      const cachedResponse = await CacheManager.cache.match(cacheKey);
-      if (cachedResponse) {
-        const cacheControl = cachedResponse.headers.get('cache-control');
-        if (cacheControl) {
-          const maxAge = parseInt(cacheControl.split('max-age=')[1].split(',')[0]);
-          if (maxAge < MAX_CACHE_AGE) {
-            await CacheManager.removeCachedResponse(cacheKey);
-          }
+  static async evictLRUCacheEntry() {
+    const cache = await CacheManager.cache.keys();
+    const cacheEntries = Array.from(cache);
+    cacheEntries.sort((a, b) => a.timestamp - b.timestamp);
+    const lruEntry = cacheEntries[0];
+    await CacheManager.cache.delete(lruEntry.request);
+  }
+
+  /**
+   * Periodically cleans up the cache by removing expired and invalid entries.
+   * @returns {Promise<void>} A promise that resolves when the cache cleanup is complete.
+   */
+  static async cleanupCache() {
+    const cache = await CacheManager.cache.keys();
+    const cacheEntries = Array.from(cache);
+    const now = performance.now();
+    for (const entry of cacheEntries) {
+      const response = await CacheManager.cache.match(entry.request);
+      if (response && response.headers.get('cache-control')?.includes('expired')) {
+        await CacheManager.cache.delete(entry.request);
+      } else if (response && response.headers.get('cache-control')?.includes('max-age')) {
+        const ttl = parseInt(response.headers.get('cache-control').split('max-age=')[1].split(',')[0]);
+        if (now > entry.timestamp + ttl * 1000) {
+          await CacheManager.cache.delete(entry.request);
         }
       }
     }
