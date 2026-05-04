@@ -1,11 +1,14 @@
 import { EncodingUtils } from '../utils/encodingUtils.js';
-import { URL_PREFIX, DEFAULT_ENCODING, SALT_LENGTH } from '../config/constants.js';
+import { URL_PREFIX, DEFAULT_ENCODING, SALT_LENGTH, cache, rotatingSalt, wss, server } from '../config/constants.js';
 import { createReadStream, createWriteStream, readFileSync } from 'fs';
 import { join } from 'path';
 import { promisify } from 'util';
 import axios from 'axios';
 import WebSocket from 'ws';
 import { v4 as uuidv4 } from 'uuid';
+import LRU from 'lru-cache';
+import crypto from 'crypto';
+import tls from 'tls';
 
 const pipeline = promisify(require('stream').pipeline');
 
@@ -18,7 +21,10 @@ class ProxyEngine {
    */
   constructor() {
     this.wsClients = new Map();
-    this.cache = new Map();
+    this.cache = new LRU({
+      max: 1000,
+      maxAge: 1000 * 60 * 60 // 1 hour
+    });
   }
 
   /**
@@ -58,6 +64,15 @@ class ProxyEngine {
 
       // Rewrite the response headers
       const rewrittenHeaders = this.rewriteHeaders(response.headers);
+
+      // Remove hop-by-hop headers
+      delete rewrittenHeaders['connection'];
+      delete rewrittenHeaders['keep-alive'];
+      delete rewrittenHeaders['proxy-authenticate'];
+      delete rewrittenHeaders['proxy-authorization'];
+      delete rewrittenHeaders['te'];
+      delete rewrittenHeaders['trailers'];
+      delete rewrittenHeaders['upgrade'];
 
       // Cache the response
       this.cache.set(rewrittenUrl, {
@@ -108,22 +123,19 @@ class ProxyEngine {
 
     // Handle WebSocket close
     wsClient.on('close', () => {
-      // Remove the WebSocket client from the map
       this.wsClients.delete(reqUrl);
     });
 
-    // Handle WebSocket open
-    wsClient.on('open', () => {
-      // Send the WebSocket upgrade response
-      res.writeHead(101, {
-        'Upgrade': 'websocket',
-        'Connection': 'Upgrade',
-      });
-      res.end();
-    });
-
-    // Add the WebSocket client to the map
+    // Store the WebSocket client
     this.wsClients.set(reqUrl, wsClient);
+
+    // Send the WebSocket response
+    res.writeHead(101, {
+      'Upgrade': 'websocket',
+      'Connection': 'Upgrade',
+      'Sec-WebSocket-Accept': this.getWebSocketAccept(headers['sec-webSocket-key']),
+    });
+    res.end();
   }
 
   /**
@@ -146,18 +158,17 @@ class ProxyEngine {
   rewriteHeaders(headers) {
     const rewrittenHeaders = { ...headers };
 
-    // Strip CSP, HSTS, X-Frame-Options
-    delete rewrittenHeaders['content-security-policy'];
-    delete rewrittenHeaders['strict-transport-security'];
-    delete rewrittenHeaders['x-frame-options'];
+    // Remove hop-by-hop headers
+    delete rewrittenHeaders['connection'];
+    delete rewrittenHeaders['keep-alive'];
+    delete rewrittenHeaders['proxy-authenticate'];
+    delete rewrittenHeaders['proxy-authorization'];
+    delete rewrittenHeaders['te'];
+    delete rewrittenHeaders['trailers'];
+    delete rewrittenHeaders['upgrade'];
 
-    // Rewrite Cookie header to isolate cookies per proxied origin
-    if (rewrittenHeaders.cookie) {
-      rewrittenHeaders.cookie = rewrittenHeaders.cookie.split(';').map((cookie) => {
-        const [key, value] = cookie.trim().split('=');
-        return `${key}=${value}`;
-      }).join(';');
-    }
+    // Rewrite the Host header
+    rewrittenHeaders['host'] = rewrittenHeaders['host'].replace(':', '');
 
     return rewrittenHeaders;
   }
@@ -168,37 +179,58 @@ class ProxyEngine {
    * @returns {string} The rewritten message.
    */
   rewriteWebSocketMessage(message) {
-    // TO DO: implement WebSocket message rewriting
+    // Implement WebSocket message rewriting logic here
     return message;
   }
 
   /**
-   * Handles dynamic import rewriting.
-   * @param {string} importStatement - The original import statement.
-   * @returns {string} The rewritten import statement.
+   * Returns the WebSocket accept header value.
+   * @param {string} key - The WebSocket key.
+   * @returns {string} The WebSocket accept header value.
    */
-  rewriteDynamicImport(importStatement) {
-    // Use a regex to match the import statement
-    const importRegex = /import\((['"])(.*?)\1\)/g;
-    return importStatement.replace(importRegex, (match, quote, url) => {
-      const rewrittenUrl = this.rewriteUrl(url);
-      return `import(${quote}${rewrittenUrl}${quote})`;
-    });
+  getWebSocketAccept(key) {
+    return crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
   }
 
   /**
-   * Handles eval() rewriting.
-   * @param {string} evalStatement - The original eval statement.
-   * @returns {string} The rewritten eval statement.
+   * Integrated HTTPS tunnel.
    */
-  rewriteEval(evalStatement) {
-    // Use a regex to match the eval statement
-    const evalRegex = /eval\((['"])(.*?)\1\)/g;
-    return evalStatement.replace(evalRegex, (match, quote, code) => {
-      // TO DO: implement eval rewriting
-      return match;
+  async handleHttpsTunnel(req, res) {
+    const { headers, url: reqUrl } = req;
+    const { host, referer } = headers;
+
+    // Create a new TLS tunnel
+    const tlsSocket = tls.connect({
+      host: host,
+      port: 443,
+      rejectUnauthorized: false,
+    }, () => {
+      // Send the HTTPS request
+      const httpsReq = {
+        method: req.method,
+        headers: this.rewriteHeaders(headers),
+        url: `https://${host}${reqUrl}`,
+      };
+
+      // Pipe the request and response streams
+      const tlsReq = axios({
+        method: httpsReq.method,
+        url: httpsReq.url,
+        headers: httpsReq.headers,
+        data: req.body,
+        responseType: 'stream',
+      });
+
+      pipeline(tlsReq, res).catch((error) => {
+        console.error(error);
+      });
+    });
+
+    // Handle TLS errors
+    tlsSocket.on('error', (error) => {
+      console.error(error);
     });
   }
 }
 
-export default ProxyEngine;
+export { ProxyEngine };
