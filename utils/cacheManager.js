@@ -1,151 +1,66 @@
-const { CacheAPI } = require('sw-cache-api');
-const { MAX_CACHE_AGE, CACHE_NAME } = require('./constants');
-const { HeaderRewriterUtils } = require('./headerRewriter');
+const LRU = require('lru-cache');
 
 /**
- * Cache Manager utility class for handling cache storage, retrieval, and eviction.
+ * Cache manager utility class for handling caching with LRU eviction policy.
  */
 class CacheManager {
   /**
-   * Cache storage instance.
+   * Constructor for CacheManager.
+   * @param {object} options - Options for the LRU cache.
    */
-  static cache = new CacheAPI(CACHE_NAME);
-
-  /**
-   * Cache entry TTL (time to live) in milliseconds.
-   */
-  static MAX_CACHE_AGE = MAX_CACHE_AGE;
-
-  /**
-   * Checks if a cache entry exists and is valid.
-   * @param {string} key - The cache key.
-   * @returns {Promise<boolean>} True if the cache entry exists and is valid, false otherwise.
-   */
-  static async isValidCacheEntry(key) {
-    const cachedResponse = await CacheManager.cache.match(key);
-    if (!cachedResponse) return false;
-    const headers = cachedResponse.headers;
-    const cacheControl = headers.get('cache-control');
-    let ttl = CacheManager.MAX_CACHE_AGE;
-
-    if (cacheControl) {
-      const cacheControlDirectives = cacheControl.split(',').map((directive) => directive.trim());
-      for (const directive of cacheControlDirectives) {
-        if (directive.startsWith('max-age=')) {
-          const maxAge = parseInt(directive.substring(8), 10);
-          if (!isNaN(maxAge)) {
-            ttl = maxAge * 1000;
-          }
-          break;
-        }
-      }
-    }
-
-    return Date.now() - cachedResponse.timestamp <= ttl;
+  constructor(options) {
+    this.cache = new LRU(options);
   }
 
   /**
-   * Retrieves a cache entry.
-   * @param {string} key - The cache key.
-   * @returns {Promise<Response>} The cached Response object, or undefined if not found.
+   * Gets a value from the cache.
+   * @param {string} key - The key to retrieve from the cache.
+   * @returns {*} The cached value or undefined if not found.
    */
-  static async getCacheEntry(key) {
-    if (await CacheManager.isValidCacheEntry(key)) {
-      return CacheManager.cache.match(key);
-    } else {
-      await CacheManager.removeCacheEntry(key);
-      return undefined;
-    }
+  get(key) {
+    return this.cache.get(key);
   }
 
   /**
-   * Stores a cache entry.
-   * @param {string} key - The cache key.
-   * @param {Response} response - The Response object to cache.
-   * @returns {Promise<void>}
+   * Sets a value in the cache.
+   * @param {string} key - The key to store in the cache.
+   * @param {*} value - The value to store in the cache.
+   * @param {number} [ttl] - The time to live in milliseconds.
    */
-  static async storeCacheEntry(key, response) {
-    const clonedResponse = response.clone();
-    const rewrittenHeaders = HeaderRewriterUtils.rewriteResponseHeaders(clonedResponse.headers);
-    clonedResponse.headers = rewrittenHeaders;
-    await CacheManager.cache.put(key, clonedResponse);
+  set(key, value, ttl) {
+    this.cache.set(key, value, ttl);
   }
 
   /**
-   * Removes a cache entry.
-   * @param {string} key - The cache key.
-   * @returns {Promise<void>}
+   * Deletes a value from the cache.
+   * @param {string} key - The key to delete from the cache.
    */
-  static async removeCacheEntry(key) {
-    await CacheManager.cache.delete(key);
+  delete(key) {
+    this.cache.del(key);
   }
 
   /**
-   * Clears all cache entries.
-   * @returns {Promise<void>}
+   * Checks if a key exists in the cache.
+   * @param {string} key - The key to check in the cache.
+   * @returns {boolean} True if the key exists, false otherwise.
    */
-  static async clearCache() {
-    await CacheManager.cache.keys().then(async (keys) => {
-      for (const key of keys) {
-        await CacheManager.removeCacheEntry(key);
-      }
-    });
+  has(key) {
+    return this.cache.has(key);
   }
 
   /**
-   * Prefetches a cache entry.
-   * @param {string} key - The cache key.
-   * @param {string} url - The URL to prefetch.
-   * @returns {Promise<void>}
+   * Clears the entire cache.
    */
-  static async prefetchCacheEntry(key, url) {
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
-        await CacheManager.storeCacheEntry(key, response.clone());
-      }
-    } catch (error) {
-      globalThis.console.error(`Error prefetching cache entry: ${error}`);
-    }
+  clear() {
+    this.cache.clear();
   }
 
   /**
-   * Parses cache control headers and determines the TTL for a cache entry.
-   * @param {Headers} headers - The response headers.
-   * @returns {number} The TTL in milliseconds.
+   * Returns the number of items in the cache.
+   * @returns {number} The number of items in the cache.
    */
-  static parseCacheControl(headers) {
-    const cacheControl = headers.get('cache-control');
-    let ttl = CacheManager.MAX_CACHE_AGE;
-
-    if (cacheControl) {
-      const cacheControlDirectives = cacheControl.split(',').map((directive) => directive.trim());
-      for (const directive of cacheControlDirectives) {
-        if (directive.startsWith('max-age=')) {
-          const maxAge = parseInt(directive.substring(8), 10);
-          if (!isNaN(maxAge)) {
-            ttl = maxAge * 1000;
-          }
-          break;
-        }
-      }
-    }
-
-    return ttl;
-  }
-
-  /**
-   * Caches a response with a TTL based on the cache control headers.
-   * @param {string} key - The cache key.
-   * @param {Response} response - The Response object to cache.
-   * @returns {Promise<void>}
-   */
-  static async cacheResponseWithTTL(key, response) {
-    const ttl = CacheManager.parseCacheControl(response.headers);
-    const cachedResponse = new Response(response.body, response);
-    cachedResponse.timestamp = Date.now();
-    cachedResponse.ttl = ttl;
-    await CacheManager.storeCacheEntry(key, cachedResponse);
+  size() {
+    return this.cache.size;
   }
 }
 
