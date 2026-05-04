@@ -1,136 +1,100 @@
 import React, { useState, useEffect } from 'react';
 
 const SettingsPanel = () => {
-  const [encodingMode, setEncodingMode] = useState('base64');
+  const [isOpen, setIsOpen] = useState(false);
   const [cacheEnabled, setCacheEnabled] = useState(true);
-  const [adBlockEnabled, setAdBlockEnabled] = useState(true);
-  const [prefetchEnabled, setPrefetchEnabled] = useState(true);
   const [cacheTTL, setCacheTTL] = useState(3600); // 1 hour default
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [prefetchEnabled, setPrefetchEnabled] = useState(true);
+  const [adBlockEnabled, setAdBlockEnabled] = useState(true);
+  const [adBlockList, setAdBlockList] = useState([]);
+  const [encodingMode, setEncodingMode] = useState('xor-base64');
 
   useEffect(() => {
     const storedSettings = localStorage.getItem('settings');
     if (storedSettings) {
       const settings = JSON.parse(storedSettings);
-      setEncodingMode(settings.encodingMode);
       setCacheEnabled(settings.cacheEnabled);
-      setAdBlockEnabled(settings.adBlockEnabled);
-      setPrefetchEnabled(settings.prefetchEnabled);
       setCacheTTL(settings.cacheTTL);
+      setPrefetchEnabled(settings.prefetchEnabled);
+      setAdBlockEnabled(settings.adBlockEnabled);
+      setAdBlockList(settings.adBlockList);
+      setEncodingMode(settings.encodingMode);
     }
   }, []);
 
   useEffect(() => {
     localStorage.setItem('settings', JSON.stringify({
-      encodingMode,
       cacheEnabled,
-      adBlockEnabled,
-      prefetchEnabled,
       cacheTTL,
+      prefetchEnabled,
+      adBlockEnabled,
+      adBlockList,
+      encodingMode,
     }));
-  }, [encodingMode, cacheEnabled, adBlockEnabled, prefetchEnabled, cacheTTL]);
+  }, [cacheEnabled, cacheTTL, prefetchEnabled, adBlockEnabled, adBlockList, encodingMode]);
 
-  const handleEncodingModeChange = (event) => {
-    setEncodingMode(event.target.value);
-  };
-
-  const handleCacheToggle = () => {
-    setCacheEnabled(!cacheEnabled);
-  };
-
-  const handleAdBlockToggle = () => {
-    setAdBlockEnabled(!adBlockEnabled);
-  };
-
-  const handlePrefetchToggle = () => {
-    setPrefetchEnabled(!prefetchEnabled);
+  const handleCacheEnabledChange = (event) => {
+    setCacheEnabled(event.target.checked);
   };
 
   const handleCacheTTLChange = (event) => {
     setCacheTTL(event.target.value);
   };
 
-  const handleSettingsToggle = () => {
-    setSettingsOpen(!settingsOpen);
+  const handlePrefetchEnabledChange = (event) => {
+    setPrefetchEnabled(event.target.checked);
   };
 
-  const handleResetSettings = () => {
-    setEncodingMode('base64');
-    setCacheEnabled(true);
-    setAdBlockEnabled(true);
-    setPrefetchEnabled(true);
-    setCacheTTL(3600);
+  const handleAdBlockEnabledChange = (event) => {
+    setAdBlockEnabled(event.target.checked);
+  };
+
+  const handleAdBlockListChange = (event) => {
+    setAdBlockList(event.target.value.split(','));
+  };
+
+  const handleEncodingModeChange = (event) => {
+    setEncodingMode(event.target.value);
   };
 
   return (
-    <div className="settings-panel" id="settings-panel">
-      <button className="settings-toggle" id="settings-toggle" onClick={handleSettingsToggle}>
-        {settingsOpen ? 'Close Settings' : 'Open Settings'}
+    <div className={`settings-panel ${isOpen ? 'open' : ''}`}>
+      <button className="settings-toggle" onClick={() => setIsOpen(!isOpen)}>
+        Settings
       </button>
-      {settingsOpen && (
-        <div className="settings-content">
-          <h2>Settings</h2>
-          <div className="settings-group">
-            <label>Encoding Mode:</label>
-            <select value={encodingMode} onChange={handleEncodingModeChange}>
-              <option value="base64">Base64</option>
-              <option value="xor">XOR</option>
-            </select>
-          </div>
-          <div className="settings-group">
-            <label>
-              <input
-                type="checkbox"
-                checked={cacheEnabled}
-                onChange={handleCacheToggle}
-              />
-              Enable Cache
-            </label>
-            <small>Cache helps improve performance by storing frequently accessed resources locally.</small>
-          </div>
-          {cacheEnabled && (
-            <div className="settings-group">
-              <label>Cache TTL (seconds):</label>
-              <input
-                type="number"
-                value={cacheTTL}
-                onChange={handleCacheTTLChange}
-              />
-              <small>Sets the time to live for cached resources.</small>
-            </div>
-          )}
-          <div className="settings-group">
-            <label>
-              <input
-                type="checkbox"
-                checked={prefetchEnabled}
-                onChange={handlePrefetchToggle}
-              />
-              Enable Prefetch Hints
-            </label>
-            <small>Prefetch hints help improve performance by caching resources before they are requested.</small>
-          </div>
-          <div className="settings-group">
-            <label>
-              <input
-                type="checkbox"
-                checked={adBlockEnabled}
-                onChange={handleAdBlockToggle}
-              />
-              Enable Ad Block
-            </label>
-            <small>Ad block helps prevent ads from being displayed on proxied websites.</small>
-          </div>
-          <div className="settings-group">
-            <button
-              className="reset-settings"
-              onClick={handleResetSettings}
-            >
-              Reset Settings
-            </button>
-          </div>
-        </div>
-      )}
+      <div className="settings-content">
+        <h2>Cache Settings</h2>
+        <label>
+          Enable Cache:
+          <input type="checkbox" checked={cacheEnabled} onChange={handleCacheEnabledChange} />
+        </label>
+        <label>
+          Cache TTL (seconds):
+          <input type="number" value={cacheTTL} onChange={handleCacheTTLChange} />
+        </label>
+        <h2>Prefetch Settings</h2>
+        <label>
+          Enable Prefetch:
+          <input type="checkbox" checked={prefetchEnabled} onChange={handlePrefetchEnabledChange} />
+        </label>
+        <h2>Ad Block Settings</h2>
+        <label>
+          Enable Ad Block:
+          <input type="checkbox" checked={adBlockEnabled} onChange={handleAdBlockEnabledChange} />
+        </label>
+        <label>
+          Ad Block List (comma-separated):
+          <input type="text" value={adBlockList.join(',')} onChange={handleAdBlockListChange} />
+        </label>
+        <h2>Encoding Settings</h2>
+        <label>
+          Encoding Mode:
+          <select value={encodingMode} onChange={handleEncodingModeChange}>
+            <option value="xor-base64">XOR + Base64</option>
+            <option value="base64">Base64</option>
+          </select>
+        </label>
+      </div>
     </div>
   );
 };
