@@ -18,7 +18,9 @@
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "build:sw": "babel src/sw -d dist/sw",
-    "build:server": "babel src/server -d dist/server"
+    "build:server": "babel src/server -d dist/server",
+    "prettier": "prettier --write .",
+    "ci": "npm run ci:build"
   },
   "keywords": [],
   "author": "NEXUS-AI",
@@ -67,5 +69,9 @@
       "^.+\\.js$": "babel-jest"
     },
     "coverageDirectory": "coverage"
+  },
+  "prettierConfig": ".prettierrc",
+  "eslintConfig": {
+    "extends": ["standard"]
   }
 }
