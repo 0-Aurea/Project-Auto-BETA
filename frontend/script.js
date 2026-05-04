@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import SettingsPanel from './components/SettingsPanel';
 import SearchBar from './components/SearchBar';
 import TabBar from './components/TabBar';
+import ProxyHistory from './components/ProxyHistory';
 import './style.css';
 
 const App = () => {
@@ -13,37 +14,33 @@ const App = () => {
           <ul>
             <li><a href="#" id="settings-toggle">Settings</a></li>
             <li><a href="#" id="bookmarks-toggle">Bookmarks</a></li>
+            <li><a href="#" id="proxy-history-toggle">Proxy History</a></li>
           </ul>
         </nav>
       </header>
       <main>
-        <SearchBar />
-        <TabBar />
+        <SearchBar 
+          onSearch={(searchTerm) => createTab(searchTerm)}
+        />
+        <TabBar 
+          onSwitchTab={(tab) => switchToTab(tab)}
+          onCreateTab={(searchTerm) => createTab(searchTerm)}
+        />
         <div id="tab-content"></div>
       </main>
       <SettingsPanel />
+      <ProxyHistory />
     </div>
   );
 };
 
 ReactDOM.render(<App />, document.body);
 
-const settingsPanel = document.getElementById('settings-panel');
-const bookmarksPanel = document.getElementById('bookmarks-panel');
-const searchInput = document.getElementById('search-input');
-const searchButton = document.getElementById('search-button');
-const tabBar = document.getElementById('tab-bar');
-const settingsToggle = document.getElementById('settings-toggle');
-const bookmarksToggle = document.getElementById('bookmarks-toggle');
-const adBlockToggle = document.getElementById('ad-block-toggle');
-const cacheToggle = document.getElementById('cache-toggle');
-const encodingModeSelect = document.getElementById('encoding-mode-select');
-
 let currentTab = null;
 let tabs = [];
 let bookmarks = [];
 let settings = {
-  encodingMode: 'base64',
+  encodingMode: 'xor-base64',
   adBlockEnabled: true,
   cacheEnabled: true
 };
@@ -71,7 +68,6 @@ const openDB = async () => {
     const bookmarksReq = store.getAll();
     bookmarksReq.onsuccess = (event) => {
       bookmarks = event.target.result;
-      renderBookmarksPanel();
     };
     await tx.done;
   } catch (e) {
@@ -82,6 +78,7 @@ openDB();
 
 // Render tab bar
 const renderTabBar = () => {
+  const tabBar = document.getElementById('tab-bar');
   tabBar.innerHTML = '';
   tabs.forEach((tab, index) => {
     const tabButton = document.createElement('button');
@@ -102,6 +99,7 @@ const switchToTab = (tab) => {
 // Create new tab
 const createTab = async (searchTerm) => {
   const tab = {
+    id: Date.now(),
     title: searchTerm,
     content: `Searching for ${searchTerm}...`,
     url: `https://www.google.com/search?q=${searchTerm}`
@@ -111,64 +109,50 @@ const createTab = async (searchTerm) => {
   switchToTab(tab);
 };
 
-// Add event listeners
-settingsToggle.addEventListener('click', () => {
-  settingsPanel.classList.toggle('open');
-});
-
-bookmarksToggle.addEventListener('click', () => {
-  bookmarksPanel.classList.toggle('open');
-});
-
-searchButton.addEventListener('click', () => {
-  const searchTerm = searchInput.value.trim();
-  if (searchTerm) {
-    createTab(searchTerm);
+// Handle tab updates
+const updateTab = (tab) => {
+  const index = tabs.findIndex((t) => t.id === tab.id);
+  if (index !== -1) {
+    tabs[index] = tab;
+    renderTabBar();
   }
-});
+};
 
-// Initialize UI
-renderTabBar();
-
-// Dark mode toggle
-const darkModeToggle = document.getElementById('dark-mode-toggle');
-darkModeToggle.addEventListener('click', () => {
-  document.body.classList.toggle('dark-mode');
-  localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
-});
-
-// Load dark mode setting
-try {
-  const storedDarkMode = localStorage.getItem('darkMode');
-  if (storedDarkMode === 'true') {
-    document.body.classList.add('dark-mode');
+// Delete tab
+const deleteTab = (tabId) => {
+  const index = tabs.findIndex((t) => t.id === tabId);
+  if (index !== -1) {
+    tabs.splice(index, 1);
+    renderTabBar();
   }
-} catch (e) {
-  console.error('Error loading dark mode setting:', e);
+};
+
+// Initialize service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js')
+    .then((registration) => {
+      console.log('Service worker registered:', registration);
+    })
+    .catch((error) => {
+      console.error('Error registering service worker:', error);
+    });
+} else {
+  console.log('Service worker not supported');
 }
 
-// Render bookmarks panel
-const renderBookmarksPanel = () => {
-  bookmarksPanel.innerHTML = '';
-  bookmarks.forEach((bookmark) => {
-    const bookmarkElement = document.createElement('div');
-    bookmarkElement.textContent = bookmark.title;
-    bookmarksPanel.appendChild(bookmarkElement);
-  });
+// Initialize IndexedDB
+const initIndexedDB = async () => {
+  try {
+    const db = await idb.openDb('nexus-proxy', 1, {
+      upgrade: (db) => {
+        db.createObjectStore('proxy-history');
+      }
+    });
+    const tx = db.transaction('proxy-history', 'readwrite');
+    const store = tx.objectStore('proxy-history');
+    // Initialize store
+  } catch (e) {
+    console.error('Error initializing IndexedDB:', e);
+  }
 };
-
-// Add bookmark
-const addBookmark = (tab) => {
-  const bookmark = {
-    title: tab.title,
-    url: tab.url
-  };
-  bookmarks.push(bookmark);
-  renderBookmarksPanel();
-};
-
-// Remove bookmark
-const removeBookmark = (bookmark) => {
-  bookmarks = bookmarks.filter((b) => b !== bookmark);
-  renderBookmarksPanel();
-};
+initIndexedDB();
