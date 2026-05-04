@@ -108,7 +108,7 @@ function decompressBody(req, res, next) {
   }
 }
 
-function handleWebSocketUpgrade(req, res, next) {
+function handleWebSocket(req, res, next) {
   if (req.headers['upgrade'] === 'websocket') {
     const websocketUrl = req.url;
     const websocketReq = {
@@ -123,22 +123,32 @@ function handleWebSocketUpgrade(req, res, next) {
   }
 }
 
+function handleWebRTC(req, res, next) {
+  if (req.headers['ice-candidate']) {
+    const rtcIceCandidate = req.body;
+    // Scrub RTC ICE candidate to prevent IP leaks
+    delete rtcIceCandidate.candidate;
+    req.body = rtcIceCandidate;
+  }
+  next();
+}
+
+app.use(rewriteHeaders);
+app.use(cookieScope);
+app.use(handleEncodedUrl);
+app.use(decompressBody);
+app.use(handleWebSocket);
+app.use(handleWebRTC);
+
 const proxy = createProxyMiddleware({
   target: 'http://localhost:8081',
   changeOrigin: true,
+  pathRewrite: { '^/': '' },
   onProxyReq: (proxyReq, req, res) => {
     proxyReq.headers['content-length'] = req.body.length;
   },
-  onProxyRes: (proxyRes, req, res) => {
-    res.headers['content-security-policy'] = "default-src 'self'; script-src 'self' https://cdn.example.com; object-src 'none'";
-  },
 });
 
-app.use(handleEncodedUrl);
-app.use(decompressBody);
-app.use(rewriteHeaders);
-app.use(cookieScope);
-app.use(handleWebSocketUpgrade);
 app.use(proxy);
 
 httpsServer.listen(port, () => {
@@ -146,23 +156,30 @@ httpsServer.listen(port, () => {
 });
 
 wss.on('connection', (ws, req) => {
+  const websocketUrl = req.url;
+  logger.info(`WebSocket connection established: ${websocketUrl}`);
+
   ws.on('message', (message) => {
     logger.info(`Received WebSocket message: ${message}`);
   });
-  ws.on('error', (error) => {
-    logger.error('WebSocket error:', error);
-  });
+
   ws.on('close', () => {
     logger.info('WebSocket connection closed');
+  });
+
+  ws.on('error', (error) => {
+    logger.error('WebSocket error:', error);
   });
 });
 
 process.on('SIGINT', () => {
   httpsServer.close();
+  wss.close();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
   httpsServer.close();
+  wss.close();
   process.exit(0);
 });
