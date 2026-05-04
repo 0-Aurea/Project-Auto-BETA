@@ -3,7 +3,7 @@ const { URL } = require('url');
 const { performance } = require('perf_hooks');
 
 /**
- * WebSocket utility class for handling WebSocket upgrade proxying.
+ * WebSocket utility class for handling WebSocket upgrade proxying with better header rewriting, subprotocol support, and error handling.
  */
 class WebSocketUtils {
   /**
@@ -14,19 +14,34 @@ class WebSocketUtils {
   /**
    * Initialize the WebSocket server.
    * @param {object} options - WebSocket server options.
+   * @param {string} options.host - The WebSocket server host.
+   * @param {number} options.port - The WebSocket server port.
+   * @param {function} options.handleConnection - The WebSocket connection handler.
    */
   static async init(options) {
     WebSocketUtils.wss = new WebSocket.Server(options);
-    WebSocketUtils.wss.on('connection', (ws) => {
-      WebSocketUtils.handleConnection(ws);
+    WebSocketUtils.wss.on('connection', (ws, req) => {
+      WebSocketUtils.handleConnection(ws, req);
     });
   }
 
   /**
    * Handle WebSocket connections.
    * @param {WebSocket} ws - The WebSocket instance.
+   * @param {object} req - The WebSocket request object.
    */
-  static handleConnection(ws) {
+  static handleConnection(ws, req) {
+    const { headers, url } = req;
+    const { Sec-WebSocket-Protocol: protocol } = headers;
+
+    // Handle WebSocket subprotocols
+    if (protocol) {
+      ws.protocol = protocol;
+    }
+
+    // Handle WebSocket headers
+    WebSocketUtils.handleHeaders(ws, headers);
+
     ws.on('message', (message) => {
       WebSocketUtils.handleMessage(ws, message);
     });
@@ -38,6 +53,31 @@ class WebSocketUtils {
     ws.on('close', () => {
       WebSocketUtils.handleClose(ws);
     });
+  }
+
+  /**
+   * Handle WebSocket headers.
+   * @param {WebSocket} ws - The WebSocket instance.
+   * @param {object} headers - The WebSocket headers.
+   */
+  static handleHeaders(ws, headers) {
+    // Rewrite WebSocket headers
+    const { Origin: origin, Host: host, 'Sec-WebSocket-Key': secKey } = headers;
+
+    // Handle WebSocket origin
+    if (origin) {
+      ws.origin = origin;
+    }
+
+    // Handle WebSocket host
+    if (host) {
+      ws.host = host;
+    }
+
+    // Handle WebSocket Sec-WebSocket-Key
+    if (secKey) {
+      ws.secKey = secKey;
+    }
   }
 
   /**
@@ -121,41 +161,6 @@ class WebSocketUtils {
     if (ws.targetWs) {
       ws.targetWs.close();
     }
-  }
-
-  /**
-   * Rewrite WebSocket upgrade requests.
-   * @param {object} req - The WebSocket upgrade request.
-   * @param {object} res - The WebSocket upgrade response.
-   */
-  static rewriteUpgradeRequest(req, res) {
-    const { headers } = req;
-    const { host, origin, 'sec-websocket-protocol': protocol } = headers;
-
-    res.writeHead(101, {
-      'Upgrade': 'websocket',
-      'Connection': 'Upgrade',
-      'Sec-WebSocket-Accept': WebSocketUtils.generateAcceptKey(headers['sec-websocket-key']),
-      'Sec-WebSocket-Protocol': protocol,
-    });
-
-    return {
-      host,
-      origin,
-      protocol,
-    };
-  }
-
-  /**
-   * Generate WebSocket accept key.
-   * @param {string} key - The WebSocket key.
-   * @returns {string} The WebSocket accept key.
-   */
-  static generateAcceptKey(key) {
-    const crypto = require('crypto');
-    const hash = crypto.createHash('sha1');
-    hash.update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`);
-    return hash.digest('base64');
   }
 }
 
