@@ -110,30 +110,42 @@ class JSRewriter {
     });
 
     js = js.replace(this.historyPushStateRegex, (match) => {
-      return `history.pushState(${this.rewriteHistoryState(match)})`;
+      return `history.pushState(${this.rewriteHistoryPushState(match)})`;
     });
 
     js = js.replace(this.historyReplaceStateRegex, (match) => {
-      return `history.replaceState(${this.rewriteHistoryState(match)})`;
+      return `history.replaceState(${this.rewriteHistoryReplaceState(match)})`;
     });
 
     return js;
   }
 
   rewriteEval(match) {
-    return match.slice(5, -1);
+    try {
+      const func = new Function(`return ${match}`);
+      const rewritten = func();
+      return JSON.stringify(rewritten);
+    } catch (e) {
+      return match;
+    }
   }
 
   rewriteFunction(match) {
-    return match.slice(9, -1);
+    try {
+      const func = new Function(`return ${match}`);
+      const rewritten = func();
+      return JSON.stringify(rewritten);
+    } catch (e) {
+      return match;
+    }
   }
 
   rewriteDynamicImport(match) {
-    return match;
+    return this.rewriteURL(match);
   }
 
   rewriteRequire(match) {
-    return match;
+    return this.rewriteURL(match);
   }
 
   rewriteURL(url) {
@@ -141,172 +153,57 @@ class JSRewriter {
     return xorBase64Encode(url, salt);
   }
 
-  rewriteHistoryState(match) {
-    return match;
+  rewriteHistoryPushState(match) {
+    return match.replace('(', '({').replace(')', '})');
+  }
+
+  rewriteHistoryReplaceState(match) {
+    return match.replace('(', '({').replace(')', '})');
   }
 }
 
-class HTMLRewriter {
-  constructor() {
-    this.srcRegex = /src\s*=\s*['"]([^'"]+)['"]/g;
-    this.hrefRegex = /href\s*=\s*['"]([^'"]+)['"]/g;
-    this.actionRegex = /action\s*=\s*['"]([^'"]+)['"]/g;
-    this.srcsetRegex = /srcset\s*=\s*['"]([^'"]+)['"]/g;
-    this.dataRegex = /data\s*=\s*['"]([^'"]+)['"]/g;
-  }
-
-  rewriteHTML(html) {
-    html = html.replace(this.srcRegex, (match, p1) => {
-      return `src="${this.rewriteURL(p1)}"`;
-    });
-
-    html = html.replace(this.hrefRegex, (match, p1) => {
-      return `href="${this.rewriteURL(p1)}"`;
-    });
-
-    html = html.replace(this.actionRegex, (match, p1) => {
-      return `action="${this.rewriteURL(p1)}"`;
-    });
-
-    html = html.replace(this.srcsetRegex, (match, p1) => {
-      return `srcset="${this.rewriteURL(p1)}"`;
-    });
-
-    html = html.replace(this.dataRegex, (match, p1) => {
-      return `data="${this.rewriteURL(p1)}"`;
-    });
-
-    return html;
-  }
-
-  rewriteURL(url) {
-    const salt = rotatingSalt[rotatingSalt.length - 1];
-    return xorBase64Encode(url, salt);
-  }
-}
-
-class CSSRewriter {
-  constructor() {
-    this.urlRegex = /url\(\s*['"]([^'"]+)['"]\s*\)/g;
-    this.importRegex = /@import\s+['"]([^'"]+)['"]/g;
-    this.contentRegex = /content:\s*url\(\s*['"]([^'"]+)['"]\s*\)/g;
-  }
-
-  rewriteCSS(css) {
-    css = css.replace(this.urlRegex, (match, p1) => {
-      return `url(${this.rewriteURL(p1)})`;
-    });
-
-    css = css.replace(this.importRegex, (match, p1) => {
-      return `@import ${this.rewriteURL(p1)}`;
-    });
-
-    css = css.replace(this.contentRegex, (match, p1) => {
-      return `content: url(${this.rewriteURL(p1)})`;
-    });
-
-    return css;
-  }
-
-  rewriteURL(url) {
-    const salt = rotatingSalt[rotatingSalt.length - 1];
-    return xorBase64Encode(url, salt);
-  }
-}
-
-async function handleRequest(request) {
-  const url = new URL(request.url);
-  const salt = generateSalt();
-
-  if (request.method === 'GET') {
-    const response = await getResponse(request);
-    if (response) {
-      const contentType = response.headers.get('Content-Type');
-      if (contentType && contentType.includes('text/html')) {
-        const html = await response.text();
-        const rewriter = new HTMLRewriter();
-        const rewrittenHtml = rewriter.rewriteHTML(html);
-        const newResponse = new Response(rewrittenHtml, {
-          headers: {
-            'Content-Type': 'text/html',
-          },
-        });
-        await putResponse(request, newResponse);
-        return newResponse;
-      } else if (contentType && contentType.includes('application/javascript')) {
-        const js = await response.text();
-        const rewriter = new JSRewriter();
-        const rewrittenJs = rewriter.rewriteJS(js);
-        const newResponse = new Response(rewrittenJs, {
-          headers: {
-            'Content-Type': 'application/javascript',
-          },
-        });
-        await putResponse(request, newResponse);
-        return newResponse;
-      } else if (contentType && contentType.includes('text/css')) {
-        const css = await response.text();
-        const rewriter = new CSSRewriter();
-        const rewrittenCss = rewriter.rewriteCSS(css);
-        const newResponse = new Response(rewrittenCss, {
-          headers: {
-            'Content-Type': 'text/css',
-          },
-        });
-        await putResponse(request, newResponse);
-        return newResponse;
-      }
-    }
-  }
-
-  if (request.method === 'WS') {
-    const websocketUrl = url.origin + url.pathname;
-    const websocketRequest = new Request(websocketUrl, {
-      method: 'GET',
-      headers: {
-        'Upgrade': 'websocket',
-        'Connection': 'Upgrade',
-      },
-    });
-    const websocketResponse = await getResponse(websocketRequest);
-    if (websocketResponse) {
-      const websocket = new WebSocket(websocketUrl);
-      websocket.onmessage = (event) => {
-        const salt = rotatingSalt[rotatingSalt.length - 1];
-        const decodedData = xorBase64Decode(event.data, salt);
-        websocket.send(decodedData);
-      };
-      websocket.onopen = () => {
-        websocketResponse.headers.forEach((value, key) => {
-          websocket.send(`header:${key}:${value}`);
-        });
-      };
-      return websocket;
-    }
-  }
-
-  return new Response('Not Found', {
-    status: 404,
-    headers: {
-      'Content-Type': 'text/plain',
-    },
-  });
-}
-
-self.addEventListener('fetch', (event) => {
+addEventListener('fetch', async (event) => {
   event.respondWith(handleRequest(event.request));
 });
 
-self.addEventListener('worker', (event) => {
-  event.ports[0].onmessage = (event) => {
-    const salt = rotatingSalt[rotatingSalt.length - 1];
-    const decodedData = xorBase64Decode(event.data, salt);
-    event.ports[0].postMessage(decodedData);
-  };
+async function handleRequest(request) {
+  const url = new URL(request.url);
+  const cache = await getCache();
+  let response = await cache.match(request);
+
+  if (!response) {
+    response = await fetch(request);
+    await putResponse(request, response.clone());
+  }
+
+  const contentType = response.headers.get('Content-Type');
+  if (contentType && contentType.includes('application/javascript')) {
+    const jsRewriter = new JSRewriter();
+    const js = await response.text();
+    const rewrittenJs = jsRewriter.rewriteJS(js);
+    return new Response(rewrittenJs, {
+      headers: {
+        'Content-Type': 'application/javascript',
+      },
+    });
+  }
+
+  return response;
+}
+
+addEventListener('message', async (event) => {
+  if (event.data.type === 'generateSalt') {
+    generateSalt();
+  }
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(getCache().then((cache) => cache.keys().then((keys) => {
-    keys.forEach((key) => cache.delete(key));
-  })));
+self.addEventListener('activate', async (event) => {
+  event.waitUntil(getCache());
+});
+
+self.addEventListener('error', (event) => {
+  console.error('Error occurred:', event);
+});
+self.addEventListener('messageerror', (event) => {
+  console.error('Message error occurred:', event);
 });
