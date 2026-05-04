@@ -1,198 +1,107 @@
-import React from 'react';
-import ReactDOM from 'react-dom';
-import SettingsPanel from './components/SettingsPanel';
-import SearchBar from './components/SearchBar';
-import TabBar from './components/TabBar';
-import ProxyHistory from './components/ProxyHistory';
-import BookmarksManager from './components/BookmarksManager';
-import './style.css';
+const { proxy } = chrome.runtime.getURL('proxy') ? 
+  chrome.runtime.getURL('proxy') : '/proxy';
 
-const App = () => {
-  return (
-    <div className="container">
-      <header>
-        <nav>
-          <ul>
-            <li><a href="#" id="settings-toggle">Settings</a></li>
-            <li><a href="#" id="bookmarks-toggle">Bookmarks</a></li>
-            <li><a href="#" id="proxy-history-toggle">Proxy History</a></li>
-          </ul>
-        </nav>
-      </header>
-      <main>
-        <SearchBar 
-          onSearch={(searchTerm) => createTab(searchTerm)}
-        />
-        <TabBar 
-          onSwitchTab={(tab) => switchToTab(tab)}
-          onCreateTab={(searchTerm) => createTab(searchTerm)}
-        />
-        <div id="tab-content"></div>
-      </main>
-      <SettingsPanel />
-      <ProxyHistory />
-      <BookmarksManager />
-    </div>
-  );
-};
-
-ReactDOM.render(<App />, document.body);
-
-let currentTab = null;
-let tabs = [];
-let bookmarks = [];
-let settings = {
+const settings = {
   encodingMode: 'xor-base64',
+  cacheEnabled: true,
+  cacheTTL: 3600,
+  prefetchEnabled: true,
   adBlockEnabled: true,
-  cacheEnabled: true
+  adBlockList: [],
+  searchEngine: 'google',
 };
 
-// Load settings from local storage
-try {
-  const storedSettings = JSON.parse(localStorage.getItem('nexus-settings'));
+const loadSettings = () => {
+  const storedSettings = localStorage.getItem('settings');
   if (storedSettings) {
-    settings = storedSettings;
+    Object.assign(settings, JSON.parse(storedSettings));
   }
-} catch (e) {
-  console.error('Error loading settings:', e);
-}
+};
 
-// Load bookmarks from IndexedDB
-const openDB = async () => {
-  try {
-    const db = await idb.openDb('nexus-bookmarks', 1, {
-      upgrade: (db) => {
-        db.createObjectStore('bookmarks');
+const saveSettings = () => {
+  localStorage.setItem('settings', JSON.stringify(settings));
+};
+
+const connectToProxy = () => {
+  const serviceWorker = navigator.serviceWorker.controller;
+  if (serviceWorker) {
+    serviceWorker.postMessage({ type: 'init', settings });
+  } else {
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      const newServiceWorker = navigator.serviceWorker.controller;
+      if (newServiceWorker) {
+        newServiceWorker.postMessage({ type: 'init', settings });
       }
     });
-    const tx = db.transaction('bookmarks', 'readonly');
-    const store = tx.objectStore('bookmarks');
-    const bookmarksReq = store.getAll();
-    bookmarksReq.onsuccess = (event) => {
-      bookmarks = event.target.result;
-    };
-    await tx.done;
-  } catch (e) {
-    console.error('Error loading bookmarks:', e);
   }
 };
-openDB();
 
-// Render tab bar
-const renderTabBar = () => {
-  const tabBar = document.getElementById('tab-bar');
-  tabBar.innerHTML = '';
-  tabs.forEach((tab, index) => {
-    const tabButton = document.createElement('button');
-    tabButton.textContent = tab.title;
-    tabButton.addEventListener('click', () => {
-      switchToTab(tab);
-    });
-    tabBar.appendChild(tabButton);
+const handleSettingsChange = (key, value) => {
+  settings[key] = value;
+  saveSettings();
+  connectToProxy();
+};
+
+const handleSearchEngineChange = (engine) => {
+  settings.searchEngine = engine;
+  saveSettings();
+};
+
+const init = () => {
+  loadSettings();
+  connectToProxy();
+
+  const settingsToggle = document.getElementById('settings-toggle');
+  settingsToggle.addEventListener('click', () => {
+    const settingsPanel = document.querySelector('SettingsPanel');
+    settingsPanel.toggleSettings();
+  });
+
+  const bookmarksToggle = document.getElementById('bookmarks-toggle');
+  bookmarksToggle.addEventListener('click', () => {
+    const bookmarksManager = document.querySelector('BookmarksManager');
+    bookmarksManager.toggleBookmarks();
+  });
+
+  const proxyHistoryToggle = document.getElementById('proxy-history-toggle');
+  proxyHistoryToggle.addEventListener('click', () => {
+    const proxyHistory = document.querySelector('ProxyHistory');
+    proxyHistory.toggleProxyHistory();
   });
 };
 
-// Switch to tab
-const switchToTab = (tab) => {
-  currentTab = tab;
-  document.getElementById('tab-content').innerHTML = tab.content;
-  // Communicate with the Service Worker to load the tab's URL
-  navigator.serviceWorker.controller.postMessage({ type: 'load-url', url: tab.url });
-};
+init();
 
-// Create new tab
-const createTab = async (searchTerm) => {
-  const tab = {
-    id: Date.now(),
-    title: searchTerm,
-    content: `Searching for ${searchTerm}...`,
-    url: `https://www.google.com/search?q=${searchTerm}`
-  };
-  tabs.push(tab);
-  renderTabBar();
-  switchToTab(tab);
-};
-
-// Handle tab updates
-const updateTab = (tab) => {
-  const index = tabs.findIndex((t) => t.id === tab.id);
-  if (index !== -1) {
-    tabs[index] = tab;
-    renderTabBar();
-  }
-};
-
-// Delete tab
-const deleteTab = (tabId) => {
-  const index = tabs.findIndex((t) => t.id === tabId);
-  if (index !== -1) {
-    tabs.splice(index, 1);
-    renderTabBar();
-  }
-};
-
-// Handle messages from the Service Worker
-navigator.serviceWorker.addEventListener('message', (event) => {
-  if (event.data.type === 'tab-update') {
-    updateTab(event.data.tab);
-  } else if (event.data.type === 'tab-delete') {
-    deleteTab(event.data.tabId);
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === 'updateSettings') {
+    handleSettingsChange(request.key, request.value);
+  } else if (request.type === 'updateSearchEngine') {
+    handleSearchEngineChange(request.engine);
   }
 });
 
-// Initialize the Service Worker
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js')
-    .then((registration) => {
-      console.log('Service Worker registered:', registration);
-    })
-    .catch((error) => {
-      console.error('Service Worker registration failed:', error);
-    });
-} else {
-  console.error('Service Worker is not supported');
-}
+navigator.serviceWorker.register('service-worker.js')
+  .then((registration) => {
+    console.log('Service worker registered:', registration);
+  })
+  .catch((error) => {
+    console.error('Service worker registration failed:', error);
+  });
 
-// Proxy engine connection
-const proxyEngine = {
-  async loadUrl(url) {
-    try {
-      const response = await fetch(url, {
-        headers: {
-          'X-Proxy-Engine': 'Nexus'
-        }
-      });
-      return await response.text();
-    } catch (error) {
-      console.error('Error loading URL:', error);
-    }
+window.addEventListener('message', (event) => {
+  if (event.data.type === 'proxyUpdate') {
+    const { key, value } = event.data;
+    handleSettingsChange(key, value);
   }
-};
-
-// Communicate with the proxy engine to load URLs
-const loadUrl = async (url) => {
-  const content = await proxyEngine.loadUrl(url);
-  document.getElementById('tab-content').innerHTML = content;
-};
-
-// Add event listener to the search bar
-document.getElementById('search-bar').addEventListener('submit', (event) => {
-  event.preventDefault();
-  const searchTerm = document.getElementById('search-input').value;
-  createTab(searchTerm);
 });
 
-// Add event listener to the settings toggle
-document.getElementById('settings-toggle').addEventListener('click', () => {
-  document.getElementById('settings-panel').classList.toggle('open');
-});
-
-// Add event listener to the bookmarks toggle
-document.getElementById('bookmarks-toggle').addEventListener('click', () => {
-  document.getElementById('bookmarks-manager').classList.toggle('open');
-});
-
-// Add event listener to the proxy history toggle
-document.getElementById('proxy-history-toggle').addEventListener('click', () => {
-  document.getElementById('proxy-history').classList.toggle('open');
+document.addEventListener('DOMContentLoaded', () => {
+  const searchBar = document.querySelector('SearchBar');
+  searchBar.addEventListener('search', (query) => {
+    const { searchEngine } = settings;
+    const url = searchEngine === 'google' ? 
+      `https://www.google.com/search?q=${query}` : 
+      `https://www.bing.com/search?q=${query}`;
+    window.open(url, '_blank');
+  });
 });
