@@ -101,92 +101,160 @@ class JSRewriter {
     });
 
     js = js.replace(this.dynamicImportRegex, (match, p1) => {
-      return `import(${this.rewriteURL(p1)})`;
+      return `import('${this.rewriteURL(p1)}')`;
     });
 
     js = js.replace(this.workerRegex, (match, p1) => {
-      return `new Worker(${this.rewriteURL(p1)})`;
+      return `new Worker('${this.rewriteURL(p1)}')`;
     });
 
     js = js.replace(this.importScriptsRegex, (match, p1) => {
-      return `importScripts(${this.rewriteURL(p1)})`;
+      return `importScripts('${this.rewriteURL(p1)}')`;
     });
 
     js = js.replace(this.documentDomainRegex, (match, p1) => {
-      return `document.domain = ${this.rewriteURL(p1)}`;
+      return `document.domain = '${this.rewriteURL(p1)}'`;
     });
 
     js = js.replace(this.windowLocationRegex, (match, p1) => {
-      return `window.location = ${this.rewriteURL(p1)}`;
+      return `window.location = '${this.rewriteURL(p1)}'`;
     });
 
     js = js.replace(this.windowOpenRegex, (match, p1) => {
-      return `window.open(${this.rewriteURL(p1)})`;
-    });
-
-    js = js.replace(this.historyPushStateRegex, (match) => {
-      return `history.pushState(${this.rewriteHistoryState(match)})`;
-    });
-
-    js = js.replace(this.historyReplaceStateRegex, (match) => {
-      return `history.replaceState(${this.rewriteHistoryState(match)})`;
+      return `window.open('${this.rewriteURL(p1)}')`;
     });
 
     return js;
   }
 
-  rewriteEval(evalStr) {
-    return this.xorBase64Encode(evalStr, generateSalt());
+  rewriteEval(js) {
+    return js.slice(5, -1);
   }
 
-  rewriteFunction(funcStr) {
-    return this.xorBase64Encode(funcStr, generateSalt());
+  rewriteFunction(js) {
+    return js.slice(9, -1);
   }
 
-  rewriteDynamicImport(importStr) {
-    return this.rewriteURL(importStr);
+  rewriteDynamicImport(js) {
+    return js;
   }
 
-  rewriteRequire(requireStr) {
-    return this.rewriteURL(requireStr);
+  rewriteRequire(js) {
+    return js;
   }
 
   rewriteURL(url) {
-    return xorBase64Encode(url, generateSalt());
+    return url.startsWith('/') ? url : `/${url}`;
+  }
+}
+
+class HTMLRewriter {
+  constructor() {
+    this.srcRegex = /src\s*=\s*['"]([^'"]+)['"]/g;
+    this.hrefRegex = /href\s*=\s*['"]([^'"]+)['"]/g;
+    this.actionRegex = /action\s*=\s*['"]([^'"]+)['"]/g;
+    this.srcsetRegex = /srcset\s*=\s*['"]([^'"]+)['"]/g;
+    this.dataRegex = /data\s*=\s*['"]([^'"]+)['"]/g;
   }
 
-  rewriteHistoryState(stateStr) {
-    return stateStr;
+  rewriteHTML(html) {
+    html = html.replace(this.srcRegex, (match, p1) => {
+      return `src="${this.rewriteURL(p1)}"`;
+    });
+
+    html = html.replace(this.hrefRegex, (match, p1) => {
+      return `href="${this.rewriteURL(p1)}"`;
+    });
+
+    html = html.replace(this.actionRegex, (match, p1) => {
+      return `action="${this.rewriteURL(p1)}"`;
+    });
+
+    html = html.replace(this.srcsetRegex, (match, p1) => {
+      return `srcset="${this.rewriteURL(p1)}"`;
+    });
+
+    html = html.replace(this.dataRegex, (match, p1) => {
+      return `data="${this.rewriteURL(p1)}"`;
+    });
+
+    return html;
   }
 
-  xorBase64Encode(data, salt) {
-    return xorBase64Encode(data, salt);
+  rewriteURL(url) {
+    return url.startsWith('/') ? url : `/${url}`;
+  }
+}
+
+class CSSRewriter {
+  constructor() {
+    this.urlRegex = /url\(\s*['"]([^'"]+)['"]\s*\)/g;
+    this.importRegex = /@import\s+['"]([^'"]+)['"]/g;
+  }
+
+  rewriteCSS(css) {
+    css = css.replace(this.urlRegex, (match, p1) => {
+      return `url('${this.rewriteURL(p1)}')`;
+    });
+
+    css = css.replace(this.importRegex, (match, p1) => {
+      return `@import '${this.rewriteURL(p1)}'`;
+    });
+
+    return css;
+  }
+
+  rewriteURL(url) {
+    return url.startsWith('/') ? url : `/${url}`;
   }
 }
 
 async function handleFetch(request) {
-  const rewriter = new JSRewriter();
-  const response = await getResponse(request);
-  if (response) {
-    const contentType = response.headers.get('Content-Type');
-    if (contentType && contentType.includes('application/javascript')) {
-      const js = await response.text();
-      const rewrittenJs = rewriter.rewriteJS(js);
-      const rewrittenResponse = new Response(rewrittenJs, {
-        headers: {
-          'Content-Type': contentType,
-        },
-      });
-      return rewrittenResponse;
-    } else {
-      return response;
-    }
-  } else {
-    return new Response('Not Found', {
-      status: 404,
-      headers: {
-        'Content-Type': 'text/plain',
-      },
+  const url = new URL(request.url);
+  const salt = generateSalt();
+  const encodedUrl = xorBase64Encode(url.href, salt);
+
+  const newRequest = new Request(`/${encodedUrl}`, {
+    method: request.method,
+    headers: request.headers,
+    body: request.body,
+  });
+
+  const response = await fetch(newRequest);
+  const contentType = response.headers.get('Content-Type');
+
+  if (contentType && contentType.includes('text/html')) {
+    const html = await response.text();
+    const rewriter = new HTMLRewriter();
+    const rewrittenHtml = rewriter.rewriteHTML(html);
+    const newResponse = new Response(rewrittenHtml, {
+      status: response.status,
+      headers: response.headers,
     });
+    await putResponse(newRequest, newResponse);
+    return newResponse;
+  } else if (contentType && contentType.includes('text/javascript')) {
+    const js = await response.text();
+    const rewriter = new JSRewriter();
+    const rewrittenJs = rewriter.rewriteJS(js);
+    const newResponse = new Response(rewrittenJs, {
+      status: response.status,
+      headers: response.headers,
+    });
+    await putResponse(newRequest, newResponse);
+    return newResponse;
+  } else if (contentType && contentType.includes('text/css')) {
+    const css = await response.text();
+    const rewriter = new CSSRewriter();
+    const rewrittenCss = rewriter.rewriteCSS(css);
+    const newResponse = new Response(rewrittenCss, {
+      status: response.status,
+      headers: response.headers,
+    });
+    await putResponse(newRequest, newResponse);
+    return newResponse;
+  } else {
+    await putResponse(newRequest, response);
+    return response;
   }
 }
