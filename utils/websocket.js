@@ -1,6 +1,6 @@
 const WebSocket = require('ws');
 const { URL } = require('url');
-const { UrlUtils } = require('./urlUtils');
+const { performance } = require('perf_hooks');
 
 /**
  * WebSocket utility class for handling WebSocket upgrade proxying.
@@ -17,87 +17,146 @@ class WebSocketUtils {
    */
   static async init(options) {
     WebSocketUtils.wss = new WebSocket.Server(options);
-
-    WebSocketUtils.wss.on('connection', (ws, req) => {
-      const { headers, url } = req;
-
-      // Handle WebSocket upgrade request
-      const upgradeHeader = headers['sec-websocket-protocol'];
-      if (upgradeHeader) {
-        // Handle subprotocol negotiation
-        const subprotocols = upgradeHeader.split(',');
-        const selectedSubprotocol = subprotocols[0].trim();
-
-        // Send WebSocket upgrade response
-        ws.on('message', (message) => {
-          // Handle incoming WebSocket message
-          const encodedMessage = UrlUtils.encodeUrl(message, ' rotating-salt ');
-          // Forward the message to the target WebSocket
-          WebSocketUtils.forwardMessage(encodedMessage, ws);
-        });
-
-        ws.on('error', (error) => {
-          // Handle WebSocket error
-          globalThis.console.error('WebSocket error:', error);
-        });
-
-        ws.on('close', () => {
-          // Handle WebSocket close
-          globalThis.console.log('WebSocket closed');
-        });
-      }
+    WebSocketUtils.wss.on('connection', (ws) => {
+      WebSocketUtils.handleConnection(ws);
     });
   }
 
   /**
-   * Forwards a WebSocket message to the target WebSocket.
-   * @param {string} message - The WebSocket message to forward.
+   * Handle WebSocket connections.
    * @param {WebSocket} ws - The WebSocket instance.
    */
-  static async forwardMessage(message, ws) {
+  static handleConnection(ws) {
+    ws.on('message', (message) => {
+      WebSocketUtils.handleMessage(ws, message);
+    });
+
+    ws.on('error', (error) => {
+      WebSocketUtils.handleError(ws, error);
+    });
+
+    ws.on('close', () => {
+      WebSocketUtils.handleClose(ws);
+    });
+  }
+
+  /**
+   * Handle WebSocket messages.
+   * @param {WebSocket} ws - The WebSocket instance.
+   * @param {string} message - The WebSocket message.
+   */
+  static handleMessage(ws, message) {
     try {
-      const targetUrl = new URL(ws.url);
-      const targetWs = new WebSocket(targetUrl.href);
-
-      targetWs.on('open', () => {
-        targetWs.send(message);
-      });
-
-      targetWs.on('message', (incomingMessage) => {
-        // Handle incoming message from target WebSocket
-        const decodedMessage = UrlUtils.decodeUrl(incomingMessage, ' rotating-salt ');
-        ws.send(decodedMessage);
-      });
-
-      targetWs.on('error', (error) => {
-        // Handle error from target WebSocket
-        globalThis.console.error('Target WebSocket error:', error);
-      });
-
-      targetWs.on('close', () => {
-        // Handle close of target WebSocket
-        globalThis.console.log('Target WebSocket closed');
-      });
+      const { type, data } = JSON.parse(message);
+      switch (type) {
+        case 'connect':
+          WebSocketUtils.handleConnect(ws, data);
+          break;
+        case 'data':
+          WebSocketUtils.handleData(ws, data);
+          break;
+        default:
+          console.error(`Unknown WebSocket message type: ${type}`);
+      }
     } catch (error) {
-      globalThis.console.error('Error forwarding WebSocket message:', error);
+      WebSocketUtils.handleError(ws, error);
     }
   }
 
   /**
-   * Handles WebSocket header rewriting.
-   * @param {object} headers - The WebSocket headers to rewrite.
-   * @returns {object} The rewritten WebSocket headers.
+   * Handle WebSocket connect messages.
+   * @param {WebSocket} ws - The WebSocket instance.
+   * @param {object} data - The connect data.
    */
-  static rewriteHeaders(headers) {
-    // Remove sensitive headers
-    delete headers['sec-websocket-protocol'];
-    delete headers['sec-websocket-extensions'];
+  static async handleConnect(ws, data) {
+    const { url, protocols } = data;
+    const proxiedUrl = new URL(url);
+    const targetWs = new WebSocket(proxiedUrl.href, protocols);
 
-    // Rewrite Origin header
-    headers['origin'] = 'https://example.com'; // Replace with desired origin
+    targetWs.on('open', () => {
+      ws.send(JSON.stringify({ type: 'connected' }));
+    });
 
-    return headers;
+    targetWs.on('message', (message) => {
+      ws.send(JSON.stringify({ type: 'data', data: message }));
+    });
+
+    targetWs.on('error', (error) => {
+      WebSocketUtils.handleError(ws, error);
+    });
+
+    targetWs.on('close', () => {
+      ws.close();
+    });
+
+    ws.targetWs = targetWs;
+  }
+
+  /**
+   * Handle WebSocket data messages.
+   * @param {WebSocket} ws - The WebSocket instance.
+   * @param {string} data - The WebSocket data.
+   */
+  static handleData(ws, data) {
+    if (ws.targetWs) {
+      ws.targetWs.send(data);
+    }
+  }
+
+  /**
+   * Handle WebSocket errors.
+   * @param {WebSocket} ws - The WebSocket instance.
+   * @param {Error} error - The WebSocket error.
+   */
+  static handleError(ws, error) {
+    console.error(`WebSocket error: ${error.message}`);
+    ws.close();
+  }
+
+  /**
+   * Handle WebSocket close events.
+   * @param {WebSocket} ws - The WebSocket instance.
+   */
+  static handleClose(ws) {
+    if (ws.targetWs) {
+      ws.targetWs.close();
+    }
+  }
+
+  /**
+   * Rewrite WebSocket upgrade requests.
+   * @param {object} req - The WebSocket upgrade request.
+   * @param {object} res - The WebSocket upgrade response.
+   */
+  static rewriteUpgradeRequest(req, res) {
+    const { headers } = req;
+    const { host, origin, 'sec-websocket-protocol': protocol } = headers;
+
+    res.writeHead(101, {
+      'Upgrade': 'websocket',
+      'Connection': 'Upgrade',
+      'Sec-WebSocket-Accept': WebSocketUtils.generateAcceptKey(headers['sec-websocket-key']),
+      'Sec-WebSocket-Protocol': protocol,
+    });
+
+    return {
+      host,
+      origin,
+      protocol,
+    };
+  }
+
+  /**
+   * Generate WebSocket accept key.
+   * @param {string} key - The WebSocket key.
+   * @returns {string} The WebSocket accept key.
+   */
+  static generateAcceptKey(key) {
+    const crypto = require('crypto');
+    const hash = crypto.createHash('sha1');
+    hash.update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`);
+    return hash.digest('base64');
   }
 }
 
-module.exports = { WebSocketUtils };
+module.exports = WebSocketUtils;
