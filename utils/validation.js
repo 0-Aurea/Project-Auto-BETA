@@ -1,85 +1,79 @@
+'use strict';
+
 /**
- * Validation utility class for checking URL validity, request formatting, and other essential checks.
+ * Validation and sanitization utility class for user input.
  */
 class ValidationUtils {
   /**
-   * Regular expression to match valid URLs.
+   * Regular expression to match and validate URL schemes.
    */
-  static URL_REGEX = /^https?:\/\/(?:[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})(?::[0-9]{1,5})?(?:[\/?#][^\s]*)?$/;
+  static URL_SCHEME_REGEX = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
 
   /**
-   * Regular expression to match valid URL origins.
+   * Regular expression to match and validate URL origins.
    */
-  static ORIGIN_REGEX = /^https?:\/\/(?:[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})(?::[0-9]{1,5})?$/;
+  static URL_ORIGIN_REGEX = /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(:[0-9]{1,5})?/;
 
   /**
-   * Checks if a URL is valid.
+   * Validate a URL and ensure it has a valid scheme and origin.
    * @param {string} url - The URL to validate.
    * @returns {boolean} True if the URL is valid, false otherwise.
    */
   static isValidUrl(url) {
     try {
-      return ValidationUtils.URL_REGEX.test(url);
+      const { protocol, hostname } = new URL(url);
+      return ValidationUtils.URL_SCHEME_REGEX.test(protocol) && ValidationUtils.URL_ORIGIN_REGEX.test(hostname);
     } catch (error) {
       return false;
     }
   }
 
   /**
-   * Checks if a URL origin is valid.
-   * @param {string} origin - The URL origin to validate.
-   * @returns {boolean} True if the URL origin is valid, false otherwise.
+   * Sanitize a URL by removing any unnecessary or malicious parts.
+   * @param {string} url - The URL to sanitize.
+   * @returns {string} The sanitized URL.
    */
-  static isValidOrigin(origin) {
+  static sanitizeUrl(url) {
     try {
-      return ValidationUtils.ORIGIN_REGEX.test(origin);
+      const { protocol, hostname, pathname, search, hash } = new URL(url);
+      return `${protocol}//${hostname}${pathname}${search}${hash}`;
     } catch (error) {
-      return false;
+      return '';
     }
   }
 
   /**
-   * Checks if a request object is properly formatted.
-   * @param {object} request - The request object to validate.
-   * @returns {boolean} True if the request object is valid, false otherwise.
+   * Validate and sanitize a URL-encoded string.
+   * @param {string} encodedStr - The URL-encoded string to validate and sanitize.
+   * @returns {string} The validated and sanitized URL-encoded string.
    */
-  static isValidRequest(request) {
-    return (
-      request &&
-      request.method &&
-      request.url &&
-      request.headers &&
-      request.headers['content-type']
-    );
-  }
-
-  /**
-   * Checks if a URL is a valid WebSocket URL.
-   * @param {string} url - The URL to validate.
-   * @returns {boolean} True if the URL is a valid WebSocket URL, false otherwise.
-   */
-  static isValidWebSocketUrl(url) {
+  static validateAndSanitizeEncodedStr(encodedStr) {
     try {
-      const { protocol } = new URL(url);
-      return protocol === 'ws:' || protocol === 'wss:';
+      const decodedStr = decodeURIComponent(encodedStr);
+      return ValidationUtils.sanitizeUrl(decodedStr);
     } catch (error) {
-      return false;
+      return '';
     }
   }
 
   /**
-   * Validates a proxied page's HTML content.
-   * @param {string} html - The HTML content to validate.
-   * @returns {boolean} True if the HTML content is valid, false otherwise.
+   * Validate a hostname and ensure it does not contain any invalid characters.
+   * @param {string} hostname - The hostname to validate.
+   * @returns {boolean} True if the hostname is valid, false otherwise.
    */
-  static isValidHtml(html) {
-    try {
-      const { JSDOM } = require('jsdom');
-      const dom = new JSDOM(html);
-      return dom.window.document.documentElement.tagName === 'HTML';
-    } catch (error) {
-      return false;
-    }
+  static isValidHostname(hostname) {
+    const hostnameRegex = /^[a-zA-Z0-9.-]+$/;
+    return hostnameRegex.test(hostname);
+  }
+
+  /**
+   * Validate an IP address and ensure it is in a valid format.
+   * @param {string} ipAddress - The IP address to validate.
+   * @returns {boolean} True if the IP address is valid, false otherwise.
+   */
+  static isValidIpAddress(ipAddress) {
+    const ipAddressRegex = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    return ipAddressRegex.test(ipAddress);
   }
 }
 
