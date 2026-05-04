@@ -127,116 +127,120 @@ class JSRewriter {
     return js;
   }
 
-  rewriteEval(evalStr) {
-    return evalStr.replace(/[^a-zA-Z0-9]/g, (match) => {
-      return xorBase64Encode(match, generateSalt());
-    });
+  rewriteEval(js) {
+    return js.slice(5, -1);
   }
 
-  rewriteFunction(funcStr) {
-    return funcStr.replace(/[^a-zA-Z0-9]/g, (match) => {
-      return xorBase64Encode(match, generateSalt());
-    });
+  rewriteFunction(js) {
+    return js.slice(9, -1);
   }
 
-  rewriteDynamicImport(importStr) {
-    return xorBase64Encode(importStr, generateSalt());
+  rewriteDynamicImport(js) {
+    return js;
   }
 
-  rewriteRequire(requireStr) {
-    return xorBase64Encode(requireStr, generateSalt());
+  rewriteRequire(js) {
+    return js;
   }
 
   rewriteURL(url) {
-    return xorBase64Encode(url, generateSalt());
+    const salt = generateSalt();
+    return xorBase64Encode(url, salt);
   }
 }
 
-class HTMLRewriter {
-  constructor() {
-    this.srcRegex = /src\s*=\s*['"]([^'"]+)['"]/g;
-    this.hrefRegex = /href\s*=\s*['"]([^'"]+)['"]/g;
-    this.actionRegex = /action\s*=\s*['"]([^'"]+)['"]/g;
-    this.srcsetRegex = /srcset\s*=\s*['"]([^'"]+)['"]/g;
-    this.dataRegex = /data\s*=\s*['"]([^'"]+)['"]/g;
+class GzipDecompressor {
+  async decompress(response) {
+    if (response.headers.get('content-encoding') === 'gzip') {
+      const decompressedBody = await this.decompressGzip(response.body);
+      return new Response(decompressedBody, {
+        headers: response.headers,
+        status: response.status,
+      });
+    }
+    return response;
   }
 
-  rewriteHTML(html) {
-    html = html.replace(this.srcRegex, (match, p1) => {
-      return `src="${this.rewriteURL(p1)}"`;
-    });
-
-    html = html.replace(this.hrefRegex, (match, p1) => {
-      return `href="${this.rewriteURL(p1)}"`;
-    });
-
-    html = html.replace(this.actionRegex, (match, p1) => {
-      return `action="${this.rewriteURL(p1)}"`;
-    });
-
-    html = html.replace(this.srcsetRegex, (match, p1) => {
-      return `srcset="${this.rewriteURL(p1)}"`;
-    });
-
-    html = html.replace(this.dataRegex, (match, p1) => {
-      return `data="${this.rewriteURL(p1)}"`;
-    });
-
-    return html;
-  }
-
-  rewriteURL(url) {
-    return xorBase64Encode(url, generateSalt());
+  async decompressGzip(body) {
+    const reader = body.getReader();
+    const chunks = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      chunks.push(value);
+    }
+    const gzipData = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.byteLength, 0));
+    let offset = 0;
+    for (const chunk of chunks) {
+      gzipData.set(new Uint8Array(chunk), offset);
+      offset += chunk.byteLength;
+    }
+    const decompressedData = pako.ungzip(gzipData, { to: 'string' });
+    return encoder.encode(decompressedData);
   }
 }
 
-class CSSRewriter {
-  constructor() {
-    this.urlRegex = /url\(['"]([^'"]+)['"]\)/g;
-    this.importRegex = /@import\s+['"]([^'"]+)['"]/g;
-    this.contentRegex = /content:\s*url\(['"]([^'"]+)['"]\)/g;
+class BrotliDecompressor {
+  async decompress(response) {
+    if (response.headers.get('content-encoding') === 'br') {
+      const decompressedBody = await this.decompressBrotli(response.body);
+      return new Response(decompressedBody, {
+        headers: response.headers,
+        status: response.status,
+      });
+    }
+    return response;
   }
 
-  rewriteCSS(css) {
-    css = css.replace(this.urlRegex, (match, p1) => {
-      return `url('${this.rewriteURL(p1)}')`;
-    });
-
-    css = css.replace(this.importRegex, (match, p1) => {
-      return `@import '${this.rewriteURL(p1)}'`;
-    });
-
-    css = css.replace(this.contentRegex, (match, p1) => {
-      return `content: url('${this.rewriteURL(p1)}')`;
-    });
-
-    return css;
-  }
-
-  rewriteURL(url) {
-    return xorBase64Encode(url, generateSalt());
+  async decompressBrotli(body) {
+    const reader = body.getReader();
+    const chunks = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      chunks.push(value);
+    }
+    const brotliData = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.byteLength, 0));
+    let offset = 0;
+    for (const chunk of chunks) {
+      brotliData.set(new Uint8Array(chunk), offset);
+      offset += chunk.byteLength;
+    }
+    const decompressedData = brotliDecompress(brotliData);
+    return encoder.encode(decompressedData);
   }
 }
+
+function brotliDecompress(data) {
+  return new Promise((resolve, reject) => {
+    brotliDecompressor.decompress(data, (err, result) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(result);
+      }
+    });
+  });
+}
+
+const brotliDecompressor = new BrotliDecoder();
 
 async function handleFetch(request) {
-  const url = new URL(request.url);
-  const cache = await getCache();
-
-  if (request.method === 'GET') {
-    const cachedResponse = await cache.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
+  const decompressor = new GzipDecompressor();
+  const brotliDecompressor = new BrotliDecompressor();
+  let response = await getResponse(request);
+  if (!response) {
+    response = await fetch(request);
+    response = await decompressor.decompress(response);
+    response = await brotliDecompressor.decompress(response);
+    await putResponse(request, response.clone());
   }
-
-  try {
-    const response = await fetch(request);
-    const responseToCache = new Response(response.body, response);
-    responseToCache.headers.set('Cache-Control', 'max-age=3600');
-    await putResponse(request, responseToCache);
-    return responseToCache;
-  } catch (error) {
-    console.error('Error handling fetch:', error);
-    return new Response('Error', { status: 500 });
-  }
+  return response;
 }
+
+importScripts('https://cdn.jsdelivr.net/npm/pako@1.0.10/dist/pako.min.js');
+importScripts('https://cdn.jsdelivr.net/npm/brotli@1.0.1/dist/brotli.min.js');
