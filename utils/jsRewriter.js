@@ -91,30 +91,32 @@ class JSRewriterUtils {
       return `new WebSocket(${JSON.stringify(rewrittenUrl)})`;
     });
 
-    // Handle source map URL stripping
-    jsString = jsString.replace(JSRewriterUtils.SOURCE_MAP_REGEX, (match, p1) => {
-      return '';
-    });
-
     // Handle document.domain mutations
     jsString = jsString.replace(JSRewriterUtils.DOCUMENT_DOMAIN_REGEX, (match, p1) => {
-      return `document.domain = ${JSON.stringify(UrlUtils.getHostname(baseUrl))}`;
+      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p1, baseUrl);
+      return `document.domain = ${JSON.stringify(rewrittenUrl)}`;
     });
 
     // Handle window.location assignments
     jsString = jsString.replace(JSRewriterUtils.WINDOW_LOCATION_REGEX, (match, p1) => {
-      return `window.location = ${JSON.stringify(UrlUtils.getUrl(baseUrl, p1))}`;
+      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p1, baseUrl);
+      return `window.location = ${JSON.stringify(rewrittenUrl)}`;
     });
 
     // Handle window.open calls
     jsString = jsString.replace(JSRewriterUtils.WINDOW_OPEN_REGEX, (match, p1) => {
-      return `window.open(${JSON.stringify(UrlUtils.getUrl(baseUrl, p1))})`;
+      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p1, baseUrl);
+      return `window.open(${JSON.stringify(rewrittenUrl)})`;
     });
 
     // Handle history.pushState and history.replaceState calls
     jsString = jsString.replace(JSRewriterUtils.HISTORY_PUSH_STATE_REGEX, (match, p1, p2, p3) => {
-      return `${p1}(${p2}, ${JSON.stringify(p3)}, ${JSON.stringify(UrlUtils.getUrl(baseUrl, p3))})`;
+      const rewrittenUrl = JSRewriterUtils.rewriteUrl(p3, baseUrl);
+      return `${p1}(${p2}, ${JSON.stringify(rewrittenUrl)})`;
     });
+
+    // Strip source map URLs
+    jsString = SourceMapUtils.stripJsSourceMap(jsString);
 
     return jsString;
   }
@@ -126,9 +128,9 @@ class JSRewriterUtils {
    * @returns {string} The rewritten URL.
    */
   static rewriteUrl(url, baseUrl) {
-    const urlObject = new URL(url, baseUrl);
-    const rewrittenUrl = UrlUtils.getUrl(baseUrl, urlObject.href);
-    return rewrittenUrl;
+    // Apply URL rewriting rules here
+    // For example, you can use the UrlUtils class to rewrite the URL
+    return UrlUtils.rewriteUrl(url, baseUrl);
   }
 }
 
