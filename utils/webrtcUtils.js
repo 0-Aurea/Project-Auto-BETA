@@ -92,16 +92,15 @@ class WebRTCUtils {
   }
 
   /**
-   * Remove a stream from a peer connection and handle errors.
+   * Close a peer connection and handle errors.
    * @param {RTCPeerConnection} peerConnection - The peer connection.
-   * @param {MediaStream} stream - The stream to remove.
-   * @returns {Promise<void>}
+   * @returns {void}
    */
-  static async removeStream(peerConnection, stream) {
+  static closePeerConnection(peerConnection) {
     try {
-      await peerConnection.removeStream(stream);
+      peerConnection.close();
     } catch (error) {
-      globalThis.console.error('Error removing stream:', error);
+      globalThis.console.error('Error closing peer connection:', error);
     }
   }
 }
