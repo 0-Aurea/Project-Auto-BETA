@@ -1,47 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NEXUS Proxy</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="prefetch" href="script.js" as="script">
-    <link rel="prefetch" href="components/TabBar.js" as="script">
-    <link rel="prefetch" href="components/SettingsPanel.js" as="script">
-    <link rel="prefetch" href="components/BookmarksManager.js" as="script">
-    <link rel="prefetch" href="components/ProxyHistory.js" as="script">
-    <link rel="prefetch" href="components/SearchBar.js" as="script">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus Proxy</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <nav>
-                <ul>
-                    <li><a href="#" id="settings-toggle">Settings</a></li>
-                    <li><a href="#" id="bookmarks-toggle">Bookmarks</a></li>
-                    <li><a href="#" id="proxy-history-toggle">Proxy History</a></li>
-                </ul>
-            </nav>
-        </header>
-        <main>
-            <div id="search-bar-component"></div>
-            <div class="tab-bar" id="tab-bar">
-                <div id="tab-bar-component"></div>
-            </div>
-            <div id="tab-content"></div>
-        </main>
-        <div class="settings-panel" id="settings-panel">
-            <div id="settings-panel-component"></div>
-        </div>
-        <div class="bookmarks-panel" id="bookmarks-panel">
-            <div id="bookmarks-panel-component"></div>
-        </div>
-        <div class="proxy-history-panel" id="proxy-history-panel">
-            <div id="proxy-history-panel-component"></div>
-        </div>
-    </div>
-
-    <script type="module" src="script.js"></script>
+  <div class="container">
+    <header>
+      <nav>
+        <ul>
+          <li><a href="#" id="settings-toggle">Settings</a></li>
+          <li><a href="#" id="bookmarks-toggle">Bookmarks</a></li>
+          <li><a href="#" id="proxy-history-toggle">Proxy History</a></li>
+        </ul>
+      </nav>
+    </header>
+    <main>
+      <SearchBar />
+      <TabBar />
+      <SettingsPanel />
+      <ProxyHistory />
+      <BookmarksManager />
+    </main>
+  </div>
+  <script src="script.js"></script>
 </body>
 </html>
