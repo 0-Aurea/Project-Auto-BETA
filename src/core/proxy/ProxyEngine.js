@@ -120,86 +120,123 @@ class ProxyEngine {
 
       res.setHeader('Set-Cookie', isolatedCookies);
     }
+
+    // Handle WebSocket upgrade
+    if (req.headers['upgrade'] === 'websocket') {
+      res.writeHead(101, {
+        'Upgrade': 'websocket',
+        'Connection': 'Upgrade',
+        'Sec-WebSocket-Accept': req.headers['sec-websocket-accept']
+      });
+    } else {
+      // Handle HTTP requests
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    }
   }
 
   /**
-   * Handles HTTPS CONNECT requests.
+   * Handles HTTPS tunnel connections.
+   * @param {tls.TLSSocket} socket - The TLS socket.
    * @param {http.IncomingMessage} req - The incoming request.
-   * @param {http.ServerResponse} res - The outgoing response.
    */
-  handleHttpsConnect(req, res) {
-    const targetHost = req.headers['host'];
-    const targetPort = 443;
+  handleHttpsTunnel(socket, req) {
+    const targetOptions = {
+      hostname: url.parse(req.url).hostname,
+      port: 443,
+      path: req.url,
+      headers: req.headers
+    };
 
-    const targetSocket = tls.connect(targetHost, targetPort, () => {
-      res.writeHead(200, {
-        'Content-Type': 'text/plain'
-      });
-      res.end();
+    const targetSocket = tls.connect(targetOptions, () => {
+      socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+    });
 
-      req.pipe(targetSocket);
-      targetSocket.pipe(res);
+    socket.on('data', (data) => {
+      targetSocket.write(data);
+    });
+
+    targetSocket.on('data', (data) => {
+      socket.write(data);
+    });
+
+    socket.on('error', (error) => {
+      console.error('Client HTTPS tunnel error:', error);
     });
 
     targetSocket.on('error', (error) => {
-      console.error('Target HTTPS error:', error);
-      res.destroy();
+      console.error('Target HTTPS tunnel error:', error);
     });
 
-    req.on('error', (error) => {
-      console.error('Client HTTPS error:', error);
+    socket.on('close', () => {
       targetSocket.destroy();
     });
-  }
 
-  /**
-   * Handles incoming requests and upgrades them to WebSocket or HTTPS connections if necessary.
-   * @param {http.IncomingMessage} req - The incoming request.
-   * @param {http.ServerResponse} res - The outgoing response.
-   */
-  handleRequest(req, res) {
-    if (req.method === 'CONNECT') {
-      this.handleHttpsConnect(req, res);
-    } else if (req.headers['upgrade'] === 'websocket') {
-      this.handleWebSocket(new WebSocket(req, res), req);
-    } else {
-      const targetUrl = this.decodeUrl(req.url);
-      const targetOptions = {
-        hostname: url.parse(targetUrl).hostname,
-        port: url.parse(targetUrl).port,
-        path: url.parse(targetUrl).path,
-        headers: req.headers
-      };
-
-      const targetReq = http.request(targetOptions, (targetRes) => {
-        res.writeHead(targetRes.statusCode, targetRes.headers);
-        targetRes.pipe(res);
-      });
-
-      req.pipe(targetReq);
-
-      targetReq.on('error', (error) => {
-        console.error('Target request error:', error);
-        res.destroy();
-      });
-
-      req.on('error', (error) => {
-        console.error('Client request error:', error);
-        targetReq.destroy();
-      });
-    }
+    targetSocket.on('close', () => {
+      socket.destroy();
+    });
   }
 
   /**
    * Starts the proxy server.
    */
   start() {
-    this.server.on('request', (req, res) => {
-      this.handleRequest(req, res);
+    this.server.on('connection', (socket) => {
+      socket.on('data', (data) => {
+        const req = http.parse(data);
+        if (req.method === 'CONNECT') {
+          this.handleHttpsTunnel(socket, req);
+        } else {
+          this.handleRequest(req, socket);
+        }
+      });
+    });
+
+    this.wss.on('connection', (ws, req) => {
+      this.handleWebSocket(ws, req);
     });
 
     this.server.listen(8080, () => {
       console.log('Proxy server listening on port 8080');
+    });
+  }
+
+  /**
+   * Handles incoming HTTP requests.
+   * @param {http.IncomingMessage} req - The incoming request.
+   * @param {net.Socket} socket - The socket.
+   */
+  handleRequest(req, socket) {
+    const targetUrl = this.decodeUrl(req.url);
+    const targetOptions = {
+      hostname: url.parse(targetUrl).hostname,
+      port: url.parse(targetUrl).port,
+      path: url.parse(targetUrl).path,
+      headers: req.headers
+    };
+
+    const targetReq = http.request(targetOptions, (targetRes) => {
+      socket.write(`HTTP/1.1 ${targetRes.statusCode} ${targetRes.statusMessage}\r\n`);
+      Object.keys(targetRes.headers).forEach((header) => {
+        socket.write(`${header}: ${targetRes.headers[header]}\r\n`);
+      });
+      socket.write('\r\n');
+
+      targetRes.on('data', (data) => {
+        socket.write(data);
+      });
+
+      targetRes.on('end', () => {
+        socket.end();
+      });
+    });
+
+    req.on('data', (data) => {
+      targetReq.write(data);
+    });
+
+    req.on('end', () => {
+      targetReq.end();
     });
   }
 }
