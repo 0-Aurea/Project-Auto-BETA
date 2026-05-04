@@ -13,6 +13,7 @@ const config = require('./lib/config');
 const logger = require('./lib/logger');
 const TLSHandler = require('./lib/TLSHandler');
 const authMiddleware = require('./middleware/auth');
+const { URL } = require('url');
 
 const app = express();
 const serverConfig = config.server;
@@ -29,7 +30,6 @@ const tlsHandler = new TLSHandler({
 });
 
 const httpsServer = https.createServer(tlsHandler.options, app);
-
 const wss = new WebSocket.Server({ server: httpsServer });
 
 let rotatingSalt = Math.random().toString(36).substr(2, 10);
@@ -104,54 +104,79 @@ function decompressBody(req, res, next) {
           next();
         }
       });
-    } else {
-      next();
     }
   } else {
     next();
   }
 }
 
+function handleWebSocketUpgrade(req, res, next) {
+  if (req.headers['upgrade'] === 'websocket') {
+    wss.handleUpgrade(req, req.socket, Buffer.alloc(0), (ws) => {
+      wss.emit('connection', ws, req);
+    });
+  } else {
+    next();
+  }
+}
+
+function handleProxiedRequest(req, res, next) {
+  const proxiedRequest = {
+    ...req,
+    url: req.url,
+    headers: req.headers,
+    method: req.method,
+    body: req.body,
+  };
+
+  const parsedUrl = new URL(proxiedRequest.url);
+  const protocol = parsedUrl.protocol;
+  const host = parsedUrl.host;
+
+  const options = {
+    target: `${protocol}//${host}`,
+    changeOrigin: true,
+    pathRewrite: { '^/': '' },
+    onProxyReq: (proxyReq) => {
+      proxyReq.headers['content-length'] = proxyReq.body.length;
+    },
+    onProxyRes: (proxyRes) => {
+      res.header('Content-Security-Policy', proxyRes.headers['content-security-policy']);
+      res.header('X-Frame-Options', proxyRes.headers['x-frame-options']);
+      res.header('X-Content-Type-Options', proxyRes.headers['x-content-type-options']);
+    },
+  };
+
+  const proxy = createProxyMiddleware(options);
+  proxy(proxiedRequest, res, next);
+}
+
+app.use(handleEncodedUrl);
 app.use(rewriteHeaders);
 app.use(cookieScope);
-app.use(handleEncodedUrl);
 app.use(decompressBody);
+app.use(handleWebSocketUpgrade);
 
-const proxyOptions = {
-  target: 'http://localhost:8081',
-  changeOrigin: true,
-  pathRewrite: { '^/': '' },
-  onProxyReq: (proxyReq, req, res) => {
-    logger.info('Proxying request:', proxyReq.path);
-  },
-};
-
-const proxy = createProxyMiddleware(proxyOptions);
-
-app.use(proxy);
-
-wss.on('connection', (ws) => {
-  logger.info('WebSocket connection established');
-  ws.on('message', (message) => {
-    logger.info('Received WebSocket message:', message);
-  });
-  ws.on('close', () => {
-    logger.info('WebSocket connection closed');
-  });
+app.use((req, res, next) => {
+  handleProxiedRequest(req, res, next);
 });
 
 httpsServer.listen(port, () => {
   logger.info(`Server listening on port ${port}`);
 });
 
-process.on('SIGINT', () => {
-  logger.info('Server shutting down');
-  httpsServer.close();
-  process.exit(0);
-});
+wss.on('connection', (ws, req) => {
+  logger.info('WebSocket connection established');
 
-process.on('SIGTERM', () => {
-  logger.info('Server shutting down');
-  httpsServer.close();
-  process.exit(0);
+  ws.on('message', (message) => {
+    logger.info(`Received WebSocket message: ${message}`);
+  });
+
+  ws.on('close', () => {
+    logger.info('WebSocket connection closed');
+  });
+
+  ws.on('error', (error) => {
+    logger.error('WebSocket error:', error);
+  });
 });
