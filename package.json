@@ -10,6 +10,7 @@
     "lint:fix": "eslint . --fix",
     "test": "jest",
     "test:cov": "jest --coverage",
+    "test:rewriting": "jest --testNamePattern=JSRewriting",
     "ci:lint": "eslint .",
     "ci:test": "jest",
     "ci:build": "npm run ci:lint && npm run ci:test && npm run build:sw && npm run build:server",
