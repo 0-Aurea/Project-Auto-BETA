@@ -109,12 +109,11 @@ const SearchBar = () => {
       <form onSubmit={handleSearch}>
         <input
           type="search"
-          id="search-input"
-          placeholder="Search..."
           value={searchQuery}
           onChange={handleInputChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
+          placeholder="Search..."
           className={focused ? 'focused' : ''}
         />
         {showSuggestions && (
@@ -126,24 +125,43 @@ const SearchBar = () => {
             ))}
           </ul>
         )}
-        <select value={searchEngine} onChange={handleSearchEngineChange}>
-          <option value="google">Google</option>
-          <option value="bing">Bing</option>
-        </select>
+        <button type="submit" className="search-button">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </button>
       </form>
       <div className="search-history">
-        <h3>Search History</h3>
-        <ul>
-          {searchHistory.map((historyItem, index) => (
-            <li key={index} onClick={() => handleHistoryClick(historyItem)}>
-              {historyItem}
-            </li>
-          ))}
-        </ul>
-        <button onClick={handleHistoryClear}>Clear History</button>
         <button onClick={handleHistoryToggle}>
           {historyExpanded ? 'Hide' : 'Show'} History
         </button>
+        {historyExpanded && (
+          <ul>
+            {searchHistory.map((historyItem, index) => (
+              <li key={index} onClick={() => handleHistoryClick(historyItem)}>
+                {historyItem}
+              </li>
+            ))}
+            <li onClick={handleHistoryClear}>Clear History</li>
+          </ul>
+        )}
+      </div>
+      <div className="search-engine-switcher">
+        <label>
+          Search Engine:
+          <select value={searchEngine} onChange={handleSearchEngineChange}>
+            <option value="google">Google</option>
+            <option value="bing">Bing</option>
+          </select>
+        </label>
       </div>
     </div>
   );
