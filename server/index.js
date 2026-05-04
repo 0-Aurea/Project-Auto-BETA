@@ -10,6 +10,7 @@ const cookieScoping = require('./lib/cookieScoping');
 const { URL } = require('url');
 const BrotliDecompress = require('brotli-decompress');
 const zlib = require('zlib');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 
@@ -26,7 +27,7 @@ const wss = new WebSocket.Server({ server });
 
 let connections = {};
 
-wss.on('connection', (ws, req) => {
+const handleWebSocket = (ws, req) => {
   try {
     const { hostname: proxiedHost } = req.headers['x-nexus-proxied-host'];
     if (!proxiedHost) {
@@ -51,7 +52,9 @@ wss.on('connection', (ws, req) => {
     logger.error('Error occurred during WebSocket connection:', error);
     ws.close(1000, 'Internal Server Error');
   }
-});
+};
+
+wss.on('connection', handleWebSocket);
 
 app.use(cookieScoping);
 
@@ -99,25 +102,32 @@ const handleProxyRequest = async (req, res) => {
       delete responseHeaders['strict-transport-security'];
       delete responseHeaders['x-frame-options'];
 
-      res.writeHead(targetRes.statusCode, responseHeaders);
+      // Set proxied headers
+      responseHeaders['x-nexus-proxied-host'] = proxiedHost;
 
-      if (decompressedResponse) {
+      // Recompress response if necessary
+      if (encoding === 'br' || encoding === 'gzip') {
+        res.set(responseHeaders);
         targetRes.pipe(decompressedResponse).pipe(res);
       } else {
+        res.set(responseHeaders);
         targetRes.pipe(res);
       }
-
-      targetRes.on('end', () => {
-        res.end();
-      });
     });
 
     targetReq.on('error', (error) => {
-      logger.error('Error occurred during target request:', error);
+      logger.error('Error occurred during proxy request:', error);
       res.status(500).send({ error: 'Internal Server Error' });
     });
 
-    req.pipe(targetReq);
+    req.headers['x-nexus-proxied-host'] = proxiedHost;
+    req.headers['x-nexus-target-host'] = targetHost;
+    req.headers['x-nexus-target-port'] = targetPort;
+
+    // Rewrite request headers
+    delete req.headers['host'];
+
+    targetReq.end(req.body);
   } catch (error) {
     logger.error('Error occurred during proxy request:', error);
     res.status(500).send({ error: 'Internal Server Error' });
@@ -126,30 +136,52 @@ const handleProxyRequest = async (req, res) => {
 
 app.all('*', handleProxyRequest);
 
-server.listen(config.server.port, config.server.host, () => {
-  logger.info(`Server listening on ${config.server.host}:${config.server.port}`);
-});
+const handleWebSocketProxy = (req, socket, head) => {
+  try {
+    const { hostname: proxiedHost } = req.headers['x-nexus-proxied-host'];
+    if (!proxiedHost) {
+      socket.destroy();
+      return;
+    }
 
-process.on('SIGINT', () => {
-  logger.info('Server shutting down...');
-  server.close(() => {
-    process.exit(0);
+    const targetHost = req.headers['x-nexus-target-host'];
+    const targetPort = req.headers['x-nexus-target-port'];
+
+    if (!targetHost || !targetPort) {
+      socket.destroy();
+      return;
+    }
+
+    const targetUrl = `ws://${targetHost}:${targetPort}${req.url}`;
+
+    const targetSocket = new WebSocket(targetUrl);
+
+    targetSocket.on('open', () => {
+      socket.pipe(targetSocket);
+      targetSocket.pipe(socket);
+    });
+
+    targetSocket.on('error', (error) => {
+      logger.error('Error occurred during WebSocket proxy:', error);
+      socket.destroy();
+    });
+
+    socket.on('error', (error) => {
+      logger.error('Error occurred during WebSocket proxy:', error);
+      targetSocket.close();
+    });
+  } catch (error) {
+    logger.error('Error occurred during WebSocket proxy:', error);
+    socket.destroy();
+  }
+};
+
+server.on('upgrade', handleWebSocketProxy);
+
+const startServer = () => {
+  server.listen(config.server.port, config.server.host, () => {
+    logger.info(`Server listening on ${config.server.host}:${config.server.port}`);
   });
-});
+};
 
-process.on('SIGTERM', () => {
-  logger.info('Server shutting down...');
-  server.close(() => {
-    process.exit(0);
-  });
-});
-
-process.on('uncaughtException', (error) => {
-  logger.error('Uncaught exception:', error);
-  process.exit(1);
-});
-
-process.on('unhandledRejection', (reason) => {
-  logger.error('Unhandled rejection:', reason);
-  process.exit(1);
-});
+startServer();
