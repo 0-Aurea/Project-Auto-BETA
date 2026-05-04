@@ -4,6 +4,7 @@ import { createReadStream, createWriteStream, readFileSync } from 'fs';
 import { join } from 'path';
 import { promisify } from 'util';
 import axios from 'axios';
+import WebSocket from 'ws';
 
 const pipeline = promisify(require('stream').pipeline);
 
@@ -13,6 +14,7 @@ class ProxyEngine {
    */
   constructor() {
     this.cache = new Map();
+    this.wsClients = new Map();
   }
 
   /**
@@ -27,6 +29,11 @@ class ProxyEngine {
     // Check if the request is for a proxied resource
     if (!reqUrl.startsWith(URL_PREFIX)) {
       return this.handleDirectRequest(req, res);
+    }
+
+    // Check if the request is a WebSocket upgrade request
+    if (headers['upgrade'] === 'websocket') {
+      return this.handleWebSocketRequest(req, res);
     }
 
     // Decode the URL
@@ -55,6 +62,62 @@ class ProxyEngine {
     } catch (error) {
       return this.handleError(req, res, 500, 'Internal Server Error');
     }
+  }
+
+  /**
+   * Handles a WebSocket upgrade request.
+   * @param {object} req - The incoming request object.
+   * @param {object} res - The outgoing response object.
+   * @returns {Promise<void>} A promise that resolves when the response is sent.
+   */
+  async handleWebSocketRequest(req, res) {
+    const { url: reqUrl, headers, socket, upgrade } = req;
+
+    // Decode the URL
+    const decodedUrl = this.decodeUrl(reqUrl);
+
+    // Check if the decoded URL is valid
+    if (!decodedUrl) {
+      return this.handleError(req, res, 400, 'Invalid URL');
+    }
+
+    // Create a new WebSocket connection to the target server
+    const targetWs = new WebSocket(decodedUrl);
+
+    // Handle the WebSocket connection
+    targetWs.on('open', () => {
+      // Forward the WebSocket upgrade request to the target server
+      upgrade(targetWs, req, res, (err) => {
+        if (err) {
+          console.error(err);
+        }
+      });
+
+      // Forward messages from the client to the target server
+      req.socket.on('message', (message) => {
+        targetWs.send(message);
+      });
+
+      // Forward messages from the target server to the client
+      targetWs.on('message', (message) => {
+        req.socket.send(message);
+      });
+
+      // Handle errors
+      targetWs.on('error', (error) => {
+        console.error(error);
+      });
+
+      // Handle close
+      targetWs.on('close', () => {
+        req.socket.close();
+      });
+    });
+
+    // Handle errors
+    targetWs.on('error', (error) => {
+      console.error(error);
+    });
   }
 
   /**
@@ -106,82 +169,27 @@ class ProxyEngine {
   }
 
   /**
-   * Rewrites the headers of a request or response.
+   * Rewrites the headers for a request or response.
    * @param {object} headers - The headers to rewrite.
    * @returns {object} The rewritten headers.
    */
   rewriteHeaders(headers) {
     const rewrittenHeaders = {};
 
-    // Remove sensitive headers
+    // Iterate over the headers
     for (const [key, value] of Object.entries(headers)) {
-      if (key.toLowerCase() !== 'cookie' && key.toLowerCase() !== 'authorization') {
-        rewrittenHeaders[key] = value;
+      // Skip headers that should be removed
+      if (key.toLowerCase() === 'content-security-policy' ||
+          key.toLowerCase() === 'strict-transport-security' ||
+          key.toLowerCase() === 'x-frame-options') {
+        continue;
       }
-    }
 
-    // Add or modify headers as needed
-    rewrittenHeaders['Access-Control-Allow-Origin'] = '*';
-    rewrittenHeaders['Access-Control-Allow-Headers'] = 'Origin, X-Requested-With, Content-Type, Accept';
+      // Rewrite the header value
+      rewrittenHeaders[key] = value;
+    }
 
     return rewrittenHeaders;
-  }
-
-  /**
-   * Caches a response.
-   * @param {string} url - The URL of the response.
-   * @param {object} response - The response to cache.
-   * @returns {Promise<void>} A promise that resolves when the response is cached.
-   */
-  async cacheResponse(url, response) {
-    const { status, headers, data } = response;
-
-    // Create a cache entry
-    const cacheEntry = {
-      status,
-      headers,
-      data,
-      ttl: Date.now() + 60 * 60 * 1000, // 1 hour
-    };
-
-    // Store the cache entry
-    this.cache.set(url, cacheEntry);
-  }
-
-  /**
-   * Gets a cached response.
-   * @param {string} url - The URL of the response.
-   * @returns {Promise<object|null>} A promise that resolves with the cached response or null if not found.
-   */
-  async getCachedResponse(url) {
-    const cacheEntry = this.cache.get(url);
-
-    // Check if the cache entry is valid
-    if (cacheEntry && cacheEntry.ttl > Date.now()) {
-      return cacheEntry;
-    }
-
-    return null;
-  }
-
-  /**
-   * Sends a response to the client.
-   * @param {object} req - The incoming request object.
-   * @param {object} res - The outgoing response object.
-   * @param {object} response - The response to send.
-   * @returns {Promise<void>} A promise that resolves when the response is sent.
-   */
-  async sendResponse(req, res, response) {
-    const { status, headers, data } = response;
-
-    // Set the response status and headers
-    res.status(status);
-    for (const [key, value] of Object.entries(headers)) {
-      res.set(key, value);
-    }
-
-    // Send the response data
-    res.send(data);
   }
 
   /**
@@ -191,20 +199,59 @@ class ProxyEngine {
    * @returns {Promise<void>} A promise that resolves when the response is sent.
    */
   async handleDirectRequest(req, res) {
-    // Implement direct request handling logic here
+    // Implement direct request handling
   }
 
   /**
    * Handles an error.
    * @param {object} req - The incoming request object.
    * @param {object} res - The outgoing response object.
-   * @param {number} status - The error status code.
+   * @param {number} statusCode - The status code of the error.
    * @param {string} message - The error message.
-   * @returns {Promise<void>} A promise that resolves when the error response is sent.
+   * @returns {Promise<void>} A promise that resolves when the response is sent.
    */
-  async handleError(req, res, status, message) {
-    res.status(status).send(message);
+  async handleError(req, res, statusCode, message) {
+    res.status(statusCode).send(message);
+  }
+
+  /**
+   * Gets a cached response.
+   * @param {string} url - The URL of the response to cache.
+   * @returns {Promise<object>} A promise that resolves with the cached response or null if not found.
+   */
+  async getCachedResponse(url) {
+    // Implement caching
+  }
+
+  /**
+   * Caches a response.
+   * @param {string} url - The URL of the response to cache.
+   * @param {object} response - The response to cache.
+   * @returns {Promise<void>} A promise that resolves when the response is cached.
+   */
+  async cacheResponse(url, response) {
+    // Implement caching
+  }
+
+  /**
+   * Sends a response.
+   * @param {object} req - The incoming request object.
+   * @param {object} res - The outgoing response object.
+   * @param {object} response - The response to send.
+   * @returns {Promise<void>} A promise that resolves when the response is sent.
+   */
+  async sendResponse(req, res, response) {
+    res.status(response.status).set(response.headers).send(response.data);
+  }
+
+  /**
+   * Scrub WebRTC ICE candidate to prevent IP leaks.
+   * @param {object} iceCandidate - The ICE candidate to scrub.
+   * @returns {object} The scrubbed ICE candidate.
+   */
+  scrubIceCandidate(iceCandidate) {
+    // Implement ICE candidate scrubbing
   }
 }
 
-export { ProxyEngine };
+export default ProxyEngine;
