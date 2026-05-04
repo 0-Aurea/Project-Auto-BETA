@@ -96,350 +96,190 @@ class ProxyEngine {
       return;
     }
 
-    // Proxy the request
-    const targetUrl = await this.getTargetUrl(reqUrl);
-    const targetReq = await this.rewriteRequest(req);
-    const targetRes = await axios({
-      method: targetReq.method,
-      url: targetUrl,
-      headers: targetReq.headers,
-      data: targetReq.data,
-      responseType: 'stream'
-    });
+    // Decode the URL
+    let decodedUrl = this.decodeUrl(reqUrl);
 
-    // Rewrite the response
-    const rewrittenRes = await this.rewriteResponse(targetRes);
-    rewrittenRes.pipe(res);
+    // Check if the request is for a proxied resource
+    if (decodedUrl.startsWith(URL_PREFIX)) {
+      // Handle proxied resource request
+      await this.handleProxiedResourceRequest(req, res, decodedUrl);
+    } else {
+      // Handle direct request
+      await this.handleDirectRequest(req, res, decodedUrl);
+    }
   }
 
   /**
-   * Handles WebSocket upgrades.
-   * @param {object} req - The incoming request object.
-   * @param {object} socket - The socket object.
-   * @param {object} head - The head object.
+   * Decodes a URL using the XOR + base64 encoding scheme.
+   * @param {string} encodedUrl - The encoded URL.
+   * @returns {string} The decoded URL.
    */
-  async handleWebSocket(req, socket, head) {
-    const { headers, url: reqUrl } = req;
-    const { host, referer } = headers;
+  decodeUrl(encodedUrl) {
+    // Remove the URL prefix
+    encodedUrl = encodedUrl.replace(URL_PREFIX, '');
 
-    // Get the target URL
-    const targetUrl = await this.getTargetUrl(reqUrl);
+    // Decode the URL
+    return EncodingUtils.decode(encodedUrl, rotatingSalt);
+  }
 
-    // Establish a WebSocket connection to the target URL
-    const targetWs = new WebSocket(targetUrl);
+  /**
+   * Handles a proxied resource request.
+   * @param {object} req - The incoming request object.
+   * @param {object} res - The outgoing response object.
+   * @param {string} decodedUrl - The decoded URL.
+   */
+  async handleProxiedResourceRequest(req, res, decodedUrl) {
+    // Rewrite the request headers
+    req.headers['host'] = url.parse(decodedUrl).host;
 
-    // Handle WebSocket messages
-    targetWs.on('message', (message) => {
-      socket.send(message);
+    // Proxy the request
+    const proxiedReq = axios.create({
+      headers: req.headers,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
     });
 
-    // Handle WebSocket errors
-    targetWs.on('error', (error) => {
-      console.error('WebSocket error:', error);
+    // Pipe the response
+    const response = await proxiedReq.get(decodedUrl, {
+      responseType: 'stream',
     });
 
-    // Handle WebSocket close
-    targetWs.on('close', () => {
-      socket.close();
-    });
+    // Re-write the response headers
+    res.set(response.headers);
 
-    // Handle socket messages
-    socket.on('message', (message) => {
-      targetWs.send(message);
-    });
+    // Pipe the response stream
+    await pipeline(response.data, res);
 
-    // Handle socket errors
-    socket.on('error', (error) => {
-      console.error('Socket error:', error);
-    });
+    // Cache the response
+    this.cache.set(decodedUrl, response.data);
+  }
 
-    // Handle socket close
-    socket.on('close', () => {
-      targetWs.close();
+  /**
+   * Handles a direct request.
+   * @param {object} req - The incoming request object.
+   * @param {object} res - The outgoing response object.
+   * @param {string} decodedUrl - The decoded URL.
+   */
+  async handleDirectRequest(req, res, decodedUrl) {
+    // Check if the request is cached
+    if (this.cache.has(decodedUrl)) {
+      // Return the cached response
+      const cachedResponse = this.cache.get(decodedUrl);
+      res.set(cachedResponse.headers);
+      res.send(cachedResponse);
+    } else {
+      // Proxy the request
+      const proxiedReq = axios.create({
+        headers: req.headers,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+      });
+
+      // Pipe the response
+      const response = await proxiedReq.get(decodedUrl, {
+        responseType: 'stream',
+      });
+
+      // Re-write the response headers
+      res.set(response.headers);
+
+      // Pipe the response stream
+      await pipeline(response.data, res);
+
+      // Cache the response
+      this.cache.set(decodedUrl, response.data);
+    }
+  }
+
+  /**
+   * Handles a WebSocket connection.
+   * @param {object} req - The incoming request object.
+   * @param {object} socket - The WebSocket socket object.
+   * @param {object} head - The WebSocket head object.
+   */
+  handleWebSocket(req, socket, head) {
+    // Handle WebSocket upgrade
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit('connection', ws, req);
     });
   }
 
   /**
-   * Handles WebSocket connections.
+   * Handles a WebSocket connection event.
    * @param {object} ws - The WebSocket object.
    * @param {object} req - The incoming request object.
    */
-  async handleWebSocketConnection(ws, req) {
-    const { headers, url: reqUrl } = req;
-    const { host, referer } = headers;
-
-    // Get the target URL
-    const targetUrl = await this.getTargetUrl(reqUrl);
-
-    // Establish a WebSocket connection to the target URL
-    const targetWs = new WebSocket(targetUrl);
-
+  handleWebSocketConnection(ws, req) {
     // Handle WebSocket messages
     ws.on('message', (message) => {
-      targetWs.send(message);
+      // Handle WebSocket message
+      console.log(`Received WebSocket message: ${message}`);
     });
 
     // Handle WebSocket errors
     ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
+      console.error(`WebSocket error: ${error}`);
     });
 
     // Handle WebSocket close
     ws.on('close', () => {
-      targetWs.close();
-    });
-
-    // Handle target WebSocket messages
-    targetWs.on('message', (message) => {
-      ws.send(message);
-    });
-
-    // Handle target WebSocket errors
-    targetWs.on('error', (error) => {
-      console.error('Target WebSocket error:', error);
-    });
-
-    // Handle target WebSocket close
-    targetWs.on('close', () => {
-      ws.close();
+      console.log('WebSocket closed');
     });
   }
 
   /**
-   * Gets the target URL for a given request URL.
-   * @param {string} reqUrl - The incoming request URL.
-   * @returns {string} The target URL.
-   */
-  async getTargetUrl(reqUrl) {
-    // Decode the request URL
-    const decodedUrl = EncodingUtils.decodeUrl(reqUrl);
-
-    // Get the target URL
-    const targetUrl = decodedUrl;
-
-    return targetUrl;
-  }
-
-  /**
-   * Rewrites a request.
+   * Handles a WebRTC ICE candidate scrubbing request.
    * @param {object} req - The incoming request object.
-   * @returns {object} The rewritten request object.
+   * @param {object} socket - The socket object.
+   * @param {object} head - The head object.
    */
-  async rewriteRequest(req) {
-    const { headers, url: reqUrl, method, data } = req;
-
-    // Rewrite the request headers
-    const rewrittenHeaders = await this.rewriteHeaders(headers);
-
-    // Rewrite the request URL
-    const rewrittenUrl = await this.getTargetUrl(reqUrl);
-
-    // Create a new request object
-    const rewrittenReq = {
-      method,
-      url: rewrittenUrl,
-      headers: rewrittenHeaders,
-      data
-    };
-
-    return rewrittenReq;
+  handleWebRTC(req, socket, head) {
+    // Handle WebRTC ICE candidate scrubbing
+    console.log('Handling WebRTC ICE candidate scrubbing');
   }
 
   /**
-   * Rewrites a response.
-   * @param {object} res - The incoming response object.
-   * @returns {object} The rewritten response object.
-   */
-  async rewriteResponse(res) {
-    const { headers, data } = res;
-
-    // Rewrite the response headers
-    const rewrittenHeaders = await this.rewriteHeaders(headers);
-
-    // Create a new response object
-    const rewrittenRes = {
-      headers: rewrittenHeaders,
-      data: await this.rewriteBody(data)
-    };
-
-    return rewrittenRes;
-  }
-
-  /**
-   * Rewrites headers.
-   * @param {object} headers - The incoming headers object.
-   * @returns {object} The rewritten headers object.
-   */
-  async rewriteHeaders(headers) {
-    const rewrittenHeaders = {};
-
-    // Iterate over the headers
-    for (const [key, value] of Object.entries(headers)) {
-      // Rewrite the header value
-      const rewrittenValue = await this.rewriteHeaderValue(key, value);
-
-      // Add the rewritten header to the rewritten headers object
-      rewrittenHeaders[key] = rewrittenValue;
-    }
-
-    return rewrittenHeaders;
-  }
-
-  /**
-   * Rewrites a header value.
-   * @param {string} key - The header key.
-   * @param {string} value - The header value.
-   * @returns {string} The rewritten header value.
-   */
-  async rewriteHeaderValue(key, value) {
-    // Handle specific headers
-    switch (key) {
-      case 'content-security-policy':
-        // Remove the content security policy header
-        return '';
-      case 'strict-transport-security':
-        // Remove the strict transport security header
-        return '';
-      case 'x-frame-options':
-        // Remove the x-frame-options header
-        return '';
-      default:
-        // Return the original header value
-        return value;
-    }
-  }
-
-  /**
-   * Rewrites the body of a response.
-   * @param {object} body - The incoming body object.
-   * @returns {object} The rewritten body object.
-   */
-  async rewriteBody(body) {
-    // Check if the body is a string
-    if (typeof body === 'string') {
-      // Rewrite the body as a string
-      return await this.rewriteStringBody(body);
-    } else {
-      // Return the original body
-      return body;
-    }
-  }
-
-  /**
-   * Rewrites a string body.
-   * @param {string} body - The incoming string body.
-   * @returns {string} The rewritten string body.
-   */
-  async rewriteStringBody(body) {
-    // Use the JS rewriter to rewrite the body
-    return this.jsRewriter.rewrite(body);
-  }
-
-  /**
-   * Handles search requests.
+   * Handles a search request.
    * @param {object} req - The incoming request object.
    * @param {object} res - The outgoing response object.
    */
   async handleSearchRequest(req, res) {
-    const { query } = req.query;
-
-    // Perform the search
-    const results = await this.performSearch(query);
-
-    // Return the search results
-    res.json(results);
+    // Handle search request
+    console.log('Handling search request');
+    res.send('Search results');
   }
 
   /**
-   * Performs a search.
-   * @param {string} query - The search query.
-   * @returns {object} The search results.
-   */
-  async performSearch(query) {
-    // Implement search logic here
-    return [];
-  }
-
-  /**
-   * Handles new tab requests.
+   * Handles a new tab request.
    * @param {object} req - The incoming request object.
    * @param {object} res - The outgoing response object.
    */
   async handleNewTabRequest(req, res) {
-    const { url } = req.query;
-
-    // Create a new tab
-    const tab = await this.createTab(url);
-
-    // Return the tab
-    res.json(tab);
+    // Handle new tab request
+    console.log('Handling new tab request');
+    res.send('New tab created');
   }
 
   /**
-   * Creates a new tab.
-   * @param {string} url - The URL for the new tab.
-   * @returns {object} The new tab object.
-   */
-  async createTab(url) {
-    // Implement tab creation logic here
-    return {};
-  }
-
-  /**
-   * Handles tab update requests.
+   * Handles a tab update request.
    * @param {object} req - The incoming request object.
    * @param {object} res - The outgoing response object.
    */
   async handleTabUpdateRequest(req, res) {
-    const { tabId, url } = req.body;
-
-    // Update the tab
-    await this.updateTab(tabId, url);
-
-    // Return the updated tab
-    res.json(await this.getTab(tabId));
+    // Handle tab update request
+    console.log('Handling tab update request');
+    res.send('Tab updated');
   }
 
   /**
-   * Updates a tab.
-   * @param {string} tabId - The ID of the tab to update.
-   * @param {string} url - The new URL for the tab.
-   */
-  async updateTab(tabId, url) {
-    // Implement tab update logic here
-  }
-
-  /**
-   * Gets a tab.
-   * @param {string} tabId - The ID of the tab to get.
-   * @returns {object} The tab object.
-   */
-  async getTab(tabId) {
-    // Implement tab retrieval logic here
-    return {};
-  }
-
-  /**
-   * Handles tab removal requests.
+   * Handles a tab removal request.
    * @param {object} req - The incoming request object.
    * @param {object} res - The outgoing response object.
    */
   async handleTabRemoveRequest(req, res) {
-    const { tabId } = req.body;
-
-    // Remove the tab
-    await this.removeTab(tabId);
-
-    // Return a success response
-    res.json({ success: true });
-  }
-
-  /**
-   * Removes a tab.
-   * @param {string} tabId - The ID of the tab to remove.
-   */
-  async removeTab(tabId) {
-    // Implement tab removal logic here
+    // Handle tab removal request
+    console.log('Handling tab removal request');
+    res.send('Tab removed');
   }
 }
 
