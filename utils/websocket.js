@@ -1,156 +1,77 @@
-const { WebSocket } = require('ws');
+const WebSocket = require('ws');
 const { URL } = require('url');
-const { REQUEST_HEADER_REWRITE_LIST, RESPONSE_HEADER_REWRITE_LIST } = require('./constants');
 
 /**
  * WebSocket utility class for handling WebSocket upgrade proxying with header rewriting and subprotocol support.
  */
 class WebSocketUtils {
   /**
-   * Regular expression to match WebSocket upgrade requests.
-   */
-  static WEBSOCKET_UPGRADE_REGEX = /^\/$/;
-
-  /**
    * WebSocket server instance.
    */
   static wss;
 
   /**
-   * Options for the WebSocket server.
-   */
-  static options = {
-    // Add WebSocket server options here
-    maxPayload: 1024 * 1024 * 10, // 10MB payload limit
-  };
-
-  /**
    * Initialize the WebSocket server.
-   * @param {http.Server} server - The HTTP server instance.
+   * @param {object} server - The HTTP server instance.
+   * @param {object} options - WebSocket server options.
    */
-  static init(server) {
-    WebSocketUtils.wss = new WebSocket.Server({ server, ...WebSocketUtils.options });
+  static init(server, options) {
+    WebSocketUtils.wss = new WebSocket.Server({ server, ...options });
 
     WebSocketUtils.wss.on('connection', (ws, req) => {
-      // Handle WebSocket connection handshake
-      const { headers, method, url } = req;
+      const { headers, url } = req;
 
-      // Rewrite WebSocket upgrade request headers
-      const rewrittenHeaders = { ...headers };
-      REQUEST_HEADER_REWRITE_LIST.forEach((header) => {
-        delete rewrittenHeaders[header];
-      });
+      // Handle WebSocket upgrade request
+      const websocketUrl = new URL(url, 'http://example.com');
+      const { searchParams } = websocketUrl;
 
-      // Handle WebSocket messages
+      // Extract subprotocols
+      const subprotocols = headers['sec-websocket-protocol'];
+
+      // Handle WebSocket connection
       ws.on('message', (message) => {
-        // Handle and rewrite WebSocket messages
-        const { type, data } = JSON.parse(message);
-        switch (type) {
-          case 'text':
-            // Handle text messages
-            ws.send(JSON.stringify({ type: 'text', data: data.toString() }));
-            break;
-          case 'binary':
-            // Handle binary messages
-            ws.send(Buffer.from(data));
-            break;
-          default:
-            // Handle unknown message types
-            console.error(`Unknown message type: ${type}`);
-        }
+        // Rewrite and forward message
+        WebSocketUtils.rewriteAndForwardMessage(ws, message);
       });
 
-      // Handle WebSocket close events
       ws.on('close', () => {
-        // Handle WebSocket close events
+        // Handle WebSocket close
       });
 
-      // Handle WebSocket errors
       ws.on('error', (error) => {
-        // Handle WebSocket errors
-        console.error(`WebSocket error: ${error}`);
+        // Handle WebSocket error
+        globalThis.console.error('WebSocket error:', error);
       });
     });
   }
 
   /**
-   * Handle WebSocket upgrade requests.
-   * @param {http.IncomingMessage} req - The incoming request.
-   * @param {http.ServerResponse} res - The server response.
-   * @param {string} target - The target URL for the WebSocket connection.
-   */
-  static handleUpgrade(req, res, target) {
-    if (!WebSocketUtils.WEBSOCKET_UPGRADE_REGEX.test(req.url)) {
-      return;
-    }
-
-    const { headers, method, url } = req;
-
-    // Rewrite WebSocket upgrade request headers
-    const rewrittenHeaders = { ...headers };
-    REQUEST_HEADER_REWRITE_LIST.forEach((header) => {
-      delete rewrittenHeaders[header];
-    });
-
-    // Establish the WebSocket connection
-    WebSocketUtils.wss.handleUpgrade(req, res, (ws) => {
-      WebSocketUtils.wss.emit('connection', ws, req);
-
-      // Proxy WebSocket connection through the HTTPS tunnel
-      WebSocketUtils.proxyWebSocket(target, req, res, ws);
-    });
-  }
-
-  /**
-   * Proxy WebSocket connections through the HTTPS tunnel.
-   * @param {string} target - The target URL for the WebSocket connection.
-   * @param {http.IncomingMessage} req - The incoming request.
-   * @param {http.ServerResponse} res - The server response.
+   * Rewrites and forwards a WebSocket message.
    * @param {WebSocket} ws - The WebSocket instance.
+   * @param {Buffer} message - The message to rewrite and forward.
    */
-  static proxyWebSocket(target, req, res, ws) {
-    const { headers, method, url } = req;
+  static rewriteAndForwardMessage(ws, message) {
+    try {
+      // TO DO: implement message rewriting logic
+      ws.send(message);
+    } catch (error) {
+      globalThis.console.error('Error rewriting and forwarding WebSocket message:', error);
+    }
+  }
 
-    // Establish the WebSocket connection through the HTTPS tunnel
-    const targetWs = new WebSocket(target, {
-      headers: {
-        ...headers,
-        'Sec-WebSocket-Protocol': headers['sec-webSocket-protocol'],
-      },
-    });
-
-    // Handle WebSocket open events
-    targetWs.on('open', () => {
-      // Forward WebSocket messages to the target WebSocket
-      ws.on('message', (message) => {
-        targetWs.send(message);
-      });
-
-      // Forward WebSocket messages from the target WebSocket
-      targetWs.on('message', (message) => {
-        ws.send(message);
-      });
-    });
-
-    // Handle WebSocket close events
-    targetWs.on('close', () => {
-      // Handle WebSocket close events
-      ws.close();
-    });
-
-    // Handle WebSocket errors
-    targetWs.on('error', (error) => {
-      // Handle WebSocket errors
-      console.error(`WebSocket error: ${error}`);
-    });
-
-    // Rewrite WebSocket response headers
-    targetWs.on('headers', (headers) => {
-      const rewrittenHeaders = { ...headers };
-      RESPONSE_HEADER_REWRITE_LIST.forEach((header) => {
-        delete rewrittenHeaders[header];
-      });
-    });
+  /**
+   * Handles WebSocket ICE candidate scrubbing to prevent IP leaks.
+   * @param {object} candidate - The ICE candidate to scrub.
+   * @returns {object} The scrubbed ICE candidate.
+   */
+  static scrubIceCandidate(candidate) {
+    try {
+      // TO DO: implement ICE candidate scrubbing logic
+      return candidate;
+    } catch (error) {
+      globalThis.console.error('Error scrubbing WebSocket ICE candidate:', error);
+      return null;
+    }
   }
 }
 
