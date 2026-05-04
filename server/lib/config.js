@@ -12,6 +12,10 @@ const config = {
       tlsv1_2: true,
       tlsv1_3: true,
     },
+    auth: {
+      secret: 'nexus-auth-secret',
+      tokenExpiration: 60 * 60 * 24 * 7, // 1 week
+    },
     cors: {
       enabled: true,
       origin: '*',
@@ -65,6 +69,19 @@ const config = {
       },
       bookmarks: true,
       aboutBlankCloaking: true,
+    },
+    search: {
+      providers: [
+        {
+          name: 'Google',
+          url: 'https://www.google.com/search?q=',
+        },
+        {
+          name: 'Bing',
+          url: 'https://www.bing.com/search?q=',
+        },
+      ],
+      defaultProvider: 'Google',
     },
   },
   // Security configuration
