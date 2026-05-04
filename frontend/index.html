@@ -20,19 +20,43 @@
     </header>
     <main>
       <div class="search-bar-container">
-        <SearchBar />
+        <SearchBar 
+          onSearchQuery={handleSearchQuery} 
+          onSearchEngineChange={handleSearchEngineChange}
+        />
       </div>
       <div class="tab-bar-container">
-        <TabManager />
+        <TabBar 
+          onTabChange={handleTabChange} 
+          onNewTab={handleNewTab} 
+          onTabClose={handleTabClose}
+        />
+      </div>
+      <div class="tab-manager-container">
+        <TabManager 
+          onTabChange={handleTabChange} 
+          onNewTab={handleNewTab} 
+          onTabClose={handleTabClose}
+        />
       </div>
       <div class="settings-panel-container">
-        <SettingsPanel />
+        <SettingsPanel 
+          onCacheEnabledChange={handleCacheEnabledChange}
+          onCacheTTLChange={handleCacheTTLChange}
+          onPrefetchEnabledChange={handlePrefetchEnabledChange}
+          onAdBlockEnabledChange={handleAdBlockEnabledChange}
+        />
       </div>
       <div class="proxy-history-container">
-        <ProxyHistory />
+        <ProxyHistory 
+          onHistoryChange={handleHistoryChange} 
+          onFilteredHistoryChange={handleFilteredHistoryChange}
+        />
       </div>
       <div class="bookmarks-manager-container">
-        <BookmarksManager />
+        <BookmarksManager 
+          onBookmarksChange={handleBookmarksChange}
+        />
       </div>
     </main>
   </div>
