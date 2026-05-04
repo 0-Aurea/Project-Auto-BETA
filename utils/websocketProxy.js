@@ -119,8 +119,9 @@ class WebSocketProxyUtils {
       delete headers[header];
     });
 
-    // Add custom headers if needed
-    headers['X-Forwarded-For'] = '127.0.0.1';
+    // Add proxied headers
+    headers['x-proxied'] = 'true';
+    headers['x-origin'] = origin;
 
     return headers;
   }
