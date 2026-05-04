@@ -58,6 +58,44 @@ class HeaderRewriterUtils {
   }
 
   /**
+   * Handle WebSocket upgrade requests and responses.
+   * @param {object} request - The WebSocket request object.
+   * @param {object} response - The WebSocket response object.
+   */
+  static handleWebSocketUpgrade(request, response) {
+    // Rewrite WebSocket upgrade request headers
+    request.headers = HeaderRewriterUtils.rewriteRequestHeaders(request.headers);
+
+    // Rewrite WebSocket upgrade response headers
+    response.headers = HeaderRewriterUtils.rewriteResponseHeaders(response.headers);
+
+    // Handle WebSocket connection
+    return new Promise((resolve, reject) => {
+      // Establish WebSocket connection
+      const webSocket = new globalThis.WebSocket(request.url);
+
+      // Handle WebSocket messages
+      webSocket.onmessage = (event) => {
+        // Rewrite WebSocket message headers
+        const messageHeaders = HeaderRewriterUtils.rewriteRequestHeaders(event.data.headers);
+
+        // Send rewritten message
+        webSocket.send(JSON.stringify({ ...event.data, headers: messageHeaders }));
+      };
+
+      // Handle WebSocket errors
+      webSocket.onerror = (event) => {
+        reject(event);
+      };
+
+      // Handle WebSocket close
+      webSocket.onclose = () => {
+        resolve();
+      };
+    });
+  }
+
+  /**
    * Strip sensitive headers from a response object.
    * @param {object} response - The response object to strip headers from.
    * @returns {object} The response object with sensitive headers stripped.
