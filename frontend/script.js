@@ -4,6 +4,7 @@ import SettingsPanel from './components/SettingsPanel';
 import SearchBar from './components/SearchBar';
 import TabBar from './components/TabBar';
 import ProxyHistory from './components/ProxyHistory';
+import BookmarksManager from './components/BookmarksManager';
 import './style.css';
 
 const App = () => {
@@ -30,6 +31,7 @@ const App = () => {
       </main>
       <SettingsPanel />
       <ProxyHistory />
+      <BookmarksManager />
     </div>
   );
 };
@@ -94,6 +96,8 @@ const renderTabBar = () => {
 const switchToTab = (tab) => {
   currentTab = tab;
   document.getElementById('tab-content').innerHTML = tab.content;
+  // Communicate with the Service Worker to load the tab's URL
+  navigator.serviceWorker.controller.postMessage({ type: 'load-url', url: tab.url });
 };
 
 // Create new tab
@@ -127,32 +131,68 @@ const deleteTab = (tabId) => {
   }
 };
 
-// Initialize service worker
+// Handle messages from the Service Worker
+navigator.serviceWorker.addEventListener('message', (event) => {
+  if (event.data.type === 'tab-update') {
+    updateTab(event.data.tab);
+  } else if (event.data.type === 'tab-delete') {
+    deleteTab(event.data.tabId);
+  }
+});
+
+// Initialize the Service Worker
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js')
     .then((registration) => {
-      console.log('Service worker registered:', registration);
+      console.log('Service Worker registered:', registration);
     })
     .catch((error) => {
-      console.error('Error registering service worker:', error);
+      console.error('Service Worker registration failed:', error);
     });
 } else {
-  console.log('Service worker not supported');
+  console.error('Service Worker is not supported');
 }
 
-// Initialize IndexedDB
-const initIndexedDB = async () => {
-  try {
-    const db = await idb.openDb('nexus-proxy', 1, {
-      upgrade: (db) => {
-        db.createObjectStore('proxy-history');
-      }
-    });
-    const tx = db.transaction('proxy-history', 'readwrite');
-    const store = tx.objectStore('proxy-history');
-    // Initialize store
-  } catch (e) {
-    console.error('Error initializing IndexedDB:', e);
+// Proxy engine connection
+const proxyEngine = {
+  async loadUrl(url) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'X-Proxy-Engine': 'Nexus'
+        }
+      });
+      return await response.text();
+    } catch (error) {
+      console.error('Error loading URL:', error);
+    }
   }
 };
-initIndexedDB();
+
+// Communicate with the proxy engine to load URLs
+const loadUrl = async (url) => {
+  const content = await proxyEngine.loadUrl(url);
+  document.getElementById('tab-content').innerHTML = content;
+};
+
+// Add event listener to the search bar
+document.getElementById('search-bar').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const searchTerm = document.getElementById('search-input').value;
+  createTab(searchTerm);
+});
+
+// Add event listener to the settings toggle
+document.getElementById('settings-toggle').addEventListener('click', () => {
+  document.getElementById('settings-panel').classList.toggle('open');
+});
+
+// Add event listener to the bookmarks toggle
+document.getElementById('bookmarks-toggle').addEventListener('click', () => {
+  document.getElementById('bookmarks-manager').classList.toggle('open');
+});
+
+// Add event listener to the proxy history toggle
+document.getElementById('proxy-history-toggle').addEventListener('click', () => {
+  document.getElementById('proxy-history').classList.toggle('open');
+});
