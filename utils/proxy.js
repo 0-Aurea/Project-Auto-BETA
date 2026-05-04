@@ -8,6 +8,7 @@ const { WebRTCUtils } = require('./webrtc');
 const { JSRewriterUtils } = require('./jsRewriter');
 const { CssRewriterUtils } = require('./cssRewriter');
 const { HTMLRewriterUtils } = require('./htmlRewriter');
+const { HeaderRewriterUtils } = require('./headerRewriter');
 
 /**
  * Proxy utility class for managing full request/response header rewriting,
@@ -111,7 +112,7 @@ class ProxyUtils {
    */
   static getProxiedUrl(url) {
     // Implement XOR + base64 URL encoding with a rotating salt
-    const encodedUrl = EncodingUtils.encodeUrl(url);
+    const encodedUrl = EncodingUtils.encode(url);
     return `/proxy/${encodedUrl}`;
   }
 
@@ -121,28 +122,18 @@ class ProxyUtils {
    * @returns {object} The rewritten headers.
    */
   static rewriteHeaders(headers) {
-    // Implement full request/response header rewriting
-    // Strip CSP, HSTS, X-Frame-Options, and other security headers
-    const rewrittenHeaders = { ...headers };
-    delete rewrittenHeaders['content-security-policy'];
-    delete rewrittenHeaders['strict-transport-security'];
-    delete rewrittenHeaders['x-frame-options'];
+    // Implement header rewriting to strip CSP, HSTS, and X-Frame-Options headers
+    const rewrittenHeaders = HeaderRewriterUtils.rewrite(headers);
     return rewrittenHeaders;
   }
 
   /**
    * Handle WebRTC ICE candidate scrubbing to prevent IP leaks.
-   * @param {object} rtcPeerConnection - The RTCPeerConnection instance.
+   * @param {object} rtc - The WebRTC object.
    */
-  static handleWebRTCIceCandidateScrubbing(rtcPeerConnection) {
+  static handleWebRTC(rtc) {
     // Implement WebRTC ICE candidate scrubbing
-    rtcPeerConnection.onicecandidate = (event) => {
-      if (event.candidate) {
-        // Scrub the IP address from the ICE candidate
-        const scrubbedCandidate = WebRTCUtils.scrubIceCandidate(event.candidate);
-        rtcPeerConnection.addIceCandidate(scrubbedCandidate);
-      }
-    };
+    WebRTCUtils.scrub(rtc);
   }
 
   /**
@@ -163,25 +154,59 @@ class ProxyUtils {
       perMessageDeflate: false,
     });
 
-    // Handle WebSocket messages
+    // Handle WebSocket connection
+    proxiedWs.on('open', () => {
+      res.writeHead(101, {
+        'Upgrade': 'WebSocket',
+        'Connection': 'Upgrade',
+      });
+      res.end();
+    });
+
+    // Handle messages from the client
+    req.on('data', (message) => {
+      try {
+        proxiedWs.send(message);
+      } catch (error) {
+        console.error('Error sending message to proxied WebSocket server:', error);
+        req.destroy();
+        proxiedWs.close();
+      }
+    });
+
+    // Handle errors
+    req.on('error', (error) => {
+      console.error('WebSocket client error:', error);
+      req.destroy();
+      proxiedWs.close();
+    });
+
+    // Handle close event
+    req.on('close', () => {
+      proxiedWs.close();
+    });
+
+    // Handle messages from the proxied WebSocket server
     proxiedWs.on('message', (message) => {
       try {
         res.write(message);
       } catch (error) {
         console.error('Error sending message to WebSocket client:', error);
+        req.destroy();
         proxiedWs.close();
       }
     });
 
-    // Handle WebSocket errors
+    // Handle errors
     proxiedWs.on('error', (error) => {
       console.error('WebSocket proxied server error:', error);
+      req.destroy();
       proxiedWs.close();
     });
 
-    // Handle WebSocket close event
+    // Handle close event
     proxiedWs.on('close', () => {
-      res.end();
+      req.destroy();
     });
   }
 }
