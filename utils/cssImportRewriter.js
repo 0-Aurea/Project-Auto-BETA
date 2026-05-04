@@ -1,68 +1,59 @@
 const { URL } = require('url');
+const { JSDOM } = require('jsdom');
+const { EncodingUtils } = require('./encoding');
+const { UrlUtils } = require('./urlUtils');
 
 /**
- * CSS import rewriter utility class for handling @import statements and url() functions.
+ * CSS import rewriter utility class for handling @import statements.
  */
-class CssImportRewriter {
+class CSSImportRewriterUtils {
   /**
    * Regular expression to match @import statements.
    */
-  static IMPORT_REGEX = /@import\s+['"]([^'"]+)['"]/g;
+  static IMPORT_REGEX = /@import\s+['"](.*?)['"]/g;
 
   /**
-   * Regular expression to match url() functions.
+   * Regular expression to match url() functions in CSS.
    */
-  static URL_REGEX = /url\(\s*['"]?([^'")]+)['"]?\s*\)/g;
+  static URL_FUNCTION_REGEX = /url\(\s*['"](.*?)['"]\s*\)/g;
 
   /**
-   * Rewrites CSS imports to ensure they are proxied through the Nexus proxy.
-   * @param {string} css - The CSS code to rewrite.
-   * @param {string} baseUrl - The base URL of the proxied resource.
-   * @returns {string} The rewritten CSS code.
+   * Rewrites @import statements to use the proxied URL.
+   * @param {string} css - The CSS to rewrite.
+   * @param {string} proxiedUrl - The proxied URL.
+   * @returns {string} The rewritten CSS.
    */
-  static rewriteImports(css, baseUrl) {
-    return css.replace(CssImportRewriter.IMPORT_REGEX, (match, importUrl) => {
-      const absoluteUrl = new URL(importUrl, baseUrl).href;
-      return `@import "${CssImportRewriter.rewriteUrl(absoluteUrl, baseUrl)}";`;
+  static rewriteImports(css, proxiedUrl) {
+    return css.replace(CSSImportRewriterUtils.IMPORT_REGEX, (match, importUrl) => {
+      const rewrittenImportUrl = UrlUtils.rewriteUrl(importUrl, proxiedUrl);
+      return `@import "${rewrittenImportUrl}"`;
     });
   }
 
   /**
-   * Rewrites url() functions in CSS to ensure they are proxied through the Nexus proxy.
-   * @param {string} css - The CSS code to rewrite.
-   * @param {string} baseUrl - The base URL of the proxied resource.
-   * @returns {string} The rewritten CSS code.
+   * Rewrites url() functions in CSS to use the proxied URL.
+   * @param {string} css - The CSS to rewrite.
+   * @param {string} proxiedUrl - The proxied URL.
+   * @returns {string} The rewritten CSS.
    */
-  static rewriteUrls(css, baseUrl) {
-    return css.replace(CssImportRewriter.URL_REGEX, (match, url) => {
-      const absoluteUrl = new URL(url, baseUrl).href;
-      return `url("${CssImportRewriter.rewriteUrl(absoluteUrl, baseUrl)}")`;
+  static rewriteUrlFunctions(css, proxiedUrl) {
+    return css.replace(CSSImportRewriterUtils.URL_FUNCTION_REGEX, (match, url) => {
+      const rewrittenUrl = UrlUtils.rewriteUrl(url, proxiedUrl);
+      return `url("${rewrittenUrl}")`;
     });
-  }
-
-  /**
-   * Rewrites a URL to be proxied through the Nexus proxy.
-   * @param {string} url - The URL to rewrite.
-   * @param {string} baseUrl - The base URL of the proxied resource.
-   * @returns {string} The rewritten URL.
-   */
-  static rewriteUrl(url, baseUrl) {
-    // Implement URL rewriting logic here
-    // For example, using XOR + base64 URL encoding with a rotating salt
-    return url; // TO DO: implement rewriting logic
   }
 
   /**
    * Rewrites CSS content to handle @import statements and url() functions.
    * @param {string} css - The CSS content to rewrite.
-   * @param {string} baseUrl - The base URL of the proxied resource.
+   * @param {string} proxiedUrl - The proxied URL.
    * @returns {string} The rewritten CSS content.
    */
-  static rewriteCss(css, baseUrl) {
-    css = CssImportRewriter.rewriteImports(css, baseUrl);
-    css = CssImportRewriter.rewriteUrls(css, baseUrl);
+  static rewriteCSS(css, proxiedUrl) {
+    css = CSSImportRewriterUtils.rewriteImports(css, proxiedUrl);
+    css = CSSImportRewriterUtils.rewriteUrlFunctions(css, proxiedUrl);
     return css;
   }
 }
 
-module.exports = CssImportRewriter;
+module.exports = CSSImportRewriterUtils;
