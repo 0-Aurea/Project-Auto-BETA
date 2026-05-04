@@ -106,8 +106,8 @@ class JsRewriterUtils {
    */
   static rewriteDocumentDomain(js, rewriter) {
     return js.replace(JsRewriterUtils.DOCUMENT_DOMAIN_REGEX, (match, p1) => {
-      const rewrittenUrl = rewriter(p1);
-      return `document.domain = ${JSON.stringify(rewrittenUrl)}`;
+      const rewrittenDomain = rewriter(p1);
+      return `document.domain = ${JSON.stringify(rewrittenDomain)}`;
     });
   }
 
@@ -146,17 +146,17 @@ class JsRewriterUtils {
   static rewriteHistoryPushState(js, rewriter) {
     return js.replace(JsRewriterUtils.HISTORY_PUSH_STATE_REGEX, (match, p1) => {
       const rewrittenUrl = rewriter(p1);
-      return `${match.replace(p1, JSON.stringify(rewrittenUrl))}`;
+      return `history.pushState(${JSON.stringify(rewrittenUrl)})`;
     });
   }
 
   /**
-   * Rewrites the given JS string using the provided rewriter function.
+   * Rewrite JS string to handle complex cases.
    * @param {string} js - The JS string to rewrite.
    * @param {function} rewriter - The rewriter function.
    * @returns {string} The rewritten JS string.
    */
-  static rewrite(js, rewriter) {
+  static rewriteJs(js, rewriter) {
     js = JsRewriterUtils.rewriteEval(js, rewriter);
     js = JsRewriterUtils.rewriteImport(js, rewriter);
     js = JsRewriterUtils.rewriteWorker(js, rewriter);
@@ -169,4 +169,4 @@ class JsRewriterUtils {
   }
 }
 
-module.exports = { JsRewriterUtils };
+module.exports = JsRewriterUtils;
