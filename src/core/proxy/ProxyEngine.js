@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import LRU from 'lru-cache';
 import crypto from 'crypto';
 import tls from 'tls';
+import { ProxyHistory } from './ProxyHistory.js';
 
 const pipeline = promisify(require('stream').pipeline');
 
@@ -27,6 +28,7 @@ class ProxyEngine {
     });
     this.jsRewriter = new JSRewriter();
     this.rtcPeerConnections = new Map();
+    this.proxyHistory = new ProxyHistory();
 
     // Initialize WebSocket server event listeners
     wss.on('connection', (ws, req) => {
@@ -67,6 +69,7 @@ class ProxyEngine {
       const cachedResponse = this.cache.get(rewrittenUrl);
       res.writeHead(cachedResponse.status, cachedResponse.headers);
       res.end(cachedResponse.data);
+      this.proxyHistory.addEntry(req, cachedResponse);
       return;
     }
 
@@ -93,154 +96,114 @@ class ProxyEngine {
 
       // Rewrite the response content
       let rewrittenContent = response.data;
-      if (response.headers['content-type']?.includes('application/javascript')) {
-        rewrittenContent = this.jsRewriter.rewrite(rewrittenContent, rewrittenUrl);
+      if (response.headers['content-type'] && response.headers['content-type'].includes('text/html')) {
+        rewrittenContent = this.jsRewriter.rewriteHtml(rewrittenContent, rewrittenUrl);
       }
 
       // Cache the response
-      this.cache.set(rewrittenUrl, {
+      const cacheEntry = {
         status: response.status,
         headers: rewrittenHeaders,
         data: rewrittenContent,
-      });
+      };
+      this.cache.set(rewrittenUrl, cacheEntry);
 
       // Send the response
       res.writeHead(response.status, rewrittenHeaders);
       res.end(rewrittenContent);
+
+      // Add entry to proxy history
+      this.proxyHistory.addEntry(req, cacheEntry);
     } catch (error) {
-      console.error(error);
-      res.status(500).send('Internal Server Error');
+      console.error('Error proxying request:', error);
+      res.statusCode = 500;
+      res.end('Internal Server Error');
     }
   }
 
   /**
-   * Handles WebSocket upgrades and establishes a WebSocket connection.
+   * Handles WebSocket upgrades.
    * @param {object} req - The incoming request object.
    * @param {object} socket - The WebSocket socket object.
-   * @param {object} head - The WebSocket head object.
+   * @param {object} head - The WebSocket upgrade head object.
    */
-  async handleWebSocket(req, socket, head) {
+  handleWebSocket(req, socket, head) {
     const { headers, url: reqUrl } = req;
-    const { host, referer } = headers;
 
     // Rewrite the request URL
     const rewrittenUrl = this.rewriteUrl(reqUrl);
 
-    // Establish a WebSocket connection to the target URL
-    const targetWs = new WebSocket(rewrittenUrl);
+    // Handle WebSocket upgrade
+    const ws = new WebSocket(rewrittenUrl, {
+      headers: this.rewriteHeaders(headers),
+    });
 
     // Handle WebSocket messages
-    targetWs.on('message', (message) => {
-      socket.send(message);
+    ws.on('message', (message) => {
+      this.handleWebSocketMessage(message, req, socket);
     });
 
     // Handle WebSocket errors
-    targetWs.on('error', (error) => {
-      console.error(error);
-      socket.destroy();
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
     });
 
     // Handle WebSocket close
-    targetWs.on('close', () => {
-      socket.destroy();
+    ws.on('close', () => {
+      this.handleWebSocketClose(req, socket);
     });
 
-    // Handle incoming WebSocket messages
-    socket.on('message', (message) => {
-      targetWs.send(message);
-    });
-
-    // Handle WebSocket errors
-    socket.on('error', (error) => {
-      console.error(error);
-      targetWs.destroy();
-    });
-
-    // Handle WebSocket close
-    socket.on('close', () => {
-      targetWs.destroy();
-    });
+    // Add WebSocket client to map
+    this.wsClients.set(reqUrl, ws);
   }
 
   /**
-   * Handles WebRTC peer connections and scrubs ICE candidates.
+   * Handles WebSocket messages.
+   * @param {string} message - The WebSocket message.
    * @param {object} req - The incoming request object.
-   * @param {object} socket - The WebRTC socket object.
-   * @param {object} head - The WebRTC head object.
+   * @param {object} socket - The WebSocket socket object.
    */
-  async handleWebRTC(req, socket, head) {
+  handleWebSocketMessage(message, req, socket) {
     const { headers, url: reqUrl } = req;
-    const { host, referer } = headers;
 
-    // Rewrite the request URL
-    const rewrittenUrl = this.rewriteUrl(reqUrl);
+    // Rewrite the WebSocket message
+    const rewrittenMessage = this.jsRewriter.rewriteWebSocketMessage(message, reqUrl);
 
-    // Handle WebRTC ICE candidate scrubbing
-    const rtcPeerConnection = new RTCPeerConnection();
-    this.rtcPeerConnections.set(reqUrl, rtcPeerConnection);
-
-    // Handle WebRTC ICE candidate messages
-    rtcPeerConnection.onicecandidate = (event) => {
-      if (event.candidate) {
-        // Scrub the ICE candidate
-        const scrubbedCandidate = this.scrubICECandidate(event.candidate);
-        socket.send(JSON.stringify({ type: 'iceCandidate', candidate: scrubbedCandidate }));
-      }
-    };
-
-    // Handle WebRTC errors
-    rtcPeerConnection.oniceerror = (error) => {
-      console.error(error);
-      socket.destroy();
-    };
-
-    // Handle WebRTC close
-    rtcPeerConnection.onclose = () => {
-      socket.destroy();
-    };
+    // Send the rewritten message to the WebSocket client
+    this.wsClients.get(reqUrl).send(rewrittenMessage);
   }
 
   /**
-   * Scrubs an ICE candidate to prevent IP leaks.
-   * @param {object} candidate - The ICE candidate object.
-   * @returns {object} The scrubbed ICE candidate object.
+   * Handles WebSocket close.
+   * @param {object} req - The incoming request object.
+   * @param {object} socket - The WebSocket socket object.
    */
-  scrubICECandidate(candidate) {
-    // TO DO: implement ICE candidate scrubbing logic
-    return candidate;
+  handleWebSocketClose(req, socket) {
+    const { url: reqUrl } = req;
+
+    // Remove WebSocket client from map
+    this.wsClients.delete(reqUrl);
   }
 
   /**
-   * Rewrites a URL to use the proxy prefix.
-   * @param {string} url - The URL to rewrite.
+   * Rewrites the request URL.
+   * @param {string} reqUrl - The incoming request URL.
    * @returns {string} The rewritten URL.
    */
-  rewriteUrl(url) {
-    // TO DO: implement URL rewriting logic
-    return url;
+  rewriteUrl(reqUrl) {
+    // Implement URL rewriting logic here
+    return reqUrl;
   }
 
   /**
-   * Rewrites headers to remove sensitive information.
-   * @param {object} headers - The headers to rewrite.
+   * Rewrites the request headers.
+   * @param {object} headers - The incoming request headers.
    * @returns {object} The rewritten headers.
    */
   rewriteHeaders(headers) {
-    // TO DO: implement header rewriting logic
+    // Implement header rewriting logic here
     return headers;
   }
 }
 
 export { ProxyEngine };
-class JSRewriter {
-  /**
-   * Rewrites JavaScript code to handle dynamic imports and eval.
-   * @param {string} code - The JavaScript code to rewrite.
-   * @param {string} url - The URL of the JavaScript code.
-   * @returns {string} The rewritten JavaScript code.
-   */
-  rewrite(code, url) {
-    // TO DO: implement JavaScript rewriting logic
-    return code;
-  }
-}
