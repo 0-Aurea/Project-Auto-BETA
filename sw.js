@@ -135,38 +135,38 @@ class JSRewriter {
     });
 
     js = js.replace(this.historyPushStateRegex, (match) => {
-      return `history.pushState(${this.rewriteHistoryState(match)})`;
+      return `history.pushState(${this.rewriteHistory(match)})`;
     });
 
     js = js.replace(this.historyReplaceStateRegex, (match) => {
-      return `history.replaceState(${this.rewriteHistoryState(match)})`;
+      return `history.replaceState(${this.rewriteHistory(match)})`;
     });
 
     return js;
   }
 
-  rewriteEval(js) {
-    return js.slice(5, -1);
+  rewriteEval(evalStr) {
+    return evalStr.replace(/[^a-zA-Z0-9]/g, '');
   }
 
-  rewriteFunction(js) {
-    return js.slice(9, -1);
+  rewriteFunction(funcStr) {
+    return funcStr.replace(/[^a-zA-Z0-9]/g, '');
   }
 
-  rewriteDynamicImport(js) {
-    return js;
+  rewriteDynamicImport(importStr) {
+    return this.rewriteURL(importStr);
   }
 
-  rewriteRequire(js) {
-    return js;
+  rewriteRequire(requireStr) {
+    return this.rewriteURL(requireStr);
   }
 
   rewriteURL(url) {
-    return url;
+    return url.replace(/\//g, '%2F');
   }
 
-  rewriteHistoryState(state) {
-    return state;
+  rewriteHistory(historyStr) {
+    return historyStr.replace(/[^a-zA-Z0-9]/g, '');
   }
 }
 
@@ -205,15 +205,15 @@ class HTMLRewriter {
   }
 
   rewriteURL(url) {
-    return url;
+    return url.replace(/\//g, '%2F');
   }
 }
 
 // CSS Rewriter class
 class CSSRewriter {
   constructor() {
-    this.urlRegex = /url\(['"]([^'"]+)['"]\)/g;
-    this.importRegex = /@import\s+['"]([^'"]+)['"]/g;
+    this.urlRegex = /url\(\s*['"]([^'"]+)['"]\s*\)/g;
+    this.importRegex = /@import\s*['"]([^'"]+)['"]/g;
   }
 
   rewriteCSS(css) {
@@ -229,45 +229,34 @@ class CSSRewriter {
   }
 
   rewriteURL(url) {
-    return url;
+    return url.replace(/\//g, '%2F');
   }
 }
 
 async function handleFetch(request) {
   const url = new URL(request.url);
-  const encodedUrl = xorBase64Encode(url.href, generateSalt());
-  const proxiedRequest = new Request(encodedUrl, {
-    method: request.method,
-    headers: request.headers,
-    body: request.body,
-  });
+  const cache = await getCache();
 
-  const response = await fetch(proxiedRequest);
-  const rewrittenResponse = new Response(response.body, response);
-
-  const contentType = response.headers.get('Content-Type');
-  if (contentType && contentType.includes('text/javascript')) {
-    const jsRewriter = new JSRewriter();
-    const rewrittenBody = await response.text();
-    const rewrittenJS = jsRewriter.rewriteJS(rewrittenBody);
-    rewrittenResponse.body = rewrittenJS;
-  } else if (contentType && contentType.includes('text/html')) {
-    const htmlRewriter = new HTMLRewriter();
-    const rewrittenBody = await response.text();
-    const rewrittenHTML = htmlRewriter.rewriteHTML(rewrittenBody);
-    rewrittenResponse.body = rewrittenHTML;
-  } else if (contentType && contentType.includes('text/css')) {
-    const cssRewriter = new CSSRewriter();
-    const rewrittenBody = await response.text();
-    const rewrittenCSS = cssRewriter.rewriteCSS(rewrittenBody);
-    rewrittenResponse.body = rewrittenCSS;
+  if (request.method === 'GET') {
+    const cachedResponse = await cache.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
   }
 
-  rewrittenResponse.headers.set('Content-Type', contentType);
+  try {
+    const response = await fetch(request);
+    const clonedResponse = response.clone();
 
-  await putResponse(request, rewrittenResponse);
+    if (response.ok) {
+      await putResponse(request, clonedResponse);
+    }
 
-  return rewrittenResponse;
+    return response;
+  } catch (error) {
+    console.error('Error handling fetch:', error);
+    return new Response('Error', { status: 500 });
+  }
 }
 
 function updateTab(tabId, url) {
@@ -279,9 +268,10 @@ function closeTab(tabId) {
 }
 
 function search(query, engine) {
-  // Implement search functionality
+  const url = engine === 'google' ? `https://www.google.com/search?q=${query}` : `https://www.bing.com/search?q=${query}`;
+  return url;
 }
 
-function getTabURL(tabId) {
-  return tabs[tabId];
+function generateUUID() {
+  return crypto.randomUUID();
 }
