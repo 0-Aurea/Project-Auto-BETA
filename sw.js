@@ -124,42 +124,39 @@ class JSRewriter {
       return `window.open('${this.rewriteURL(p1)}')`;
     });
 
+    js = js.replace(this.historyPushStateRegex, (match) => {
+      return `history.pushState(${this.rewriteHistoryState(match)})`;
+    });
+
+    js = js.replace(this.historyReplaceStateRegex, (match) => {
+      return `history.replaceState(${this.rewriteHistoryState(match)})`;
+    });
+
     return js;
   }
 
-  rewriteEval(evalStr) {
-    try {
-      const evalFunc = new Function(`return ${evalStr}`);
-      const result = evalFunc();
-      return JSON.stringify(result);
-    } catch (e) {
-      return evalStr;
-    }
+  rewriteEval(match) {
+    return match.slice(5, -1);
   }
 
-  rewriteFunction(funcStr) {
-    try {
-      const func = new Function(`return ${funcStr}`);
-      const result = func();
-      return JSON.stringify(result);
-    } catch (e) {
-      return funcStr;
-    }
+  rewriteFunction(match) {
+    return match.slice(9, -1);
   }
 
-  rewriteDynamicImport(importStr) {
-    return this.rewriteURL(importStr);
+  rewriteDynamicImport(match) {
+    return match.slice(7, -1);
   }
 
-  rewriteRequire(requireStr) {
-    return this.rewriteURL(requireStr);
+  rewriteRequire(match) {
+    return match.slice(8, -1);
   }
 
   rewriteURL(url) {
-    if (url.startsWith('http')) {
-      return url;
-    }
-    return xorBase64Encode(url, generateSalt());
+    return url.startsWith('/') ? url : `/${url}`;
+  }
+
+  rewriteHistoryState(match) {
+    return match.slice(0, -1);
   }
 }
 
@@ -197,10 +194,7 @@ class HTMLRewriter {
   }
 
   rewriteURL(url) {
-    if (url.startsWith('http')) {
-      return url;
-    }
-    return xorBase64Encode(url, generateSalt());
+    return url.startsWith('/') ? url : `/${url}`;
   }
 }
 
@@ -223,57 +217,52 @@ class CSSRewriter {
   }
 
   rewriteURL(url) {
-    if (url.startsWith('http')) {
-      return url;
-    }
-    return xorBase64Encode(url, generateSalt());
+    return url.startsWith('/') ? url : `/${url}`;
   }
 }
 
 async function handleFetch(request) {
   const url = new URL(request.url);
-  if (url.pathname.startsWith('/proxy/')) {
-    const encodedUrl = url.pathname.substring(7);
-    const salt = rotatingSalt[rotatingSalt.length - 1];
-    const decodedUrl = xorBase64Decode(encodedUrl, salt);
-    const newRequest = new Request(decodedUrl, {
-      method: request.method,
-      headers: request.headers,
-      body: request.body,
-    });
-    const response = await fetch(newRequest);
-    const rewrittenResponse = new Response(response.body, response);
-    rewrittenResponse.headers.set('Content-Type', response.headers.get('Content-Type'));
-    rewrittenResponse.headers.set('Cache-Control', 'max-age=3600');
-    await putResponse(request, rewrittenResponse);
-    return rewrittenResponse;
-  } else {
-    const response = await getResponse(request);
-    if (response) {
-      return response;
+  const cache = await getCache();
+
+  if (request.method === 'GET') {
+    const cachedResponse = await cache.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
     }
-    const newResponse = await fetch(request);
-    const rewrittenResponse = new Response(newResponse.body, newResponse);
-    rewrittenResponse.headers.set('Content-Type', newResponse.headers.get('Content-Type'));
-    rewrittenResponse.headers.set('Cache-Control', 'max-age=3600');
-    await putResponse(request, rewrittenResponse);
-    return rewrittenResponse;
+  }
+
+  try {
+    const response = await fetch(request);
+    const clonedResponse = response.clone();
+
+    if (request.method === 'GET') {
+      await putResponse(request, clonedResponse);
+    }
+
+    return response;
+  } catch (error) {
+    return new Response('Error', { status: 500 });
   }
 }
 
-const jsRewriter = new JSRewriter();
-const htmlRewriter = new HTMLRewriter();
-const cssRewriter = new CSSRewriter();
-
-self.addEventListener('message', async (event) => {
-  if (event.data.type === 'rewriteJS') {
-    const rewrittenJS = jsRewriter.rewriteJS(event.data.js);
-    event.ports[0].postMessage(rewrittenJS);
-  } else if (event.data.type === 'rewriteHTML') {
-    const rewrittenHTML = htmlRewriter.rewriteHTML(event.data.html);
-    event.ports[0].postMessage(rewrittenHTML);
-  } else if (event.data.type === 'rewriteCSS') {
-    const rewrittenCSS = cssRewriter.rewriteCSS(event.data.css);
-    event.ports[0].postMessage(rewrittenCSS);
+async function handlePostRequest(request) {
+  try {
+    const response = await fetch(request);
+    return response;
+  } catch (error) {
+    return new Response('Error', { status: 500 });
   }
-});
+}
+
+function getTTLExpirationTime(ttl) {
+  return Date.now() + ttl * 1000;
+}
+
+function getResponseHeaders(response) {
+  const headers = {};
+  response.headers.forEach((value, key) => {
+    headers[key] = value;
+  });
+  return headers;
+}
