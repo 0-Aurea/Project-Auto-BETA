@@ -7,6 +7,7 @@
   --dark-mode-bg: #333;
   --dark-mode-text: #fff;
   --dark-mode-tab-bg: #444;
+  --transition-duration: 0.3s;
 }
 
 * {
@@ -19,7 +20,7 @@ body {
   font-family: var(--font-family);
   background-color: var(--light-color);
   line-height: 1.6;
-  transition: background-color 0.3s ease-in-out;
+  transition: background-color var(--transition-duration) ease-in-out;
 }
 
 body.dark-mode {
@@ -35,7 +36,7 @@ body.dark-mode {
   border: 1px solid #ddd;
   border-radius: 10px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  transition: background-color 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+  transition: background-color var(--transition-duration) ease-in-out, box-shadow var(--transition-duration) ease-in-out;
 }
 
 body.dark-mode .container {
@@ -48,7 +49,7 @@ header {
   color: #fff;
   padding: 10px;
   border-bottom: 1px solid #ccc;
-  transition: background-color 0.3s ease-in-out;
+  transition: background-color var(--transition-duration) ease-in-out;
 }
 
 body.dark-mode header {
@@ -70,7 +71,7 @@ header nav ul li {
 header nav a {
   color: #fff;
   text-decoration: none;
-  transition: color 0.3s ease-in-out;
+  transition: color var(--transition-duration) ease-in-out;
 }
 
 header nav a:hover {
@@ -89,7 +90,7 @@ body.dark-mode header nav a:hover {
   display: flex;
   justify-content: center;
   padding: 20px;
-  transition: padding 0.3s ease-in-out;
+  transition: padding var(--transition-duration) ease-in-out;
 }
 
 body.dark-mode .search-bar {
@@ -104,7 +105,7 @@ body.dark-mode .search-bar {
   font-size: 18px;
   border: 1px solid #ccc;
   border-radius: 5px 0 0 5px;
-  transition: border-color 0.3s ease-in-out, background-color 0.3s ease-in-out;
+  transition: border-color var(--transition-duration) ease-in-out, background-color var(--transition-duration) ease-in-out;
 }
 
 body.dark-mode #search-input {
@@ -122,7 +123,7 @@ body.dark-mode #search-input {
   border: none;
   border-radius: 0 5px 5px 0;
   cursor: pointer;
-  transition: background-color 0.3s ease-in-out;
+  transition: background-color var(--transition-duration) ease-in-out;
 }
 
 body.dark-mode #search-button {
@@ -138,7 +139,7 @@ body.dark-mode #search-button {
   justify-content: space-between;
   padding: 10px;
   border-bottom: 1px solid #ccc;
-  transition: border-color 0.3s ease-in-out;
+  transition: border-color var(--transition-duration) ease-in-out;
 }
 
 body.dark-mode .tab-bar {
@@ -152,41 +153,19 @@ body.dark-mode .tab-bar {
   border-radius: 5px;
   margin-right: 10px;
   cursor: pointer;
-  transition: background-color 0.3s ease-in-out, border-color 0.3s ease-in-out;
+  transition: background-color var(--transition-duration) ease-in-out;
+}
+
+.tab-bar .tab:hover {
+  background-color: #ddd;
 }
 
 body.dark-mode .tab-bar .tab {
   background-color: var(--dark-mode-tab-bg);
-  border-color: #555;
-  color: var(--dark-mode-text);
-}
-
-.tab-bar .tab.active {
-  background-color: var(--primary-color);
-  color: #fff;
-}
-
-.tab-bar .tab:hover {
-  background-color: var(--secondary-color);
-  color: #fff;
-}
-
-body.dark-mode .tab-bar .tab.active {
-  background-color: var(--dark-mode-tab-bg);
 }
 
 body.dark-mode .tab-bar .tab:hover {
-  background-color: var(--dark-mode-tab-bg);
-}
-
-#tab-content {
-  padding: 20px;
-  transition: padding 0.3s ease-in-out;
-}
-
-body.dark-mode #tab-content {
-  background-color: var(--dark-mode-bg);
-  padding: 20px;
+  background-color: #555;
 }
 
 .settings-panel {
@@ -198,33 +177,19 @@ body.dark-mode #tab-content {
   border: 1px solid #ccc;
   border-radius: 5px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  display: none;
-  transition: background-color 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+  transition: transform var(--transition-duration) ease-in-out;
 }
 
 body.dark-mode .settings-panel {
   background-color: var(--dark-mode-bg);
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  border-color: #555;
 }
 
-.settings-panel.show {
-  display: block;
+.settings-panel.hide {
+  transform: translateX(100%);
 }
 
-.settings-panel .setting {
-  margin-bottom: 20px;
-}
-
-.settings-panel .setting label {
-  display: block;
-  margin-bottom: 10px;
-}
-
-.settings-panel .setting input[type="checkbox"] {
-  margin-right: 10px;
-}
-
-.bookmarks-panel {
+.bookmarks-manager {
   position: fixed;
   top: 0;
   right: 0;
@@ -233,94 +198,121 @@ body.dark-mode .settings-panel {
   border: 1px solid #ccc;
   border-radius: 5px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  display: none;
-  transition: background-color 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+  transition: transform var(--transition-duration) ease-in-out;
 }
 
-body.dark-mode .bookmarks-panel {
+body.dark-mode .bookmarks-manager {
   background-color: var(--dark-mode-bg);
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  border-color: #555;
 }
 
-.bookmarks-panel.show {
-  display: block;
+.bookmarks-manager.hide {
+  transform: translateX(100%);
 }
 
-.bookmarks-panel .bookmark {
-  margin-bottom: 20px;
+.proxy-history {
+  position: fixed;
+  top: 0;
+  right: 0;
+  background-color: #fff;
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  transition: transform var(--transition-duration) ease-in-out;
 }
 
-.bookmarks-panel .bookmark a {
-  text-decoration: none;
-  color: var(--primary-color);
-  transition: color 0.3s ease-in-out;
+body.dark-mode .proxy-history {
+  background-color: var(--dark-mode-bg);
+  border-color: #555;
 }
 
-body.dark-mode .bookmarks-panel .bookmark a {
-  color: var(--dark-mode-text);
+.proxy-history.hide {
+  transform: translateX(100%);
 }
 
-.bookmarks-panel .bookmark a:hover {
-  color: var(--secondary-color);
+.ad-block-toggle {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 25px;
 }
 
-.animate-search-bar {
-  animation: search-bar-animation 0.5s ease-in-out;
+.ad-block-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
 }
 
-@keyframes search-bar-animation {
-  0% {
-    opacity: 0;
-    transform: scale(0.5);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
+.ad-block-toggle .slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.4s;
 }
 
-.animate-tab-bar {
-  animation: tab-bar-animation 0.5s ease-in-out;
+.ad-block-toggle .slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 5px;
+  bottom: 5px;
+  background-color: white;
+  transition: 0.4s;
 }
 
-@keyframes tab-bar-animation {
-  0% {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.ad-block-toggle input:checked + .slider {
+  background-color: #2196F3;
 }
 
-.animate-settings-panel {
-  animation: settings-panel-animation 0.5s ease-in-out;
+.ad-block-toggle input:checked + .slider:before {
+  transform: translateX(20px);
 }
 
-@keyframes settings-panel-animation {
-  0% {
-    opacity: 0;
-    transform: translateX(10px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateX(0);
-  }
+.cache-toggle {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 25px;
 }
 
-@media (max-width: 768px) {
-  .container {
-    max-width: 90%;
-    margin: 20px auto;
-  }
-  .search-bar {
-    padding: 10px;
-  }
-  .tab-bar {
-    padding: 5px;
-  }
-  .tab-bar .tab {
-    margin-right: 5px;
-  }
+.cache-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.cache-toggle .slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.4s;
+}
+
+.cache-toggle .slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 5px;
+  bottom: 5px;
+  background-color: white;
+  transition: 0.4s;
+}
+
+.cache-toggle input:checked + .slider {
+  background-color: #2196F3;
+}
+
+.cache-toggle input:checked + .slider:before {
+  transform: translateX(20px);
 }
