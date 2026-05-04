@@ -93,82 +93,42 @@ class JSRewriterUtils {
 
     // Handle source map URL stripping
     jsString = jsString.replace(JSRewriterUtils.SOURCE_MAP_REGEX, (match, p1) => {
-      return `//#${SourceMapUtils.stripSourceMappingURL(p1)}`;
+      return '';
     });
 
     // Handle document.domain mutations
     jsString = jsString.replace(JSRewriterUtils.DOCUMENT_DOMAIN_REGEX, (match, p1) => {
-      return `document.domain = ${JSON.stringify(p1)}`;
+      return `document.domain = ${JSON.stringify(UrlUtils.getHostname(baseUrl))}`;
     });
 
     // Handle window.location assignments
     jsString = jsString.replace(JSRewriterUtils.WINDOW_LOCATION_REGEX, (match, p1) => {
-      return `window.location = ${JSON.stringify(p1)}`;
+      return `window.location = ${JSON.stringify(UrlUtils.getUrl(baseUrl, p1))}`;
     });
 
     // Handle window.open calls
     jsString = jsString.replace(JSRewriterUtils.WINDOW_OPEN_REGEX, (match, p1) => {
-      return `window.open(${JSON.stringify(p1)})`;
+      return `window.open(${JSON.stringify(UrlUtils.getUrl(baseUrl, p1))})`;
     });
 
     // Handle history.pushState and history.replaceState calls
     jsString = jsString.replace(JSRewriterUtils.HISTORY_PUSH_STATE_REGEX, (match, p1, p2, p3) => {
-      return `${p1}(${p2}, ${JSON.stringify(p3)})`;
+      return `${p1}(${p2}, ${JSON.stringify(p3)}, ${JSON.stringify(UrlUtils.getUrl(baseUrl, p3))})`;
     });
 
     return jsString;
   }
 
   /**
-   * Rewrites a URL by applying XOR + base64 URL encoding with a rotating salt.
+   * Rewrites a URL by applying the proxy's URL rewriting rules.
    * @param {string} url - The URL to rewrite.
    * @param {string} baseUrl - The base URL of the JavaScript file.
    * @returns {string} The rewritten URL.
    */
   static rewriteUrl(url, baseUrl) {
-    const absoluteUrl = new URL(url, baseUrl).href;
-    const encodedUrl = UrlUtils.encodeUrl(absoluteUrl, EncodingUtils.getRotatingSalt());
-    return encodedUrl;
-  }
-
-  /**
-   * Extracts and rewrites inline scripts and styles.
-   * @param {string} htmlString - The HTML string to process.
-   * @param {string} baseUrl - The base URL of the HTML file.
-   * @returns {string} The rewritten HTML string.
-   */
-  static rewriteInlineScripts(htmlString, baseUrl) {
-    const dom = new JSDOM(htmlString);
-    const scripts = dom.window.document.querySelectorAll('script');
-
-    scripts.forEach((script) => {
-      if (script.src) {
-        script.src = JSRewriterUtils.rewriteUrl(script.src, baseUrl);
-      } else {
-        const jsString = script.textContent;
-        script.textContent = JSRewriterUtils.rewriteJs(jsString, baseUrl);
-      }
-    });
-
-    return dom.serialize();
-  }
-
-  /**
-   * Extracts and rewrites inline styles.
-   * @param {string} htmlString - The HTML string to process.
-   * @param {string} baseUrl - The base URL of the HTML file.
-   * @returns {string} The rewritten HTML string.
-   */
-  static rewriteInlineStyles(htmlString, baseUrl) {
-    const dom = new JSDOM(htmlString);
-    const styles = dom.window.document.querySelectorAll('style');
-
-    styles.forEach((style) => {
-      const cssString = style.textContent;
-      style.textContent = CSSRewriterUtils.rewriteCss(cssString, baseUrl);
-    });
-
-    return dom.serialize();
+    const urlObject = new URL(url, baseUrl);
+    const rewrittenUrl = UrlUtils.getUrl(baseUrl, urlObject.href);
+    return rewrittenUrl;
   }
 }
 
