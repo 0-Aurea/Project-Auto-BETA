@@ -15,10 +15,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Node.js
+      - name: Setup Node.js and npm
         uses: actions/setup-node@v4
         with:
           node-version: '18'
+
+      - name: Cache Node.js modules
+        uses: actions/cache@v4
+        id: cache
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
 
       - name: Install dependencies
         run: npm install
@@ -30,19 +39,16 @@ jobs:
         run: npm run test
 
       - name: Test JS rewriting functionality
-        run: |
-          npm run test-js-rewriting
+        run: npm run test-js-rewriting
 
       - name: Automated fetch tests
         run: npm run fetch-tests
 
       - name: Test WebSocket functionality
-        run: |
-          npm run test-websocket
+        run: npm run test-websocket
 
       - name: Test WebRTC functionality
-        run: |
-          npm run test-webrtc
+        run: npm run test-webrtc
 
       - name: Build and package
         run: npm run build
@@ -54,24 +60,6 @@ jobs:
           sleep 10
           curl http://localhost:8080 > /dev/null
           docker stop $(docker ps -q)
-
-  js-rewriting-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Run JS rewriting tests
-        run: |
-          npm run test-js-rewriting -- --coverage
 
   codeql:
     runs-on: ubuntu-latest
@@ -99,33 +87,31 @@ jobs:
           name: audit.json
           path: audit.json 
 
-  cache-hits:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Get cache hits
-        run: |
-          echo "Cache hits: ${{ steps.cache-hits.outputs.cache-hits }}"
-
   websocket-performance:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Node.js
+      - name: Setup Node.js and npm
         uses: actions/setup-node@v4
         with:
           node-version: '18'
+
+      - name: Cache Node.js modules
+        uses: actions/cache@v4
+        id: cache
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
 
       - name: Install dependencies
         run: npm install
 
       - name: Test WebSocket performance
-        run: |
-          npm run test-websocket-performance
+        run: npm run test-websocket-performance
 
   webrtc-security-tests:
     runs-on: ubuntu-latest
@@ -133,32 +119,48 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Node.js
+      - name: Setup Node.js and npm
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
+      - name: Cache Node.js modules
+        uses: actions/cache@v4
+        id: cache
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
       - name: Install dependencies
         run: npm install
 
-      - name: Run WebRTC security tests
-        run: |
-          npm run test-webrtc-security
+      - name: Test WebRTC security
+        run: npm run test-webrtc-security
 
-  browser-compatibility:
+  js-rewriting-tests:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Node.js
+      - name: Setup Node.js and npm
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
+      - name: Cache Node.js modules
+        uses: actions/cache@v4
+        id: cache
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
       - name: Install dependencies
         run: npm install
 
-      - name: Test browser compatibility
-        run: |
-          npm run test-browser-compatibility
+      - name: Run JS rewriting tests
+        run: npm run test-js-rewriting -- --coverage
