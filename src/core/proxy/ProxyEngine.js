@@ -18,6 +18,7 @@ class ProxyEngine {
    */
   constructor() {
     this.wsClients = new Map();
+    this.cache = new Map();
   }
 
   /**
@@ -38,6 +39,14 @@ class ProxyEngine {
     // Rewrite the request URL
     const rewrittenUrl = this.rewriteUrl(reqUrl);
 
+    // Check if the request is cached
+    if (this.cache.has(rewrittenUrl)) {
+      const cachedResponse = this.cache.get(rewrittenUrl);
+      res.writeHead(cachedResponse.status, cachedResponse.headers);
+      res.end(cachedResponse.data);
+      return;
+    }
+
     // Proxy the request
     try {
       const response = await axios({
@@ -49,6 +58,13 @@ class ProxyEngine {
 
       // Rewrite the response headers
       const rewrittenHeaders = this.rewriteHeaders(response.headers);
+
+      // Cache the response
+      this.cache.set(rewrittenUrl, {
+        status: response.status,
+        headers: rewrittenHeaders,
+        data: response.data,
+      });
 
       // Send the response
       res.writeHead(response.status, rewrittenHeaders);
@@ -80,7 +96,9 @@ class ProxyEngine {
       const rewrittenMessage = this.rewriteWebSocketMessage(message);
 
       // Send the rewritten message to the client
-      res.socket.write(`data: ${rewrittenMessage}\n\n`);
+      if (wsClient.readyState === WebSocket.OPEN) {
+        wsClient.send(rewrittenMessage);
+      }
     });
 
     // Handle WebSocket errors
@@ -94,164 +112,93 @@ class ProxyEngine {
       this.wsClients.delete(reqUrl);
     });
 
+    // Handle WebSocket open
+    wsClient.on('open', () => {
+      // Send the WebSocket upgrade response
+      res.writeHead(101, {
+        'Upgrade': 'websocket',
+        'Connection': 'Upgrade',
+      });
+      res.end();
+    });
+
     // Add the WebSocket client to the map
     this.wsClients.set(reqUrl, wsClient);
-
-    // Send the WebSocket upgrade response
-    res.writeHead(101, {
-      'Upgrade': 'websocket',
-      'Connection': 'Upgrade',
-      'Sec-WebSocket-Accept': headers['sec-websocket-accept'],
-    });
-    res.end();
   }
 
   /**
-   * Rewrites a URL to handle dynamic imports.
-   * @param {string} url - The URL to rewrite.
+   * Rewrites the request URL.
+   * @param {string} url - The original URL.
    * @returns {string} The rewritten URL.
    */
   rewriteUrl(url) {
-    // Handle relative URLs
-    if (!url.startsWith('http')) {
-      return new URL(url, 'http://example.com').href;
-    }
-
-    // Use XOR + base64 URL encoding with a rotating salt
-    return EncodingUtils.encodeUrl(url);
+    // XOR + base64 URL encoding with a rotating salt
+    const salt = EncodingUtils.getSalt();
+    const encodedUrl = EncodingUtils.encode(url, salt);
+    return `${URL_PREFIX}/${encodedUrl}`;
   }
 
   /**
-   * Rewrites headers to handle proxying.
-   * @param {object} headers - The headers to rewrite.
+   * Rewrites the request headers.
+   * @param {object} headers - The original headers.
    * @returns {object} The rewritten headers.
    */
   rewriteHeaders(headers) {
-    const rewrittenHeaders = {};
+    const rewrittenHeaders = { ...headers };
 
-    // Remove sensitive headers
-    for (const header in headers) {
-      if (header.toLowerCase() !== 'host' && header.toLowerCase() !== 'referer') {
-        rewrittenHeaders[header] = headers[header];
-      }
+    // Strip CSP, HSTS, X-Frame-Options
+    delete rewrittenHeaders['content-security-policy'];
+    delete rewrittenHeaders['strict-transport-security'];
+    delete rewrittenHeaders['x-frame-options'];
+
+    // Rewrite Cookie header to isolate cookies per proxied origin
+    if (rewrittenHeaders.cookie) {
+      rewrittenHeaders.cookie = rewrittenHeaders.cookie.split(';').map((cookie) => {
+        const [key, value] = cookie.trim().split('=');
+        return `${key}=${value}`;
+      }).join(';');
     }
 
     return rewrittenHeaders;
   }
 
   /**
-   * Rewrites WebSocket messages to handle proxying.
-   * @param {string} message - The WebSocket message to rewrite.
-   * @returns {string} The rewritten WebSocket message.
+   * Rewrites the WebSocket message.
+   * @param {string} message - The original message.
+   * @returns {string} The rewritten message.
    */
   rewriteWebSocketMessage(message) {
-    // Handle WebSocket message rewriting
+    // TO DO: implement WebSocket message rewriting
     return message;
   }
 
   /**
-   * Scrubs WebRTC ICE candidate information to prevent IP leaks.
-   * @param {object} iceCandidate - The WebRTC ICE candidate object.
-   * @returns {object} The scrubbed WebRTC ICE candidate object.
+   * Handles dynamic import rewriting.
+   * @param {string} importStatement - The original import statement.
+   * @returns {string} The rewritten import statement.
    */
-  scrubWebRTCIceCandidate(iceCandidate) {
-    // Remove IP address information
-    delete iceCandidate.candidate.split(':').pop();
+  rewriteDynamicImport(importStatement) {
+    // Use a regex to match the import statement
+    const importRegex = /import\((['"])(.*?)\1\)/g;
+    return importStatement.replace(importRegex, (match, quote, url) => {
+      const rewrittenUrl = this.rewriteUrl(url);
+      return `import(${quote}${rewrittenUrl}${quote})`;
+    });
+  }
 
-    return iceCandidate;
+  /**
+   * Handles eval() rewriting.
+   * @param {string} evalStatement - The original eval statement.
+   * @returns {string} The rewritten eval statement.
+   */
+  rewriteEval(evalStatement) {
+    // Use a regex to match the eval statement
+    const evalRegex = /eval\((['"])(.*?)\1\)/g;
+    return evalStatement.replace(evalRegex, (match, quote, code) => {
+      // TO DO: implement eval rewriting
+      return match;
+    });
   }
 }
 
-/**
- * JSRewriter class to handle rewriting JavaScript code.
- */
-class JSRewriter {
-  /**
-   * Rewrites JavaScript code to handle dynamic imports and eval().
-   * @param {string} jsCode - The JavaScript code to rewrite.
-   * @param {string} url - The URL of the JavaScript file.
-   * @returns {string} The rewritten JavaScript code.
-   */
-  rewrite(jsCode, url) {
-    // Handle dynamic imports
-    jsCode = jsCode.replace(/import\(['"]([^'"]+)['"]\)/g, (match, importUrl) => {
-      return `import('${this.rewriteUrl(importUrl, url)}')`;
-    });
-
-    // Handle eval()
-    jsCode = jsCode.replace(/eval\(['"]([^'"]+)['"]\)/g, (match, evalCode) => {
-      return `eval('${this.escapeString(evalCode)}')`;
-    });
-
-    // Handle Function()
-    jsCode = jsCode.replace(/Function\(['"]([^'"]+)['"]\)/g, (match, funcCode) => {
-      return `Function('${this.escapeString(funcCode)}')`;
-    });
-
-    // Handle WebSocket connections
-    jsCode = jsCode.replace(/new WebSocket\(['"]([^'"]+)['"]\)/g, (match, wsUrl) => {
-      return `new WebSocket('${this.rewriteUrl(wsUrl, url)}')`;
-    });
-
-    // Handle document.domain mutations
-    jsCode = jsCode.replace(/document\.domain\s*=\s*['"]([^'"]+)['"]/g, (match, domain) => {
-      return `document.domain = '${domain}';`;
-    });
-
-    // Handle window.location
-    jsCode = jsCode.replace(/window\.location\s*=\s*['"]([^'"]+)['"]/g, (match, location) => {
-      return `window.location = '${this.rewriteUrl(location, url)}';`;
-    });
-
-    // Handle window.open
-    jsCode = jsCode.replace(/window\.open\(['"]([^'"]+)['"]\)/g, (match, openUrl) => {
-      return `window.open('${this.rewriteUrl(openUrl, url)}')`;
-    });
-
-    // Handle history.pushState and history.replaceState
-    jsCode = jsCode.replace(/history\.pushState\(/g, (match) => {
-      return `history.pushState(${this.rewriteHistoryState(match)}, null, '${this.rewriteUrl(window.location.href, url)}');`;
-    });
-
-    jsCode = jsCode.replace(/history\.replaceState\(/g, (match) => {
-      return `history.replaceState(${this.rewriteHistoryState(match)}, null, '${this.rewriteUrl(window.location.href, url)}');`;
-    });
-
-    return jsCode;
-  }
-
-  /**
-   * Rewrites a URL to handle dynamic imports.
-   * @param {string} url - The URL to rewrite.
-   * @param {string} baseUrl - The base URL of the JavaScript file.
-   * @returns {string} The rewritten URL.
-   */
-  rewriteUrl(url, baseUrl) {
-    // Handle relative URLs
-    if (!url.startsWith('http')) {
-      return new URL(url, baseUrl).href;
-    }
-
-    return url;
-  }
-
-  /**
-   * Escapes a string to prevent code injection.
-   * @param {string} str - The string to escape.
-   * @returns {string} The escaped string.
-   */
-  escapeString(str) {
-    return str.replace(/'/g, '\\\'');
-  }
-
-  /**
-   * Rewrites history state to handle proxying.
-   * @param {string} historyState - The history state to rewrite.
-   * @returns {string} The rewritten history state.
-   */
-  rewriteHistoryState(historyState) {
-    return historyState;
-  }
-}
-
-export { ProxyEngine, JSRewriter };
+export default ProxyEngine;
