@@ -109,12 +109,12 @@ const SearchBar = () => {
       <form onSubmit={handleSearch}>
         <input
           type="search"
+          id="search-input"
           value={searchQuery}
           onChange={handleInputChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
           placeholder="Search..."
-          className={focused ? 'focused' : ''}
         />
         {showSuggestions && (
           <ul className="suggestions">
@@ -125,26 +125,8 @@ const SearchBar = () => {
             ))}
           </ul>
         )}
-        <button type="submit" className="search-button">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-        </button>
-      </form>
-      <div className="search-history">
-        <button onClick={handleHistoryToggle}>
-          {historyExpanded ? 'Hide' : 'Show'} History
-        </button>
         {historyExpanded && (
-          <ul>
+          <ul className="search-history">
             {searchHistory.map((historyItem, index) => (
               <li key={index} onClick={() => handleHistoryClick(historyItem)}>
                 {historyItem}
@@ -153,16 +135,13 @@ const SearchBar = () => {
             <li onClick={handleHistoryClear}>Clear History</li>
           </ul>
         )}
-      </div>
-      <div className="search-engine-switcher">
-        <label>
-          Search Engine:
-          <select value={searchEngine} onChange={handleSearchEngineChange}>
-            <option value="google">Google</option>
-            <option value="bing">Bing</option>
-          </select>
-        </label>
-      </div>
+        <button type="submit">Search</button>
+        <select value={searchEngine} onChange={handleSearchEngineChange}>
+          <option value="google">Google</option>
+          <option value="bing">Bing</option>
+        </select>
+        <button onClick={handleHistoryToggle}>History</button>
+      </form>
     </div>
   );
 };
