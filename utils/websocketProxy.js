@@ -2,6 +2,7 @@ const WebSocket = require('ws');
 const { URL } = require('url');
 const { CookieScopingUtils } = require('./cookieScoping');
 const { Encoding } = require('./encoding');
+const { REQUEST_HEADER_REWRITE_LIST, RESPONSE_HEADER_REWRITE_LIST } = require('./constants');
 
 /**
  * WebSocket proxy utility class for handling WebSocket upgrade proxying with header rewriting.
@@ -36,7 +37,9 @@ class WebSocketProxyUtils {
         const rewrittenMessage = this.rewriteMessage(message, headers, origin);
 
         // Forward rewritten message to target WebSocket server
-        const targetWs = new WebSocket(origin);
+        const targetWs = new WebSocket(origin, {
+          headers: this.rewriteHeaders(headers, origin),
+        });
         targetWs.on('open', () => {
           targetWs.send(rewrittenMessage);
         });
@@ -92,59 +95,47 @@ class WebSocketProxyUtils {
   }
 
   /**
+   * Rewrite WebSocket request and response headers.
+   * @param {object} headers - The WebSocket request or response headers.
+   * @param {string} origin - The origin of the WebSocket request.
+   * @returns {object} The rewritten WebSocket headers.
+   */
+  static rewriteHeaders(headers, origin) {
+    const rewrittenHeaders = {};
+
+    // Rewrite request headers
+    Object.keys(headers).forEach((header) => {
+      if (REQUEST_HEADER_REWRITE_LIST.includes(header)) {
+        // Strip sensitive headers
+        return;
+      }
+
+      if (header.toLowerCase() === 'cookie') {
+        const rewrittenCookieHeader = CookieScopingUtils.isolateCookies(headers[header], origin);
+        rewrittenHeaders[header] = rewrittenCookieHeader;
+      } else {
+        rewrittenHeaders[header] = headers[header];
+      }
+    });
+
+    // Add WebSocket-specific headers
+    rewrittenHeaders['sec-websocket-protocol'] = 'nexus-proxy';
+
+    return rewrittenHeaders;
+  }
+
+  /**
    * Handle WebSocket upgrade proxying.
    * @param {object} req - The HTTP request object.
    * @param {object} res - The HTTP response object.
    */
   static handleUpgrade(req, res) {
-    // Implement WebSocket upgrade proxying logic here
-    // For example, handle WebSocket upgrade request and establish WebSocket connection
     const { headers, url } = req;
     const { origin, pathname } = new URL(url, 'http://example.com');
 
-    // Establish WebSocket connection to target server
-    const targetWs = new WebSocket(origin);
-
-    // Handle WebSocket connection establishment
-    targetWs.on('open', () => {
-      // Forward WebSocket upgrade request to target server
-      targetWs.send(req.headers['sec-websocket-protocol']);
-
-      // Handle WebSocket messages
-      targetWs.on('message', (message) => {
-        // Rewrite WebSocket message headers
-        const rewrittenMessage = this.rewriteMessage(message, headers, origin);
-
-        // Forward rewritten message to client
-        res.writeHead(101, {
-          'Upgrade': 'WebSocket',
-          'Connection': 'Upgrade',
-          'Sec-WebSocket-Accept': headers['sec-websocket-accept'],
-        });
-        res.end();
-
-        // Establish WebSocket connection to client
-        const clientWs = new WebSocket(req.socket, {
-          // WebSocket connection options
-        });
-
-        // Handle client WebSocket messages
-        clientWs.on('message', (clientMessage) => {
-          // Rewrite client WebSocket message headers
-          const rewrittenClientMessage = this.rewriteMessage(clientMessage, headers, origin);
-
-          // Forward rewritten client message to target server
-          targetWs.send(rewrittenClientMessage);
-        });
-      });
-    });
-
-    targetWs.on('error', (error) => {
-      console.error('Target WebSocket error:', error);
-    });
-
-    targetWs.on('close', () => {
-      // Handle target WebSocket closure
+    // Perform WebSocket upgrade
+    this.wss.handleUpgrade(req, res, (ws) => {
+      this.wss.emit('connection', ws, req);
     });
   }
 }
