@@ -36,6 +36,30 @@ class JSRewriter {
       return `new WebSocket('${this.rewriteUrl(wsUrl, url)}')`;
     });
 
+    // Handle document.domain mutations
+    jsCode = jsCode.replace(/document\.domain\s*=\s*['"]([^'"]+)['"]/g, (match, domain) => {
+      return `document.domain = '${domain}';`;
+    });
+
+    // Handle window.location
+    jsCode = jsCode.replace(/window\.location\s*=\s*['"]([^'"]+)['"]/g, (match, location) => {
+      return `window.location = '${this.rewriteUrl(location, url)}';`;
+    });
+
+    // Handle window.open
+    jsCode = jsCode.replace(/window\.open\(['"]([^'"]+)['"]\)/g, (match, openUrl) => {
+      return `window.open('${this.rewriteUrl(openUrl, url)}')`;
+    });
+
+    // Handle history.pushState and history.replaceState
+    jsCode = jsCode.replace(/history\.pushState\(/g, (match) => {
+      return `history.pushState(${this.rewriteHistoryState(match)}, null, '${this.rewriteUrl(window.location.href, url)}');`;
+    });
+
+    jsCode = jsCode.replace(/history\.replaceState\(/g, (match) => {
+      return `history.replaceState(${this.rewriteHistoryState(match)}, null, '${this.rewriteUrl(window.location.href, url)}');`;
+    });
+
     return jsCode;
   }
 
@@ -61,6 +85,15 @@ class JSRewriter {
    */
   escapeString(str) {
     return str.replace(/'/g, '\\\'').replace(/"/g, '\\"');
+  }
+
+  /**
+   * Rewrites history state to prevent code injection.
+   * @param {string} state - The history state to rewrite.
+   * @returns {string} The rewritten history state.
+   */
+  rewriteHistoryState(state) {
+    return state.replace(/'/g, '\\\'').replace(/"/g, '\\"');
   }
 }
 
@@ -96,169 +129,157 @@ class ProxyEngine {
     // Decode the URL
     const decodedUrl = this.decodeUrl(reqUrl);
 
-    // Check if the decoded URL is valid
-    if (!decodedUrl) {
-      return this.handleError(req, res, 400, 'Invalid URL');
-    }
-
-    // Get the cached response if available
-    const cachedResponse = await this.getCachedResponse(decodedUrl);
-    if (cachedResponse) {
-      return this.sendResponse(res, cachedResponse);
+    // Check if the request is cached
+    if (this.cache.has(decodedUrl)) {
+      const cachedResponse = this.cache.get(decodedUrl);
+      res.writeHead(cachedResponse.status, cachedResponse.headers);
+      res.end(cachedResponse.body);
+      return;
     }
 
     try {
       // Forward the request to the target server
-      const targetResponse = await this.forwardRequest(decodedUrl, req);
+      const targetResponse = await axios({
+        method,
+        url: decodedUrl,
+        headers: this.rewriteHeaders(headers),
+        data: req.body,
+      });
 
       // Cache the response
-      await this.cacheResponse(decodedUrl, targetResponse);
+      this.cache.set(decodedUrl, targetResponse);
+
+      // Rewrite the response headers
+      const rewrittenHeaders = this.rewriteHeaders(targetResponse.headers);
 
       // Send the response
-      return this.sendResponse(res, targetResponse);
+      res.writeHead(targetResponse.status, rewrittenHeaders);
+      res.end(targetResponse.data);
     } catch (error) {
-      // Handle errors
-      return this.handleError(req, res, 500, 'Internal Server Error');
+      console.error(error);
+      res.writeHead(500);
+      res.end('Internal Server Error');
     }
   }
 
   /**
-   * Handles a direct request (not proxied).
+   * Handles a direct request and returns a response.
    * @param {object} req - The incoming request object.
    * @param {object} res - The outgoing response object.
    * @returns {Promise<void>} A promise that resolves when the response is sent.
    */
   async handleDirectRequest(req, res) {
-    // Implement direct request handling
+    try {
+      // Forward the request to the target server
+      const targetResponse = await axios({
+        method: req.method,
+        url: req.url,
+        headers: req.headers,
+        data: req.body,
+      });
+
+      // Send the response
+      res.writeHead(targetResponse.status, targetResponse.headers);
+      res.end(targetResponse.data);
+    } catch (error) {
+      console.error(error);
+      res.writeHead(500);
+      res.end('Internal Server Error');
+    }
   }
 
   /**
-   * Handles a WebSocket upgrade request.
+   * Handles a WebSocket upgrade request and establishes a WebSocket connection.
    * @param {object} req - The incoming request object.
    * @param {object} res - The outgoing response object.
-   * @returns {Promise<void>} A promise that resolves when the response is sent.
+   * @returns {Promise<void>} A promise that resolves when the WebSocket connection is established.
    */
   async handleWebSocketRequest(req, res) {
-    // Upgrade the WebSocket connection
-    const wsUrl = this.decodeUrl(req.url);
-    const ws = new WebSocket(wsUrl);
+    const { url: reqUrl, headers } = req;
+
+    // Decode the URL
+    const decodedUrl = this.decodeUrl(reqUrl);
+
+    // Establish a WebSocket connection to the target server
+    const targetWs = new WebSocket(decodedUrl);
 
     // Handle WebSocket messages
-    ws.on('message', (message) => {
-      // Rewrite the message
-      const rewrittenMessage = this.rewriteMessage(message);
-
-      // Forward the message to the target server
-      ws.send(rewrittenMessage);
+    targetWs.on('message', (message) => {
+      this.wsClients.get(reqUrl).send(message);
     });
 
     // Handle WebSocket errors
-    ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
+    targetWs.on('error', (error) => {
+      console.error(error);
+      this.wsClients.get(reqUrl).close();
     });
 
     // Handle WebSocket close
-    ws.on('close', () => {
-      console.log('WebSocket connection closed');
+    targetWs.on('close', () => {
+      this.wsClients.delete(reqUrl);
     });
 
-    // Send the WebSocket upgrade response
+    // Handle WebSocket upgrade response
     res.writeHead(101, {
       'Upgrade': 'websocket',
       'Connection': 'Upgrade',
-      'Sec-WebSocket-Accept': req.headers['sec-webSocket-accept'],
+      'Sec-WebSocket-Accept': headers['sec-webSocket-accept'],
     });
-    res.end();
+
+    // Establish a WebSocket connection to the client
+    const clientWs = new WebSocket(reqUrl);
+    this.wsClients.set(reqUrl, clientWs);
+
+    // Handle client WebSocket messages
+    clientWs.on('message', (message) => {
+      targetWs.send(message);
+    });
+
+    // Handle client WebSocket errors
+    clientWs.on('error', (error) => {
+      console.error(error);
+      targetWs.close();
+    });
+
+    // Handle client WebSocket close
+    clientWs.on('close', () => {
+      targetWs.close();
+    });
   }
 
   /**
-   * Rewrites a WebSocket message.
-   * @param {string} message - The message to rewrite.
-   * @returns {string} The rewritten message.
-   */
-  rewriteMessage(message) {
-    // Implement message rewriting
-  }
-
-  /**
-   * Decodes a URL.
-   * @param {string} url - The URL to decode.
+   * Decodes a URL from the proxied request.
+   * @param {string} reqUrl - The URL of the proxied request.
    * @returns {string} The decoded URL.
    */
-  decodeUrl(url) {
-    // Remove the URL prefix
-    url = url.replace(URL_PREFIX, '');
-
-    // Decode the URL using the XOR + base64 encoding
-    return EncodingUtils.decodeUrl(url);
+  decodeUrl(reqUrl) {
+    const encodedUrl = reqUrl.substring(URL_PREFIX.length);
+    const decodedUrl = EncodingUtils.decode(encodedUrl);
+    return decodedUrl;
   }
 
   /**
-   * Forwards a request to the target server.
-   * @param {string} url - The URL of the target server.
-   * @param {object} req - The incoming request object.
-   * @returns {Promise<object>} A promise that resolves with the target response.
+   * Rewrites the headers of a response.
+   * @param {object} headers - The headers to rewrite.
+   * @returns {object} The rewritten headers.
    */
-  async forwardRequest(url, req) {
-    // Implement request forwarding
-    const targetResponse = await axios({
-      method: req.method,
-      url,
-      headers: req.headers,
-      data: req.body,
-    });
+  rewriteHeaders(headers) {
+    const rewrittenHeaders = {};
 
-    return targetResponse;
-  }
+    for (const [key, value] of Object.entries(headers)) {
+      if (key.toLowerCase() === 'content-security-policy') {
+        rewrittenHeaders[key] = value.replace(/'self'/g, '*');
+      } else if (key.toLowerCase() === 'strict-transport-security') {
+        rewrittenHeaders[key] = '';
+      } else if (key.toLowerCase() === 'x-frame-options') {
+        rewrittenHeaders[key] = '';
+      } else {
+        rewrittenHeaders[key] = value;
+      }
+    }
 
-  /**
-   * Caches a response.
-   * @param {string} url - The URL of the response.
-   * @param {object} response - The response to cache.
-   * @returns {Promise<void>} A promise that resolves when the response is cached.
-   */
-  async cacheResponse(url, response) {
-    // Implement response caching
-    this.cache.set(url, response);
-  }
-
-  /**
-   * Gets a cached response.
-   * @param {string} url - The URL of the response.
-   * @returns {Promise<object>} A promise that resolves with the cached response.
-   */
-  async getCachedResponse(url) {
-    // Implement cached response retrieval
-    return this.cache.get(url);
-  }
-
-  /**
-   * Sends a response.
-   * @param {object} res - The outgoing response object.
-   * @param {object} response - The response to send.
-   * @returns {Promise<void>} A promise that resolves when the response is sent.
-   */
-  async sendResponse(res, response) {
-    // Implement response sending
-    res.writeHead(response.status, response.headers);
-    res.end(response.data);
-  }
-
-  /**
-   * Handles an error.
-   * @param {object} req - The incoming request object.
-   * @param {object} res - The outgoing response object.
-   * @param {number} statusCode - The error status code.
-   * @param {string} message - The error message.
-   * @returns {Promise<void>} A promise that resolves when the error response is sent.
-   */
-  async handleError(req, res, statusCode, message) {
-    // Implement error handling
-    res.writeHead(statusCode, {
-      'Content-Type': 'text/plain',
-    });
-    res.end(message);
+    return rewrittenHeaders;
   }
 }
 
-export { ProxyEngine };
+export default ProxyEngine;
