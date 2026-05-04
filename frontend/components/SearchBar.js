@@ -9,6 +9,7 @@ const SearchBar = () => {
     const storedHistory = localStorage.getItem('searchHistory');
     return storedHistory ? JSON.parse(storedHistory) : [];
   });
+  const [historyExpanded, setHistoryExpanded] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
@@ -77,6 +78,14 @@ const SearchBar = () => {
     setSearchQuery(historyItem);
   };
 
+  const handleHistoryClear = () => {
+    setSearchHistory([]);
+  };
+
+  const handleHistoryToggle = () => {
+    setHistoryExpanded(!historyExpanded);
+  };
+
   return (
     <div className="search-bar">
       <form onSubmit={handleSearch}>
@@ -100,26 +109,26 @@ const SearchBar = () => {
           </ul>
         )}
         {searchHistory.length > 0 && (
-          <ul className="search-history">
-            {searchHistory.map((historyItem, index) => (
-              <li key={index} onClick={() => handleHistoryClick(historyItem)}>
-                {historyItem}
-              </li>
-            ))}
-          </ul>
+          <div className="search-history-container">
+            <button className="history-toggle" onClick={handleHistoryToggle}>
+              {historyExpanded ? 'Hide' : 'Show'} History
+            </button>
+            {historyExpanded && (
+              <ul className="search-history">
+                {searchHistory.map((historyItem, index) => (
+                  <li key={index}>
+                    <button onClick={() => handleHistoryClick(historyItem)}>
+                      {historyItem}
+                    </button>
+                  </li>
+                ))}
+                <li>
+                  <button onClick={handleHistoryClear}>Clear History</button>
+                </li>
+              </ul>
+            )}
+          </div>
         )}
-        <button id="search-button" type="submit">
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M16.32 14.9l5.39 5.4a1 1 0 0 1-1.42 1.4l-5.38-5.38a8 8 0 1 1 1.41-1.41zM10 16a6 6 0 1 0 0-12 6 6 0 0 0 0 12z" />
-          </svg>
-        </button>
       </form>
     </div>
   );
