@@ -97,62 +97,78 @@ class ProxyEngine {
    */
   handleWebSocket(req, res) {
     const { headers, url: reqUrl } = req;
-    const { host, referer } = headers;
+    const websocketKey = headers['sec-websocket-key'];
+    const websocketAccept = headers['sec-websocket-accept'];
 
-    // Rewrite the WebSocket URL
-    const rewrittenUrl = this.rewriteUrl(reqUrl);
+    // Generate a random WebSocket ID
+    const websocketId = uuidv4();
 
     // Create a new WebSocket client
-    const wsClient = new WebSocket(rewrittenUrl);
+    const wsClient = new WebSocket(`ws://${req.headers.host}${reqUrl}`);
 
-    // Handle WebSocket messages
-    wsClient.on('message', (message) => {
-      // Rewrite the WebSocket message
-      const rewrittenMessage = this.rewriteWebSocketMessage(message);
+    // Handle WebSocket connection open
+    wsClient.on('open', () => {
+      // Send the WebSocket connection open event
+      wsClient.send(JSON.stringify({ type: 'connection_open', data: reqUrl }));
 
-      // Send the rewritten message to the client
-      if (wsClient.readyState === WebSocket.OPEN) {
-        wsClient.send(rewrittenMessage);
-      }
+      // Store the WebSocket client in the map
+      this.wsClients.set(websocketId, wsClient);
     });
 
-    // Handle WebSocket errors
+    // Handle WebSocket message
+    wsClient.on('message', (message) => {
+      // Handle incoming WebSocket message
+      const data = JSON.parse(message);
+
+      // Scrub WebRTC ICE candidate
+      if (data.type === 'ice_candidate') {
+        data.sdpMLineIndex = 0;
+        data.sdpMid = '';
+      }
+
+      // Send the WebSocket message to the client
+      res.send(JSON.stringify(data));
+    });
+
+    // Handle WebSocket error
     wsClient.on('error', (error) => {
       console.error(error);
     });
 
     // Handle WebSocket close
     wsClient.on('close', () => {
-      this.wsClients.delete(reqUrl);
+      // Remove the WebSocket client from the map
+      this.wsClients.delete(websocketId);
     });
 
-    // Store the WebSocket client
-    this.wsClients.set(reqUrl, wsClient);
-
-    // Send the WebSocket response
+    // Handle WebSocket upgrade response
     res.writeHead(101, {
       'Upgrade': 'websocket',
       'Connection': 'Upgrade',
-      'Sec-WebSocket-Accept': this.getWebSocketAccept(headers['sec-webSocket-key']),
+      'Sec-WebSocket-Accept': websocketAccept,
     });
+
     res.end();
   }
 
   /**
    * Rewrites the request URL.
-   * @param {string} url - The original URL.
+   * @param {string} reqUrl - The incoming request URL.
    * @returns {string} The rewritten URL.
    */
-  rewriteUrl(url) {
-    // XOR + base64 URL encoding with a rotating salt
-    const salt = EncodingUtils.getSalt();
-    const encodedUrl = EncodingUtils.encode(url, salt);
-    return `${URL_PREFIX}/${encodedUrl}`;
+  rewriteUrl(reqUrl) {
+    // Remove the URL prefix
+    const urlWithoutPrefix = reqUrl.replace(URL_PREFIX, '');
+
+    // Decode the URL
+    const decodedUrl = EncodingUtils.decodeUrl(urlWithoutPrefix);
+
+    return decodedUrl;
   }
 
   /**
    * Rewrites the request headers.
-   * @param {object} headers - The original headers.
+   * @param {object} headers - The incoming request headers.
    * @returns {object} The rewritten headers.
    */
   rewriteHeaders(headers) {
@@ -174,62 +190,14 @@ class ProxyEngine {
   }
 
   /**
-   * Rewrites the WebSocket message.
-   * @param {string} message - The original message.
-   * @returns {string} The rewritten message.
+   * Scrubs WebRTC ICE candidate to prevent IP leaks.
+   * @param {object} data - The WebSocket message data.
    */
-  rewriteWebSocketMessage(message) {
-    // Implement WebSocket message rewriting logic here
-    return message;
-  }
-
-  /**
-   * Returns the WebSocket accept header value.
-   * @param {string} key - The WebSocket key.
-   * @returns {string} The WebSocket accept header value.
-   */
-  getWebSocketAccept(key) {
-    return crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
-  }
-
-  /**
-   * Integrated HTTPS tunnel.
-   */
-  async handleHttpsTunnel(req, res) {
-    const { headers, url: reqUrl } = req;
-    const { host, referer } = headers;
-
-    // Create a new TLS tunnel
-    const tlsSocket = tls.connect({
-      host: host,
-      port: 443,
-      rejectUnauthorized: false,
-    }, () => {
-      // Send the HTTPS request
-      const httpsReq = {
-        method: req.method,
-        headers: this.rewriteHeaders(headers),
-        url: `https://${host}${reqUrl}`,
-      };
-
-      // Pipe the request and response streams
-      const tlsReq = axios({
-        method: httpsReq.method,
-        url: httpsReq.url,
-        headers: httpsReq.headers,
-        data: req.body,
-        responseType: 'stream',
-      });
-
-      pipeline(tlsReq, res).catch((error) => {
-        console.error(error);
-      });
-    });
-
-    // Handle TLS errors
-    tlsSocket.on('error', (error) => {
-      console.error(error);
-    });
+  scrubWebrtcIceCandidate(data) {
+    if (data.type === 'ice_candidate') {
+      data.sdpMLineIndex = 0;
+      data.sdpMid = '';
+    }
   }
 }
 
