@@ -137,23 +137,22 @@ const TabBar = () => {
           onDragOver={(event) => handleDragOver(event, index)}
           onDrop={(event) => handleDrop(event, index)}
         >
-          <span className="tab-title">{tab.title}</span>
-          <button className="close-tab" onClick={() => removeTab(tab.id)}>
-            ×
-          </button>
+          <img src={tab.icon} alt={tab.title} />
+          <span>{tab.title}</span>
+          <button onClick={() => removeTab(tab.id)}>×</button>
+          <div
+            className="tab-content"
+            style={{
+              display: activeTab === tab.id ? 'block' : 'none',
+            }}
+          >
+            {tabContent[tab.id]}
+          </div>
         </div>
       ))}
       <button className="add-tab" onClick={() => addTab('', '', '', '')}>
         +
       </button>
-      {activeTab && (
-        <div className="tab-content">
-          <iframe
-            src={tabs.find((tab) => tab.id === activeTab).url}
-            title={tabs.find((tab) => tab.id === activeTab).title}
-          />
-        </div>
-      )}
     </div>
   );
 };
