@@ -72,10 +72,17 @@ const init = () => {
   const searchBar = document.querySelector('search-bar');
   searchBar.addEventListener('search', (query) => {
     const { searchEngine } = settings;
-    const url = searchEngine === 'google' ? 
-      `https://www.google.com/search?q=${query}` : 
-      `https://www.bing.com/search?q=${query}`;
-    window.open(url, '_blank');
+    let url;
+    if (searchEngine === 'google') {
+      url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+    } else if (searchEngine === 'bing') {
+      url = `https://www.bing.com/search?q=${encodeURIComponent(query)}`;
+    } else {
+      console.error('Unsupported search engine:', searchEngine);
+      return;
+    }
+    const tab = window.open(url, '_blank');
+    tab.focus();
   });
 };
 
@@ -104,116 +111,29 @@ window.addEventListener('message', (event) => {
   }
 });
 
-document.addEventListener('DOMContentLoaded', () => {
-  const tabBar = document.querySelector('tab-bar');
-  tabBar.addEventListener('tabChange', (tab) => {
-    const iframe = document.querySelector(`iframe[src="${tab.url}"]`);
-    iframe.contentWindow.postMessage({ type: 'proxyUpdate', settings }, '*');
-  });
-});
-
-const handleProxyHistory = () => {
-  const proxyHistory = [];
-  const addToHistory = (url) => {
-    proxyHistory.push(url);
-    localStorage.setItem('proxyHistory', JSON.stringify(proxyHistory));
-  };
-
-  const clearHistory = () => {
-    proxyHistory.length = 0;
-    localStorage.removeItem('proxyHistory');
-  };
-
-  const getHistory = () => {
-    const storedHistory = localStorage.getItem('proxyHistory');
-    return storedHistory ? JSON.parse(storedHistory) : [];
-  };
-
-  return { addToHistory, clearHistory, getHistory };
-};
-
-const proxyHistory = handleProxyHistory();
-
-window.addEventListener('popstate', (event) => {
-  if (event.state) {
-    const currentUrl = event.state.url;
-    proxyHistory.addToHistory(currentUrl);
+// Listen for tab updates
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete') {
+    chrome.tabs.sendMessage(tabId, { type: 'tabUpdated' });
   }
 });
 
-window.addEventListener('pushstate', (event) => {
-  if (event.state) {
-    const currentUrl = event.state.url;
-    proxyHistory.addToHistory(currentUrl);
+// Handle search queries from the omnibox
+chrome.omnibox.onInputEntered.addListener((text) => {
+  const { searchEngine } = settings;
+  let url;
+  if (searchEngine === 'google') {
+    url = `https://www.google.com/search?q=${encodeURIComponent(text)}`;
+  } else if (searchEngine === 'bing') {
+    url = `https://www.bing.com/search?q=${encodeURIComponent(text)}`;
+  } else {
+    console.error('Unsupported search engine:', searchEngine);
+    return;
   }
+  chrome.tabs.create({ url });
 });
 
-window.addEventListener('replacestate', (event) => {
-  if (event.state) {
-    const currentUrl = event.state.url;
-    proxyHistory.addToHistory(currentUrl);
-  }
-});
-
-const bookmarksManager = {
-  addBookmark: (title, url) => {
-    const bookmarks = JSON.parse(localStorage.getItem('bookmarks')) || [];
-    bookmarks.push({ title, url });
-    localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
-  },
-
-  removeBookmark: (url) => {
-    const bookmarks = JSON.parse(localStorage.getItem('bookmarks')) || [];
-    const updatedBookmarks = bookmarks.filter((bookmark) => bookmark.url !== url);
-    localStorage.setItem('bookmarks', JSON.stringify(updatedBookmarks));
-  },
-
-  getBookmarks: () => {
-    const storedBookmarks = localStorage.getItem('bookmarks');
-    return storedBookmarks ? JSON.parse(storedBookmarks) : [];
-  },
-};
-
-const settingsPanel = {
-  toggleSettings: () => {
-    const settingsPanelElement = document.querySelector('settings-panel');
-    settingsPanelElement.classList.toggle('open');
-  },
-};
-
-const handleAdBlock = () => {
-  const adBlockList = settings.adBlockList;
-  const filterList = adBlockList.join('\n');
-
-  const adBlockFilter = `
-    [${filterList}]
-  `;
-
-  const style = document.createElement('style');
-  style.textContent = `
-    ${adBlockFilter} {
-      display: none !important;
-    }
-  `;
-  document.head.appendChild(style);
-};
-
-handleAdBlock();
-
-const handlePrefetch = () => {
-  const prefetchLinks = document.querySelectorAll('link[rel="prefetch"]');
-  prefetchLinks.forEach((link) => {
-    const href = link.href;
-    fetch(href)
-      .then((response) => response.blob())
-      .then((blob) => {
-        const url = URL.createObjectURL(blob);
-        const prefetchLink = document.createElement('link');
-        prefetchLink.rel = 'prefetch';
-        prefetchLink.href = url;
-        document.head.appendChild(prefetchLink);
-      });
-  });
-};
-
-handlePrefetch();
+// Periodically sync settings with the service worker
+setInterval(() => {
+  connectToProxy();
+}, 10000);
