@@ -101,67 +101,50 @@ class JSRewriter {
     });
 
     js = js.replace(this.dynamicImportRegex, (match, p1) => {
-      return `import('${this.rewriteURL(p1)}')`;
+      return `import(${this.rewriteURL(p1)})`;
     });
 
     js = js.replace(this.workerRegex, (match, p1) => {
-      return `new Worker('${this.rewriteURL(p1)}')`;
+      return `new Worker(${this.rewriteURL(p1)})`;
     });
 
     js = js.replace(this.importScriptsRegex, (match, p1) => {
-      return `importScripts('${this.rewriteURL(p1)}')`;
+      return `importScripts(${this.rewriteURL(p1)})`;
     });
 
     js = js.replace(this.documentDomainRegex, (match, p1) => {
-      return `document.domain = '${this.rewriteURL(p1)}'`;
+      return `document.domain = ${this.rewriteURL(p1)}`;
     });
 
     js = js.replace(this.windowLocationRegex, (match, p1) => {
-      return `window.location = '${this.rewriteURL(p1)}'`;
+      return `window.location = ${this.rewriteURL(p1)}`;
     });
 
     js = js.replace(this.windowOpenRegex, (match, p1) => {
-      return `window.open('${this.rewriteURL(p1)}')`;
-    });
-
-    js = js.replace(this.historyPushStateRegex, (match) => {
-      return `history.pushState(${this.rewriteHistoryState(match)})`;
-    });
-
-    js = js.replace(this.historyReplaceStateRegex, (match) => {
-      return `history.replaceState(${this.rewriteHistoryState(match)})`;
+      return `window.open(${this.rewriteURL(p1)})`;
     });
 
     return js;
   }
 
-  rewriteEval(evalStr) {
-    return evalStr.replace(/[^\(]+/, (match) => {
-      return this.rewriteJS(match);
-    });
+  rewriteEval(js) {
+    return js.slice(5, -1);
   }
 
-  rewriteFunction(funcStr) {
-    return funcStr.replace(/[^\(]+/, (match) => {
-      return this.rewriteJS(match);
-    });
+  rewriteFunction(js) {
+    return js.slice(9, -1);
   }
 
-  rewriteDynamicImport(importStr) {
-    return this.rewriteURL(importStr);
+  rewriteDynamicImport(js) {
+    return js;
   }
 
-  rewriteRequire(requireStr) {
-    return this.rewriteURL(requireStr);
+  rewriteRequire(js) {
+    return js;
   }
 
   rewriteURL(url) {
-    // TO DO: implement URL rewriting
     return url;
-  }
-
-  rewriteHistoryState(stateStr) {
-    return stateStr;
   }
 }
 
@@ -199,14 +182,13 @@ class HTMLRewriter {
   }
 
   rewriteURL(url) {
-    // TO DO: implement URL rewriting
     return url;
   }
 }
 
 class CSSRewriter {
   constructor() {
-    this.urlRegex = /url\(\s*['"]([^'"]+)['"]\s*\)/g;
+    this.urlRegex = /url\(['"]([^'"]+)['"]\)/g;
     this.importRegex = /@import\s+['"]([^'"]+)['"]/g;
   }
 
@@ -223,46 +205,50 @@ class CSSRewriter {
   }
 
   rewriteURL(url) {
-    // TO DO: implement URL rewriting
     return url;
   }
 }
 
 async function handleFetch(request) {
   const url = new URL(request.url);
-  const salt = generateSalt();
-  const encodedUrl = xorBase64Encode(url.href, salt);
-
-  if (request.method === 'GET') {
-    const cachedResponse = await getResponse(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-
-    const response = await fetch(request);
-    const responseBody = await response.clone().text();
-    const rewrittenResponseBody = rewriteResponseBody(responseBody, request);
-
-    const rewrittenResponse = new Response(rewrittenResponseBody, response.headers);
-    await putResponse(request, rewrittenResponse);
-
-    return rewrittenResponse;
-  } else if (request.method === 'POST') {
-    // TO DO: handle POST requests
+  if (url.pathname.startsWith('/proxy/')) {
+    return handleProxyRequest(request);
+  } else {
+    return handleOriginalRequest(request);
   }
 }
 
-function rewriteResponseBody(body, request) {
-  const contentType = request.headers.get('Content-Type');
-  if (contentType && contentType.includes('text/html')) {
-    const htmlRewriter = new HTMLRewriter();
-    return htmlRewriter.rewriteHTML(body);
-  } else if (contentType && contentType.includes('application/javascript')) {
-    const jsRewriter = new JSRewriter();
-    return jsRewriter.rewriteJS(body);
-  } else if (contentType && contentType.includes('text/css')) {
-    const cssRewriter = new CSSRewriter();
-    return cssRewriter.rewriteCSS(body);
+async function handleProxyRequest(request) {
+  const salt = generateSalt();
+  const encodedUrl = xorBase64Encode(request.url, salt);
+  const proxiedRequest = new Request(`https://proxy.example.com/${encodedUrl}`, {
+    method: request.method,
+    headers: request.headers,
+    body: request.body,
+  });
+
+  const response = await fetch(proxiedRequest);
+  const proxiedResponse = new Response(response.body, {
+    status: response.status,
+    headers: response.headers,
+  });
+
+  return proxiedResponse;
+}
+
+async function handleOriginalRequest(request) {
+  const cache = await getCache();
+  const cachedResponse = await cache.match(request);
+  if (cachedResponse) {
+    return cachedResponse;
   }
-  return body;
+
+  const response = await fetch(request);
+  const cachedResponse = new Response(response.body, {
+    status: response.status,
+    headers: response.headers,
+  });
+
+  await putResponse(request, cachedResponse);
+  return cachedResponse;
 }
