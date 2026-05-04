@@ -23,25 +23,30 @@ const wss = new WebSocket.Server({ server });
 let connections = {};
 
 wss.on('connection', (ws, req) => {
-  const { hostname: proxiedHost } = req.headers['x-nexus-proxied-host'];
-  if (!proxiedHost) {
-    ws.close(1000, 'Bad Request');
-    return;
+  try {
+    const { hostname: proxiedHost } = req.headers['x-nexus-proxied-host'];
+    if (!proxiedHost) {
+      ws.close(1000, 'Bad Request');
+      return;
+    }
+
+    connections[proxiedHost] = ws;
+
+    ws.on('message', (message) => {
+      logger.info(`Received message from ${proxiedHost}: ${message}`);
+    });
+
+    ws.on('close', () => {
+      delete connections[proxiedHost];
+    });
+
+    ws.on('error', (error) => {
+      logger.error(`Error occurred for ${proxiedHost}: ${error}`);
+    });
+  } catch (error) {
+    logger.error('Error occurred during WebSocket connection:', error);
+    ws.close(1000, 'Internal Server Error');
   }
-
-  connections[proxiedHost] = ws;
-
-  ws.on('message', (message) => {
-    logger.info(`Received message from ${proxiedHost}: ${message}`);
-  });
-
-  ws.on('close', () => {
-    delete connections[proxiedHost];
-  });
-
-  ws.on('error', (error) => {
-    logger.error(`Error occurred for ${proxiedHost}: ${error}`);
-  });
 });
 
 app.use(cookieScoping);
@@ -78,10 +83,18 @@ const handleProxyRequest = async (req, res) => {
         decompressedResponse = zlib.createGunzip();
       }
 
+      const responseHeaders = { ...targetRes.headers };
+
+      // Remove hop-by-hop headers
+      ['connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailers', 'transfer-encoding', 'upgrade'].forEach((header) => {
+        delete responseHeaders[header];
+      });
+
+      res.writeHead(targetRes.statusCode, responseHeaders);
+
       if (decompressedResponse) {
         targetRes.pipe(decompressedResponse).pipe(res);
       } else {
-        res.writeHead(targetRes.statusCode, targetRes.headers);
         targetRes.pipe(res);
       }
 
@@ -131,43 +144,30 @@ const handleWebSocketProxyRequest = async (req, res) => {
       logger.error(`Error occurred while proxying WebSocket request to ${targetUrl}: ${error}`);
       res.status(500).send({ error: 'Internal Server Error' });
     });
+
+    targetWs.on('close', () => {
+      res.end();
+    });
   } catch (error) {
     logger.error(`Error occurred while handling WebSocket proxy request: ${error}`);
     res.status(500).send({ error: 'Internal Server Error' });
   }
 };
 
-app.all('*', (req, res, next) => {
-  if (req.headers['upgrade'] === 'websocket') {
-    handleWebSocketProxyRequest(req, res);
-  } else {
-    handleProxyRequest(req, res);
-  }
+app.all('*', handleProxyRequest);
+
+server.listen(config.server.port, config.server.host, () => {
+  logger.info(`Server listening on ${config.server.host}:${config.server.port}`);
 });
 
-const httpsServer = https.createServer({
+const tlsServer = https.createServer({
   key: fs.readFileSync(config.server.https.key),
   cert: fs.readFileSync(config.server.https.cert),
 }, app);
 
-httpsServer.listen(config.server.port, config.server.host, () => {
-  logger.info(`Server listening on ${config.server.host}:${config.server.port}`);
+tlsServer.listen(8443, () => {
+  logger.info('TLS server listening on port 8443');
 });
-
-server.listen(config.server.port + 1, () => {
-  logger.info(`Fallback HTTP server listening on ${config.server.host}:${config.server.port + 1}`);
-});
-
-process.on('SIGINT', () => {
-  logger.info('Received SIGINT, shutting down...');
-  httpsServer.close();
-  server.close();
-  process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-  logger.info('Received SIGTERM, shutting down...');
-  httpsServer.close();
-  server.close();
-  process.exit(0);
+app.use((req, res) => {
+  res.status(404).send({ error: 'Not Found' });
 });
