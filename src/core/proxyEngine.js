@@ -1,130 +1,147 @@
+const express = require('express');
 const WebSocket = require('ws');
 const http = require('http');
-const https = require('https');
 const url = require('url');
 const LRU = require('lru-cache');
+const crypto = require('crypto');
+
+const app = express();
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
 
 const cache = new LRU({
   max: 1000,
   maxAge: 1000 * 60 * 60 // 1 hour
 });
 
-class ProxyEngine {
-  constructor() {
-    this.server = http.createServer((req, res) => this.handleRequest(req, res));
-    this.wss = new WebSocket.Server({ server: this.server });
-    this.wss.on('connection', (ws, req) => this.handleWebSocket(ws, req));
-  }
+const rotatingSalt = crypto.randomBytes(16).toString('hex');
 
-  handleRequest(req, res) {
-    const { hostname, pathname } = url.parse(req.url);
-    const targetUrl = `http://${hostname}${pathname}`;
-
-    req.headers['x-forwarded-for'] = req.socket.remoteAddress;
-    req.headers['x-forwarded-port'] = req.socket.remotePort;
-
-    const options = {
-      hostname,
-      port: 80,
-      path: pathname,
-      method: req.method,
-      headers: req.headers
-    };
-
-    const proxyReq = http.request(options, (proxyRes) => {
-      res.writeHead(proxyRes.statusCode, proxyRes.headers);
-      proxyRes.pipe(res);
-    });
-
-    req.pipe(proxyReq);
-
-    proxyReq.on('error', (err) => {
-      console.error(err);
-      res.statusCode = 500;
-      res.end();
-    });
-  }
-
-  handleWebSocket(ws, req) {
-    const { hostname, pathname } = url.parse(req.url);
-    const targetUrl = `ws://${hostname}${pathname}`;
-
-    const options = {
-      hostname,
-      port: 80,
-      path: pathname,
-      headers: req.headers
-    };
-
-    const proxyWs = new WebSocket(targetUrl, options);
-
-    ws.on('message', (message) => {
-      proxyWs.send(message);
-    });
-
-    ws.on('close', () => {
-      proxyWs.close();
-    });
-
-    ws.on('error', (err) => {
-      console.error(err);
-      proxyWs.close();
-    });
-
-    proxyWs.on('message', (message) => {
-      ws.send(message);
-    });
-
-    proxyWs.on('close', () => {
-      ws.close();
-    });
-
-    proxyWs.on('error', (err) => {
-      console.error(err);
-      ws.close();
-    });
-  }
-
-  handleWebRTCIceCandidate(req, res) {
-    const { candidate } = req.body;
-
-    // Scrub the ICE candidate to prevent IP leaks
-    const scrubbedCandidate = this.scrubIceCandidate(candidate);
-
-    res.json({ candidate: scrubbedCandidate });
-  }
-
-  scrubIceCandidate(candidate) {
-    // Implement ICE candidate scrubbing logic here
-    // For demonstration purposes, this simply removes the IP address
-    return candidate.replace(/a=rtcp:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/g, 'a=rtcp:0.0.0.0');
-  }
-
-  start() {
-    this.server.listen(8080, () => {
-      console.log('Proxy engine listening on port 8080');
-    });
-  }
+function generateEncodedUrl(req) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const encodedUrl = Buffer.from(req.url).toString('base64');
+  return `/${rotatingSalt}/${salt}/${encodedUrl}`;
 }
 
-const proxyEngine = new ProxyEngine();
-proxyEngine.start();
+function decodeUrl(req) {
+  const urlParts = req.url.split('/');
+  if (urlParts.length !== 4 || urlParts[1] !== rotatingSalt) return null;
+  const salt = urlParts[2];
+  const encodedUrl = urlParts[3];
+  return Buffer.from(encodedUrl, 'base64').toString();
+}
 
-module.exports = proxyEngine;
-const express = require('express');
-const app = express();
+function rewriteHeaders(req) {
+  const headers = req.headers;
+  delete headers['content-security-policy'];
+  delete headers['strict-transport-security'];
+  delete headers['x-frame-options'];
+  return headers;
+}
+
+function scrubWebRTCIceCandidates(req) {
+  if (req.method === 'POST' && req.headers['content-type'] === 'application/json') {
+    let data;
+    try {
+      data = JSON.parse(req.body);
+    } catch (e) {
+      return req.body;
+    }
+    if (data && data.candidate) {
+      data.candidate = data.candidate.replace(/a=ice-ufrag:.*? /g, 'a=ice-ufrag:XXXX ');
+      data.candidate = data.candidate.replace(/a=ice-pwd:.*? /g, 'a=ice-pwd:XXXX ');
+    }
+    return JSON.stringify(data);
+  }
+  return req.body;
+}
 
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  const decodedUrl = decodeUrl(req);
+  if (!decodedUrl) return res.status(400).send('Bad Request');
+  req.url = decodedUrl;
   next();
 });
 
-app.get('/webrtc/ice/candidate', (req, res) => {
-  const proxyEngine = require('./proxyEngine');
-  proxyEngine.handleWebRTCIceCandidate(req, res);
+app.use((req, res, next) => {
+  req.headers = rewriteHeaders(req);
+  next();
 });
 
-app.listen(8081, () => {
-  console.log('Express server listening on port 8081');
+app.get('*', (req, res) => {
+  const cacheKey = req.url;
+  if (cache.has(cacheKey)) {
+    const cachedResponse = cache.get(cacheKey);
+    res.set(cachedResponse.headers);
+    res.status(cachedResponse.statusCode).send(cachedResponse.body);
+  } else {
+    http.get(req.url, (upstreamRes) => {
+      const headers = rewriteHeaders(upstreamRes.headers);
+      res.set(headers);
+      upstreamRes.on('data', (chunk) => {
+        res.write(chunk);
+      });
+      upstreamRes.on('end', () => {
+        res.end();
+        cache.set(cacheKey, {
+          headers: res.getHeaders(),
+          statusCode: res.statusCode,
+          body: res.getContent()
+        });
+      });
+    }).on('error', (err) => {
+      console.error(err);
+      res.status(500).send('Internal Server Error');
+    });
+  }
+});
+
+app.post('*', (req, res) => {
+  const cacheKey = req.url;
+  if (cache.has(cacheKey)) {
+    const cachedResponse = cache.get(cacheKey);
+    res.set(cachedResponse.headers);
+    res.status(cachedResponse.statusCode).send(cachedResponse.body);
+  } else {
+    http.request({
+      method: req.method,
+      url: req.url,
+      headers: req.headers
+    }, (upstreamRes) => {
+      const headers = rewriteHeaders(upstreamRes.headers);
+      res.set(headers);
+      upstreamRes.on('data', (chunk) => {
+        res.write(chunk);
+      });
+      upstreamRes.on('end', () => {
+        res.end();
+        cache.set(cacheKey, {
+          headers: res.getHeaders(),
+          statusCode: res.statusCode,
+          body: res.getContent()
+        });
+      });
+    }).on('error', (err) => {
+      console.error(err);
+      res.status(500).send('Internal Server Error');
+    }).end(scrubWebRTCIceCandidates(req));
+  }
+});
+
+wss.on('connection', (ws) => {
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+      if (data.type === 'ping') {
+        ws.send(JSON.stringify({ type: 'pong' }));
+      } else {
+        ws.send(message);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  });
+});
+
+server.listen(8080, () => {
+  console.log('Proxy server listening on port 8080');
 });
