@@ -64,6 +64,7 @@ const SettingsPanel = () => {
               />
               Enable Cache
             </label>
+            <small>Cache helps improve performance by storing frequently accessed resources locally.</small>
           </div>
           <div className="settings-group">
             <label>
@@ -74,6 +75,19 @@ const SettingsPanel = () => {
               />
               Enable Ad Block
             </label>
+            <small>Ad block helps prevent ads from being displayed on proxied websites.</small>
+          </div>
+          <div className="settings-group">
+            <button
+              className="reset-settings"
+              onClick={() => {
+                setEncodingMode('base64');
+                setCacheEnabled(true);
+                setAdBlockEnabled(true);
+              }}
+            >
+              Reset Settings
+            </button>
           </div>
         </div>
       )}
