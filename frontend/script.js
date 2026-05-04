@@ -103,47 +103,100 @@ const init = () => {
 
   const tabBar = document.querySelector('tab-bar');
   if (tabBar) {
-    tabBar.addEventListener('tabChange', (tabId) => {
-      const tab = tabBar.getTab(tabId);
-      if (tab) {
-        const url = tab.url;
-        const proxiedUrl = `${proxy}?url=${encodeURIComponent(url)}`;
-        tabBar.updateTab(tabId, { url: proxiedUrl });
+    tabBar.addEventListener('tabCreated', (tab) => {
+      const { id, url, title, icon } = tab;
+      const iframe = document.createElement('iframe');
+      iframe.src = `${proxy}?url=${encodeURIComponent(url)}`;
+      iframe.id = id;
+      iframe.title = title;
+      iframe.dataset.icon = icon;
+      document.getElementById('tab-container').appendChild(iframe);
+    });
+
+    tabBar.addEventListener('tabUpdated', (tab) => {
+      const { id, url, title, icon } = tab;
+      const iframe = document.getElementById(id);
+      if (iframe) {
+        iframe.src = `${proxy}?url=${encodeURIComponent(url)}`;
+        iframe.title = title;
+        iframe.dataset.icon = icon;
+      }
+    });
+
+    tabBar.addEventListener('tabRemoved', (id) => {
+      const iframe = document.getElementById(id);
+      if (iframe) {
+        iframe.remove();
       }
     });
   } else {
     console.error('Tab bar not found');
   }
-
-  const bookmarksManager = document.querySelector('bookmarks-manager');
-  if (bookmarksManager) {
-    bookmarksManager.addEventListener('bookmarkClick', (bookmark) => {
-      const url = bookmark.url;
-      const proxiedUrl = `${proxy}?url=${encodeURIComponent(url)}`;
-      const tab = window.open(proxiedUrl, '_blank');
-      tab.focus();
-    });
-  } else {
-    console.error('Bookmarks manager not found');
-  }
 };
 
-document.addEventListener('DOMContentLoaded', init);
+init();
 
-const handleTabUpdate = (tabId, changeInfo, tab) => {
-  const tabBar = document.querySelector('tab-bar');
-  if (tabBar) {
-    tabBar.updateTab(tabId, tab);
+// Listen for messages from the service worker
+navigator.serviceWorker.addEventListener('message', (event) => {
+  if (event.data.type === 'tabUpdated') {
+    const tabBar = document.querySelector('tab-bar');
+    if (tabBar) {
+      tabBar.updateTab(event.data.tab);
+    }
+  } else if (event.data.type === 'tabRemoved') {
+    const tabBar = document.querySelector('tab-bar');
+    if (tabBar) {
+      tabBar.removeTab(event.data.id);
+    }
   }
-};
+});
 
-chrome.tabs.onUpdated.addListener(handleTabUpdate);
-
-const handleTabRemove = (tabId) => {
-  const tabBar = document.querySelector('tab-bar');
-  if (tabBar) {
-    tabBar.removeTab(tabId);
+// Listen for tab changes
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    connectToProxy();
   }
-};
+});
 
-chrome.tabs.onRemoved.addListener(handleTabRemove);
+// Periodically sync settings with the service worker
+setInterval(() => {
+  connectToProxy();
+}, 10000);
+
+// Handle search bar suggestions
+const searchBar = document.querySelector('search-bar');
+if (searchBar) {
+  searchBar.addEventListener('input', (event) => {
+    const query = event.target.value.trim();
+    if (query) {
+      fetch(`https://api.${settings.searchEngine}.com/suggestions?q=${encodeURIComponent(query)}`)
+        .then((response) => response.json())
+        .then((suggestions) => {
+          searchBar.suggestions = suggestions;
+          searchBar.showSuggestions = true;
+        })
+        .catch((error) => console.error('Error fetching suggestions:', error));
+    } else {
+      searchBar.suggestions = [];
+      searchBar.showSuggestions = false;
+    }
+  });
+}
+
+// Initialize tab manager
+const tabManager = document.querySelector('tab-manager');
+if (tabManager) {
+  tabManager.init();
+}
+
+// Initialize settings panel
+const settingsPanel = document.querySelector('settings-panel');
+if (settingsPanel) {
+  settingsPanel.init();
+}
+
+// Initialize bookmarks manager
+const bookmarksManager = document.querySelector('bookmarks-manager');
+if (bookmarksManager) {
+  bookmarksManager.init();
+}
