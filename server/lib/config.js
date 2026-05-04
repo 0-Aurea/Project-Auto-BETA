@@ -26,6 +26,15 @@ const config = {
     cacheTTL: 60 * 60 * 24 * 7, // 1 week
     maxCacheSize: 100 * 1024 * 1024, // 100MB
     cacheStrategy: 'stale-while-revalidate',
+    cacheControl: {
+      enabled: true,
+      cacheControlHeader: 'public, max-age=31536000',
+    },
+    prefetchHints: {
+      enabled: true,
+      prefetchThreshold: 0.5,
+      prefetchAhead: 10,
+    },
   },
   // Encoding configuration
   encoding: {
@@ -80,7 +89,6 @@ const config = {
       brotli: true,
       gzip: true,
     },
-    prefetchHints: true,
     caching: {
       enabled: true,
       cacheControl: 'public, max-age=31536000',
