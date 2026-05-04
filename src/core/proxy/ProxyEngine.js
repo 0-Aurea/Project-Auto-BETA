@@ -37,8 +37,27 @@ class ProxyEngine {
    */
   generateEncodedUrl(req) {
     const salt = crypto.randomBytes(16).toString('hex');
-    const encodedUrl = Buffer.from(req.url).toString('base64');
-    return `/${this.rotatingSalt}/${salt}/${encodedUrl}`;
+    const xorEncodedUrl = this.xorEncode(req.url, salt);
+    const base64EncodedUrl = Buffer.from(xorEncodedUrl).toString('base64');
+    return `/${this.rotatingSalt}/${salt}/${base64EncodedUrl}`;
+  }
+
+  /**
+   * XOR encodes a URL with a given salt.
+   * @param {string} url - The URL to encode.
+   * @param {string} salt - The salt to use for encoding.
+   * @returns {string} The XOR encoded URL.
+   */
+  xorEncode(url, salt) {
+    const urlBuffer = Buffer.from(url);
+    const saltBuffer = Buffer.from(salt, 'hex');
+    const encodedBuffer = Buffer.alloc(urlBuffer.length);
+
+    for (let i = 0; i < urlBuffer.length; i++) {
+      encodedBuffer[i] = urlBuffer[i] ^ saltBuffer[i % saltBuffer.length];
+    }
+
+    return encodedBuffer.toString();
   }
 
   /**
@@ -90,10 +109,30 @@ class ProxyEngine {
   decodeUrl(encodedUrl) {
     const urlParts = encodedUrl.split('/');
     const salt = urlParts[2];
-    const encodedPath = urlParts[3];
+    const base64EncodedPath = urlParts[3];
 
-    const decodedPath = Buffer.from(encodedPath, 'base64').toString();
-    return decodedPath;
+    const decodedPathBuffer = Buffer.from(base64EncodedPath, 'base64');
+    const xorDecodedPath = this.xorDecode(decodedPathBuffer.toString(), salt);
+
+    return xorDecodedPath;
+  }
+
+  /**
+   * XOR decodes a URL with a given salt.
+   * @param {string} encodedUrl - The XOR encoded URL.
+   * @param {string} salt - The salt to use for decoding.
+   * @returns {string} The decoded URL.
+   */
+  xorDecode(encodedUrl, salt) {
+    const encodedUrlBuffer = Buffer.from(encodedUrl);
+    const saltBuffer = Buffer.from(salt, 'hex');
+    const decodedBuffer = Buffer.alloc(encodedUrlBuffer.length);
+
+    for (let i = 0; i < encodedUrlBuffer.length; i++) {
+      decodedBuffer[i] = encodedUrlBuffer[i] ^ saltBuffer[i % saltBuffer.length];
+    }
+
+    return decodedBuffer.toString();
   }
 
   /**
@@ -114,33 +153,36 @@ class ProxyEngine {
       const isolatedCookies = [];
 
       cookies.forEach((cookie) => {
-        const [name, value] = cookie.trim().split('=');
-        isolatedCookies.push(`${name}=${value}; Domain=${url.parse(req.url).hostname}; Path=/`);
+        const [key, value] = cookie.trim().split('=');
+        isolatedCookies.push(`${key}=${value}; Secure; Path=/`);
       });
 
       res.setHeader('Set-Cookie', isolatedCookies);
     }
 
-    // Handle WebSocket upgrade
+    // Rewrite WebSocket upgrade requests
     if (req.headers['upgrade'] === 'websocket') {
-      res.writeHead(101, {
-        'Upgrade': 'websocket',
-        'Connection': 'Upgrade',
-        'Sec-WebSocket-Accept': req.headers['sec-websocket-accept']
-      });
-    } else {
-      // Handle HTTP requests
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+      res.setHeader('Upgrade', 'WebSocket');
+      res.setHeader('Connection', 'Upgrade');
+    }
+
+    // Handle WebRTC ICE candidate scrubbing
+    if (req.headers['content-type'] === 'application/json') {
+      const requestBody = req.body;
+      if (requestBody && requestBody.iceCandidates) {
+        requestBody.iceCandidates = requestBody.iceCandidates.map((candidate) => {
+          return candidate.replace(/a=ssrc:(\d+)/g, 'a=ssrc:xxxxxx');
+        });
+      }
     }
   }
 
   /**
    * Handles HTTPS tunnel connections.
-   * @param {tls.TLSSocket} socket - The TLS socket.
    * @param {http.IncomingMessage} req - The incoming request.
+   * @param {http.ServerResponse} res - The outgoing response.
    */
-  handleHttpsTunnel(socket, req) {
+  handleHttpsTunnel(req, res) {
     const targetOptions = {
       hostname: url.parse(req.url).hostname,
       port: 443,
@@ -148,32 +190,15 @@ class ProxyEngine {
       headers: req.headers
     };
 
-    const targetSocket = tls.connect(targetOptions, () => {
-      socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+    const targetReq = http.request(targetOptions, (targetRes) => {
+      res.writeHead(targetRes.statusCode, targetRes.headers);
+      targetRes.pipe(res);
     });
 
-    socket.on('data', (data) => {
-      targetSocket.write(data);
-    });
+    req.pipe(targetReq);
 
-    targetSocket.on('data', (data) => {
-      socket.write(data);
-    });
-
-    socket.on('error', (error) => {
-      console.error('Client HTTPS tunnel error:', error);
-    });
-
-    targetSocket.on('error', (error) => {
-      console.error('Target HTTPS tunnel error:', error);
-    });
-
-    socket.on('close', () => {
-      targetSocket.destroy();
-    });
-
-    targetSocket.on('close', () => {
-      socket.destroy();
+    targetReq.on('error', (error) => {
+      console.error('Target HTTPS error:', error);
     });
   }
 
@@ -181,19 +206,13 @@ class ProxyEngine {
    * Starts the proxy server.
    */
   start() {
-    this.server.on('connection', (socket) => {
-      socket.on('data', (data) => {
-        const req = http.parse(data);
-        if (req.method === 'CONNECT') {
-          this.handleHttpsTunnel(socket, req);
-        } else {
-          this.handleRequest(req, socket);
-        }
-      });
-    });
-
-    this.wss.on('connection', (ws, req) => {
-      this.handleWebSocket(ws, req);
+    this.app.use((req, res) => {
+      if (req.url.startsWith('/_nexus')) {
+        this.handleRequest(req, res);
+      } else {
+        res.statusCode = 404;
+        res.end('Not Found');
+      }
     });
 
     this.server.listen(8080, () => {
@@ -202,42 +221,19 @@ class ProxyEngine {
   }
 
   /**
-   * Handles incoming HTTP requests.
+   * Handles incoming requests.
    * @param {http.IncomingMessage} req - The incoming request.
-   * @param {net.Socket} socket - The socket.
+   * @param {http.ServerResponse} res - The outgoing response.
    */
-  handleRequest(req, socket) {
-    const targetUrl = this.decodeUrl(req.url);
-    const targetOptions = {
-      hostname: url.parse(targetUrl).hostname,
-      port: url.parse(targetUrl).port,
-      path: url.parse(targetUrl).path,
-      headers: req.headers
-    };
-
-    const targetReq = http.request(targetOptions, (targetRes) => {
-      socket.write(`HTTP/1.1 ${targetRes.statusCode} ${targetRes.statusMessage}\r\n`);
-      Object.keys(targetRes.headers).forEach((header) => {
-        socket.write(`${header}: ${targetRes.headers[header]}\r\n`);
-      });
-      socket.write('\r\n');
-
-      targetRes.on('data', (data) => {
-        socket.write(data);
-      });
-
-      targetRes.on('end', () => {
-        socket.end();
-      });
-    });
-
-    req.on('data', (data) => {
-      targetReq.write(data);
-    });
-
-    req.on('end', () => {
-      targetReq.end();
-    });
+  handleRequest(req, res) {
+    if (req.headers['upgrade'] === 'websocket') {
+      this.handleWebSocket(req.ws, req);
+    } else if (req.url.startsWith('/_nexus')) {
+      this.handleHttpsTunnel(req, res);
+    } else {
+      res.statusCode = 404;
+      res.end('Not Found');
+    }
   }
 }
 
