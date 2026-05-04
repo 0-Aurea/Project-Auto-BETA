@@ -5,11 +5,13 @@ import ProxySettings from './components/ProxySettings';
 import ProxyHistory from './components/ProxyHistory';
 import BookmarksManager from './components/BookmarksManager';
 import SettingsPanel from './components/SettingsPanel';
+import SearchBar from './components/SearchBar';
 import './style.css';
 
 const App = () => {
   return (
     <div className="app-container">
+      <SearchBar />
       <TabManager />
       <ProxySettings />
       <ProxyHistory />
@@ -46,11 +48,17 @@ navigator.serviceWorker.addEventListener('message', (event) => {
     const tabId = event.data.tabId;
     const tabUrl = event.data.tabUrl;
     // Update tab URL in TabManager
-    TabManager.updateTab(tabId, tabUrl);
+    const tabManager = document.querySelector('TabManager');
+    if (tabManager) {
+      tabManager.updateTab(tabId, tabUrl);
+    }
   } else if (event.data.type === 'addHistory') {
     const historyItem = event.data.historyItem;
     // Add history item in ProxyHistory
-    ProxyHistory.addHistory(historyItem);
+    const proxyHistory = document.querySelector('ProxyHistory');
+    if (proxyHistory) {
+      proxyHistory.addHistory(historyItem);
+    }
   }
 });
 
@@ -79,7 +87,9 @@ fetch(proxyUrl, {
   });
 
 // Handle tab updates
-TabManager.addEventListener('tabUpdated', (tabId, tabUrl) => {
+document.addEventListener('tabUpdated', (event) => {
+  const tabId = event.detail.tabId;
+  const tabUrl = event.detail.tabUrl;
   // Send a message to the Service Worker to update the tab URL
   navigator.serviceWorker.controller.postMessage({
     type: 'updateTab',
@@ -89,10 +99,65 @@ TabManager.addEventListener('tabUpdated', (tabId, tabUrl) => {
 });
 
 // Handle history updates
-ProxyHistory.addEventListener('historyUpdated', (historyItem) => {
+document.addEventListener('historyUpdated', (event) => {
+  const historyItem = event.detail.historyItem;
   // Send a message to the Service Worker to add the history item
   navigator.serviceWorker.controller.postMessage({
     type: 'addHistory',
     historyItem,
   });
 });
+
+// Initialize search bar
+const searchBar = document.querySelector('SearchBar');
+if (searchBar) {
+  searchBar.addEventListener('search', (event) => {
+    const searchQuery = event.detail.searchQuery;
+    // Send a message to the Service Worker to perform the search
+    navigator.serviceWorker.controller.postMessage({
+      type: 'search',
+      searchQuery,
+    });
+  });
+}
+
+// Initialize tab manager
+const tabManager = document.querySelector('TabManager');
+if (tabManager) {
+  tabManager.addEventListener('tabUpdated', (event) => {
+    const tabId = event.detail.tabId;
+    const tabUrl = event.detail.tabUrl;
+    // Send a message to the Service Worker to update the tab URL
+    navigator.serviceWorker.controller.postMessage({
+      type: 'updateTab',
+      tabId,
+      tabUrl,
+    });
+  });
+}
+
+// Initialize bookmarks manager
+const bookmarksManager = document.querySelector('BookmarksManager');
+if (bookmarksManager) {
+  bookmarksManager.addEventListener('bookmarkAdded', (event) => {
+    const bookmark = event.detail.bookmark;
+    // Send a message to the Service Worker to add the bookmark
+    navigator.serviceWorker.controller.postMessage({
+      type: 'addBookmark',
+      bookmark,
+    });
+  });
+}
+
+// Initialize settings panel
+const settingsPanel = document.querySelector('SettingsPanel');
+if (settingsPanel) {
+  settingsPanel.addEventListener('settingsUpdated', (event) => {
+    const settings = event.detail.settings;
+    // Send a message to the Service Worker to update the settings
+    navigator.serviceWorker.controller.postMessage({
+      type: 'updateSettings',
+      settings,
+    });
+  });
+}
