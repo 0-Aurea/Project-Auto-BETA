@@ -8,6 +8,9 @@
   --dark-mode-text: #fff;
   --dark-mode-tab-bg: #444;
   --transition-duration: 0.3s;
+  --tab-border-radius: 10px;
+  --tab-padding: 10px;
+  --tab-margin: 5px;
 }
 
 * {
@@ -86,24 +89,35 @@ body.dark-mode header nav a:hover {
   color: var(--secondary-color);
 }
 
-.search-bar {
+.search-bar-container {
   display: flex;
   justify-content: center;
   padding: 20px;
   transition: padding var(--transition-duration) ease-in-out;
 }
 
+.search-bar {
+  width: 70%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  background-color: #fff;
+  transition: border-color var(--transition-duration) ease-in-out, background-color var(--transition-duration) ease-in-out;
+}
+
 body.dark-mode .search-bar {
   background-color: var(--dark-mode-bg);
-  padding: 20px;
-  border-bottom: 1px solid #555;
+  border-color: #555;
 }
 
 #search-input {
-  width: 70%;
+  width: 80%;
   padding: 10px;
   font-size: 18px;
-  border: 1px solid #ccc;
+  border: none;
   border-radius: 5px 0 0 5px;
   transition: border-color var(--transition-duration) ease-in-out, background-color var(--transition-duration) ease-in-out;
 }
@@ -115,7 +129,7 @@ body.dark-mode #search-input {
 }
 
 #search-button {
-  width: 30%;
+  width: 20%;
   padding: 10px;
   font-size: 18px;
   background-color: var(--primary-color);
@@ -143,29 +157,27 @@ body.dark-mode #search-button {
 }
 
 body.dark-mode .tab-bar {
-  border-bottom: 1px solid #555;
+  border-color: #555;
 }
 
-.tab-bar .tab {
-  background-color: #f0f0f0;
-  padding: 10px;
+.tab {
+  padding: var(--tab-padding);
+  margin: var(--tab-margin);
   border: 1px solid #ccc;
-  border-radius: 5px;
-  margin-right: 10px;
-  cursor: pointer;
-  transition: background-color var(--transition-duration) ease-in-out;
+  border-radius: var(--tab-border-radius);
+  background-color: #fff;
+  transition: background-color var(--transition-duration) ease-in-out, border-color var(--transition-duration) ease-in-out;
 }
 
-.tab-bar .tab:hover {
-  background-color: #ddd;
-}
-
-body.dark-mode .tab-bar .tab {
+body.dark-mode .tab {
   background-color: var(--dark-mode-tab-bg);
+  border-color: #555;
 }
 
-body.dark-mode .tab-bar .tab:hover {
-  background-color: #555;
+.tab iframe {
+  width: 100%;
+  height: 500px;
+  border: none;
 }
 
 .settings-panel {
@@ -175,144 +187,76 @@ body.dark-mode .tab-bar .tab:hover {
   background-color: #fff;
   padding: 20px;
   border: 1px solid #ccc;
-  border-radius: 5px;
+  border-radius: 10px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  transition: transform var(--transition-duration) ease-in-out;
+  transition: background-color var(--transition-duration) ease-in-out, box-shadow var(--transition-duration) ease-in-out;
 }
 
 body.dark-mode .settings-panel {
   background-color: var(--dark-mode-bg);
-  border-color: #555;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
-.settings-panel.hide {
-  transform: translateX(100%);
+.settings-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
-.bookmarks-manager {
-  position: fixed;
-  top: 0;
-  right: 0;
-  background-color: #fff;
-  padding: 20px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  transition: transform var(--transition-duration) ease-in-out;
+.settings-panel li {
+  margin-bottom: 10px;
 }
 
-body.dark-mode .bookmarks-manager {
-  background-color: var(--dark-mode-bg);
-  border-color: #555;
+.settings-panel label {
+  display: block;
+  margin-bottom: 5px;
 }
 
-.bookmarks-manager.hide {
-  transform: translateX(100%);
+.settings-panel input[type="checkbox"] {
+  margin-right: 10px;
 }
 
 .proxy-history {
-  position: fixed;
-  top: 0;
-  right: 0;
-  background-color: #fff;
   padding: 20px;
-  border: 1px solid #ccc;
+}
+
+.proxy-history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.proxy-history li {
+  margin-bottom: 10px;
+}
+
+.bookmarks {
+  padding: 20px;
+}
+
+.bookmarks ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bookmarks li {
+  margin-bottom: 10px;
+}
+
+.dark-mode-toggle {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background-color: var(--primary-color);
+  color: #fff;
+  padding: 10px;
+  border: none;
   border-radius: 5px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  transition: transform var(--transition-duration) ease-in-out;
-}
-
-body.dark-mode .proxy-history {
-  background-color: var(--dark-mode-bg);
-  border-color: #555;
-}
-
-.proxy-history.hide {
-  transform: translateX(100%);
-}
-
-.ad-block-toggle {
-  position: relative;
-  display: inline-block;
-  width: 50px;
-  height: 25px;
-}
-
-.ad-block-toggle input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.ad-block-toggle .slider {
-  position: absolute;
   cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #ccc;
-  transition: 0.4s;
+  transition: background-color var(--transition-duration) ease-in-out;
 }
 
-.ad-block-toggle .slider:before {
-  position: absolute;
-  content: "";
-  height: 20px;
-  width: 20px;
-  left: 5px;
-  bottom: 5px;
-  background-color: white;
-  transition: 0.4s;
-}
-
-.ad-block-toggle input:checked + .slider {
-  background-color: #2196F3;
-}
-
-.ad-block-toggle input:checked + .slider:before {
-  transform: translateX(20px);
-}
-
-.cache-toggle {
-  position: relative;
-  display: inline-block;
-  width: 50px;
-  height: 25px;
-}
-
-.cache-toggle input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.cache-toggle .slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #ccc;
-  transition: 0.4s;
-}
-
-.cache-toggle .slider:before {
-  position: absolute;
-  content: "";
-  height: 20px;
-  width: 20px;
-  left: 5px;
-  bottom: 5px;
-  background-color: white;
-  transition: 0.4s;
-}
-
-.cache-toggle input:checked + .slider {
-  background-color: #2196F3;
-}
-
-.cache-toggle input:checked + .slider:before {
-  transform: translateX(20px);
+.dark-mode-toggle:hover {
+  background-color: var(--secondary-color);
 }
