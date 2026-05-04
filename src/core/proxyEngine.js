@@ -95,22 +95,43 @@ class ProxyEngine {
         headers: websocketOptions.headers,
       };
 
-      // Perform WebSocket upgrade and proxying
-      const websocketResponse = {
-        writeHead: (statusCode, headers) => {
-          response.writeHead(statusCode, headers);
-        },
-        end: (data) => {
-          response.end(data);
-        },
-      };
+      const WebSocket = require('ws');
+      const wss = new WebSocket.Server({ noServer: true });
 
-      // WebSocket proxying implementation
-      // This may involve using a library like ws
-      // For simplicity, this example just calls the original request
-      // In a real implementation, you'd handle WebSocket frames
-      response.writeHead(101, websocketOptions.headers);
-      response.end();
+      wss.on('connection', (ws) => {
+        const client = new WebSocket(websocketUrl);
+
+        client.on('message', (message) => {
+          ws.send(message);
+        });
+
+        ws.on('message', (message) => {
+          client.send(message);
+        });
+
+        client.on('close', () => {
+          ws.close();
+        });
+
+        ws.on('close', () => {
+          client.close();
+        });
+      });
+
+      const server = require('http').createServer((req, res) => {
+        if (req.headers['upgrade'] === 'websocket') {
+          wss.handleUpgrade(req, req.socket, Buffer.alloc(0), (ws) => {
+            wss.emit('connection', ws, req);
+          });
+        } else {
+          res.writeHead(404);
+          res.end();
+        }
+      });
+
+      server.listen(0, () => {
+        console.log('WebSocket server listening on port', server.address().port);
+      });
     } else {
       response.writeHead(405, { 'Content-Type': 'text/plain' });
       response.end('Method Not Allowed');
@@ -118,16 +139,17 @@ class ProxyEngine {
   }
 
   getProxiedUrl(url) {
-    // Implement URL proxying logic here
-    // For example, you could use XOR + base64 URL encoding with a rotating salt
-    return url;
+    const encoder = new TextEncoder();
+    const randomSalt = Array.from(crypto.getRandomValues(new Uint8Array(16))).map((b) => b.toString(16).padStart(2, '0')).join('');
+    const encodedUrl = btoa(unescape(encodeURIComponent(url))).replace(/=/g, '');
+    const proxiedUrl = `/${randomSalt}${encodedUrl}`;
+
+    return proxiedUrl;
   }
 
   handleRequest(request, response) {
     if (request.url.includes('RTCIceCandidate')) {
       this.webRTCIceCandidateScrubber(request, response);
-    } else if (request.method === 'GET' && request.url.startsWith('/import/')) {
-      this.dynamicImportHandler(request, response);
     } else if (request.method === 'GET' && request.headers['upgrade'] === 'websocket') {
       this.websocketUpgradeHandler(request, response);
     } else {
@@ -137,4 +159,4 @@ class ProxyEngine {
   }
 }
 
-export default new ProxyEngine().handleRequest.bind(new ProxyEngine());
+module.exports = ProxyEngine;
