@@ -48,6 +48,8 @@ navigator.serviceWorker.getRegistration().then((registration) => {
       console.log('Previous Service Worker unregistered');
       registerServiceWorker();
     });
+  } else {
+    registerServiceWorker();
   }
 });
 
@@ -57,21 +59,47 @@ window.addEventListener('load', () => {
   }
 });
 
-const handleFetch = (event) => {
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        if (response.ok) {
-          return response;
-        } else {
-          return new Response('Error', { status: 500 });
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistration().then((registration) => {
+    if (registration) {
+      registration.addEventListener('updatefound', () => {
+        const installingWorker = registration.installing;
+        if (installingWorker) {
+          installingWorker.addEventListener('statechange', () => {
+            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              navigator.serviceWorker.controller.postMessage('activate');
+            }
+          });
         }
-      })
-      .catch((error) => {
-        console.error('Fetch error:', error);
-        return new Response('Error', { status: 500 });
-      })
-  );
-};
+      });
+    }
+  });
+}
 
-self.addEventListener('fetch', handleFetch);
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== 'nexus-cache') {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      return response || fetch(event.request).then((response) => {
+        const responseToCache = response.clone();
+        caches.open('nexus-cache').then((cache) => {
+          cache.put(event.request, responseToCache);
+        });
+        return response;
+      });
+    })
+  );
+});
