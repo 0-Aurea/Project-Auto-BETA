@@ -87,59 +87,46 @@ class WebRTCUtils {
    * @param {RTCSessionDescription} description - The local description.
    * @returns {Promise<void>} A promise that resolves when the operation is complete.
    */
-  static async setLocalDescription(peerConnection, description) {
-    try {
-      await peerConnection.setLocalDescription(description);
-    } catch (error) {
-      globalThis.console.error('Error setting local description:', error);
-    }
+  static setLocalDescription(peerConnection, description) {
+    return peerConnection.setLocalDescription(description)
+      .catch((error) => {
+        globalThis.console.error('Error setting local description:', error);
+        throw error;
+      });
   }
 
   /**
-   * Create an offer for a peer connection and handle errors.
+   * Create an offer and handle errors.
    * @param {RTCPeerConnection} peerConnection - The peer connection.
    * @returns {Promise<RTCSessionDescription>} A promise that resolves with the offer.
    */
-  static async createOffer(peerConnection) {
-    try {
-      return await peerConnection.createOffer();
-    } catch (error) {
-      globalThis.console.error('Error creating offer:', error);
-      return null;
-    }
+  static createOffer(peerConnection) {
+    return peerConnection.createOffer()
+      .then((offer) => {
+        return WebRTCUtils.setLocalDescription(peerConnection, offer)
+          .then(() => offer);
+      })
+      .catch((error) => {
+        globalThis.console.error('Error creating offer:', error);
+        throw error;
+      });
   }
 
   /**
-   * Create an answer for a peer connection and handle errors.
+   * Create an answer and handle errors.
    * @param {RTCPeerConnection} peerConnection - The peer connection.
    * @returns {Promise<RTCSessionDescription>} A promise that resolves with the answer.
    */
-  static async createAnswer(peerConnection) {
-    try {
-      return await peerConnection.createAnswer();
-    } catch (error) {
-      globalThis.console.error('Error creating answer:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Handle WebRTC peer connection errors.
-   * @param {RTCPeerConnection} peerConnection - The peer connection.
-   * @param {function} onError - The error handler.
-   */
-  static handlePeerConnectionErrors(peerConnection, onError) {
-    peerConnection.oniceconnectionstatechange = () => {
-      if (peerConnection.iceConnectionState === 'failed') {
-        onError(new Error('ICE connection failed'));
-      }
-    };
-
-    peerConnection.onconnectionstatechange = () => {
-      if (peerConnection.connectionState === 'failed') {
-        onError(new Error('Peer connection failed'));
-      }
-    };
+  static createAnswer(peerConnection) {
+    return peerConnection.createAnswer()
+      .then((answer) => {
+        return WebRTCUtils.setLocalDescription(peerConnection, answer)
+          .then(() => answer);
+      })
+      .catch((error) => {
+        globalThis.console.error('Error creating answer:', error);
+        throw error;
+      });
   }
 }
 
