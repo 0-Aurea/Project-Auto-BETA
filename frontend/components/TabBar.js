@@ -6,6 +6,7 @@ const TabBar = () => {
   const [tabTitle, setTabTitle] = useState('');
   const [tabIcon, setTabIcon] = useState('');
   const [tabUrl, setTabUrl] = useState('');
+  const [tabLoading, setTabLoading] = useState({});
 
   useEffect(() => {
     const storedTabs = localStorage.getItem('tabs');
@@ -67,6 +68,12 @@ const TabBar = () => {
   const handleIframeLoad = (event) => {
     const iframe = event.target;
     iframe.contentWindow.document.title = iframe.dataset.title;
+    setTabLoading((prevLoading) => ({ ...prevLoading, [iframe.dataset.tabId]: false }));
+  };
+
+  const handleIframeLoadStart = (event) => {
+    const iframe = event.target;
+    setTabLoading((prevLoading) => ({ ...prevLoading, [iframe.dataset.tabId]: true }));
   };
 
   return (
@@ -111,11 +118,20 @@ const TabBar = () => {
         <iframe
           src={activeTab.url}
           data-title={activeTab.title}
+          data-tab-id={activeTab.id}
           onLoad={handleIframeLoad}
+          onLoadStart={handleIframeLoadStart}
           frameBorder="0"
           width="100%"
           height="500"
+          loading={tabLoading[activeTab.id] ? 'lazy' : 'eager'}
         />
+      )}
+      {!activeTab && tabs.length > 0 && (
+        <p>No active tab</p>
+      )}
+      {!tabs.length && (
+        <p>No tabs open</p>
       )}
     </div>
   );
