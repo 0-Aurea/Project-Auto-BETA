@@ -1,121 +1,84 @@
-const { URL } = require('url');
-
 /**
- * WebRTC ICE candidate scrubber utility class for handling WebRTC IP leaks.
- */
-class WebRTCIceCandidateScrubber {
-  /**
-   * Regular expression to match WebRTC ICE candidate messages.
-   */
-  static ICE_CANDIDATE_REGEX = /^candidate:.*$/;
-
-  /**
-   * Scrub WebRTC ICE candidate messages to prevent IP leaks.
-   * @param {string} candidate - The WebRTC ICE candidate message.
-   * @returns {string} The scrubbed WebRTC ICE candidate message.
-   */
-  static scrubIceCandidate(candidate) {
-    if (WebRTCIceCandidateScrubber.ICE_CANDIDATE_REGEX.test(candidate)) {
-      return 'candidate:fake';
-    }
-    return candidate;
-  }
-}
-
-/**
- * Cookie scoping utility class for handling cookie isolation.
- */
-class CookieScopingUtils {
-  /**
-   * Regular expression to match cookie headers.
-   */
-  static COOKIE_HEADER_REGEX = /^Cookie:.*$/i;
-
-  /**
-   * Regular expression to match set-cookie headers.
-   */
-  static SET_COOKIE_HEADER_REGEX = /^Set-Cookie:.*$/i;
-
-  /**
-   * Isolate cookies per proxied origin to prevent cookie leakage.
-   * @param {object} request - The request object.
-   * @param {object} response - The response object.
-   * @param {string} origin - The proxied origin.
-   */
-  static isolateCookies(request, response, origin) {
-    const cookieHeader = request.headers['cookie'];
-    if (cookieHeader) {
-      const isolatedCookieHeader = CookieScopingUtils.isolateCookieHeader(cookieHeader, origin);
-      request.headers['cookie'] = isolatedCookieHeader;
-    }
-
-    const setCookieHeader = response.headers['set-cookie'];
-    if (setCookieHeader) {
-      const isolatedSetCookieHeader = CookieScopingUtils.isolateSetCookieHeader(setCookieHeader, origin);
-      response.headers['set-cookie'] = isolatedSetCookieHeader;
-    }
-  }
-
-  /**
-   * Isolate a cookie header for a specific origin.
-   * @param {string} cookieHeader - The cookie header.
-   * @param {string} origin - The origin.
-   * @returns {string} The isolated cookie header.
-   */
-  static isolateCookieHeader(cookieHeader, origin) {
-    const cookies = cookieHeader.split(';');
-    const isolatedCookies = cookies.filter((cookie) => {
-      const [name, value] = cookie.trim().split('=');
-      return CookieScopingUtils.isCookieForOrigin(name, origin);
-    });
-    return isolatedCookies.join(';');
-  }
-
-  /**
-   * Isolate a set-cookie header for a specific origin.
-   * @param {string} setCookieHeader - The set-cookie header.
-   * @param {string} origin - The origin.
-   * @returns {string} The isolated set-cookie header.
-   */
-  static isolateSetCookieHeader(setCookieHeader, origin) {
-    const isolatedSetCookieHeader = setCookieHeader.replace(/Domain=[^;]*/g, `Domain=${new URL(origin).hostname}`);
-    return isolatedSetCookieHeader;
-  }
-
-  /**
-   * Check if a cookie is for a specific origin.
-   * @param {string} cookieName - The cookie name.
-   * @param {string} origin - The origin.
-   * @returns {boolean} True if the cookie is for the origin, false otherwise.
-   */
-  static isCookieForOrigin(cookieName, origin) {
-    const cookieDomain = new URL(origin).hostname;
-    return cookieName.includes(cookieDomain);
-  }
-}
-
-/**
- * Security utility class for handling various security-related tasks.
+ * Security utility class for general security-related functions and checks.
  */
 class SecurityUtils {
   /**
-   * Scrub WebRTC ICE candidate messages to prevent IP leaks.
-   * @param {string} candidate - The WebRTC ICE candidate message.
-   * @returns {string} The scrubbed WebRTC ICE candidate message.
+   * Regular expression to match common web vulnerabilities in user input.
    */
-  static scrubWebRTCIceCandidate(candidate) {
-    return WebRTCIceCandidateScrubber.scrubIceCandidate(candidate);
+  static VULNERABILITY_REGEX = /<(?:script|img|iframe|object|embed|applet|form|input|textarea|select|option|optgroup|button|style|link|meta|frame|frameset|noframes|noframe|iframe|frame|script|style|svg|math|plaintext|marquee|blink|spacer|a|abbr|acronym|address|applet|area|b|base|basefont|bdi|bdo|big|blockquote|body|br|button|canvas|caption|center|cite|code|col|colgroup|dd|del|dfn|dir|div|dl|dt|em|fieldset|figcaption|figure|font|footer|form|frameset|h1|h2|h3|h4|h5|h6|head|header|hgroup|hr|html|i|iframe|ins|kbd|keygen|label|legend|li|link|main|map|mark|menu|menuitem|meta|meter|nav|noframes|noscript|object|ol|optgroup|option|output|p|param|picture|plaintext|portal|pre|progress|q|rb|rp|rt|rtc|ruby|s|samp|script|section|select|slot|small|source|span|strike|strong|style|sub|summary|sup|svg|table|tbody|td|template|textarea|tfoot|th|thead|time|title|tr|track|tt|u|ul|var|video|wbr|xmp)[\s\S]*?(?:\/>|>)/gi;
+
+  /**
+   * Check if a string contains potential web vulnerabilities.
+   * @param {string} input - The input string to check.
+   * @returns {boolean} True if the string contains potential web vulnerabilities, false otherwise.
+   */
+  static containsVulnerabilities(input) {
+    return SecurityUtils.VULNERABILITY_REGEX.test(input);
   }
 
   /**
-   * Isolate cookies per proxied origin to prevent cookie leakage.
-   * @param {object} request - The request object.
-   * @param {object} response - The response object.
-   * @param {string} origin - The proxied origin.
+   * Sanitize a string to prevent web vulnerabilities.
+   * @param {string} input - The input string to sanitize.
+   * @returns {string} The sanitized string.
    */
-  static isolateCookies(request, response, origin) {
-    return CookieScopingUtils.isolateCookies(request, response, origin);
+  static sanitizeString(input) {
+    return input.replace(SecurityUtils.VULNERABILITY_REGEX, '');
+  }
+
+  /**
+   * Validate a URL to prevent SSRF and DNS rebinding attacks.
+   * @param {string} url - The URL to validate.
+   * @returns {boolean} True if the URL is valid, false otherwise.
+   */
+  static validateUrl(url) {
+    try {
+      const parsedUrl = new URL(url);
+      return parsedUrl.protocol && parsedUrl.host;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Check if a URL is a valid HTTPS URL.
+   * @param {string} url - The URL to check.
+   * @returns {boolean} True if the URL is a valid HTTPS URL, false otherwise.
+   */
+  static isValidHttpsUrl(url) {
+    try {
+      const parsedUrl = new URL(url);
+      return parsedUrl.protocol === 'https:' && parsedUrl.host;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Generate a random cryptographically secure token.
+   * @param {number} length - The length of the token.
+   * @returns {string} The generated token.
+   */
+  static generateToken(length) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let token = '';
+    for (let i = 0; i < length; i++) {
+      token += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return token;
+  }
+
+  /**
+   * Hash a string using SHA-256.
+   * @param {string} input - The input string to hash.
+   * @returns {string} The hashed string.
+   */
+  static hashString(input) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(input);
+    return crypto.subtle.digest('SHA-256', data).then((hash) => {
+      return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    });
   }
 }
 
-module.exports = SecurityUtils;
+export default SecurityUtils;
