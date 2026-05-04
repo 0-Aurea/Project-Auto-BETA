@@ -1,42 +1,40 @@
 import React, { useState, useEffect } from 'react';
+import './SettingsPanel.css';
 
 const SettingsPanel = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [encodingMode, setEncodingMode] = useState('xor-base64');
-  const [cacheEnabled, setCacheEnabled] = useState(true);
-  const [cacheTTL, setCacheTTL] = useState(3600); // 1 hour default
-  const [prefetchEnabled, setPrefetchEnabled] = useState(true);
-  const [adBlockEnabled, setAdBlockEnabled] = useState(true);
-  const [adBlockList, setAdBlockList] = useState(() => {
-    const storedAdBlockList = localStorage.getItem('adBlockList');
-    return storedAdBlockList ? JSON.parse(storedAdBlockList) : [];
+  const [encodingMode, setEncodingMode] = useState(() => {
+    const storedMode = localStorage.getItem('encodingMode');
+    return storedMode ? storedMode : 'xor';
+  });
+  const [cacheEnabled, setCacheEnabled] = useState(() => {
+    const storedEnabled = localStorage.getItem('cacheEnabled');
+    return storedEnabled ? storedEnabled === 'true' : true;
+  });
+  const [adBlockEnabled, setAdBlockEnabled] = useState(() => {
+    const storedEnabled = localStorage.getItem('adBlockEnabled');
+    return storedEnabled ? storedEnabled === 'true' : true;
+  });
+  const [searchEngine, setSearchEngine] = useState(() => {
+    const storedEngine = localStorage.getItem('searchEngine');
+    return storedEngine ? storedEngine : 'google';
   });
 
   useEffect(() => {
-    const storedSettings = localStorage.getItem('settings');
-    if (storedSettings) {
-      const settings = JSON.parse(storedSettings);
-      setEncodingMode(settings.encodingMode || 'xor-base64');
-      setCacheEnabled(settings.cacheEnabled !== false);
-      setCacheTTL(settings.cacheTTL || 3600);
-      setPrefetchEnabled(settings.prefetchEnabled !== false);
-      setAdBlockEnabled(settings.adBlockEnabled !== false);
-    }
-  }, []);
+    localStorage.setItem('encodingMode', encodingMode);
+  }, [encodingMode]);
 
   useEffect(() => {
-    localStorage.setItem('settings', JSON.stringify({
-      encodingMode,
-      cacheEnabled,
-      cacheTTL,
-      prefetchEnabled,
-      adBlockEnabled,
-    }));
-  }, [encodingMode, cacheEnabled, cacheTTL, prefetchEnabled, adBlockEnabled]);
+    localStorage.setItem('cacheEnabled', cacheEnabled.toString());
+  }, [cacheEnabled]);
 
-  const handleToggle = () => {
-    setIsOpen(!isOpen);
-  };
+  useEffect(() => {
+    localStorage.setItem('adBlockEnabled', adBlockEnabled.toString());
+  }, [adBlockEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('searchEngine', searchEngine);
+  }, [searchEngine]);
 
   const handleEncodingModeChange = (event) => {
     setEncodingMode(event.target.value);
@@ -46,71 +44,47 @@ const SettingsPanel = () => {
     setCacheEnabled(!cacheEnabled);
   };
 
-  const handleCacheTTLChange = (event) => {
-    setCacheTTL(parseInt(event.target.value, 10));
-  };
-
-  const handlePrefetchToggle = () => {
-    setPrefetchEnabled(!prefetchEnabled);
-  };
-
   const handleAdBlockToggle = () => {
     setAdBlockEnabled(!adBlockEnabled);
   };
 
+  const handleSearchEngineChange = (event) => {
+    setSearchEngine(event.target.value);
+  };
+
   return (
     <div className={`settings-panel ${isOpen ? 'open' : ''}`}>
-      <button className="settings-toggle" onClick={handleToggle}>
+      <button className="settings-toggle" onClick={() => setIsOpen(!isOpen)}>
         Settings
       </button>
       <div className="settings-content">
         <h2>Settings</h2>
-        <section>
-          <h3>Encoding Mode</h3>
+        <div className="settings-group">
+          <label>Encoding Mode:</label>
           <select value={encodingMode} onChange={handleEncodingModeChange}>
-            <option value="xor-base64">XOR + Base64</option>
+            <option value="xor">XOR</option>
             <option value="base64">Base64</option>
           </select>
-        </section>
-        <section>
-          <h3>Cache</h3>
-          <label>
-            <input
-              type="checkbox"
-              checked={cacheEnabled}
-              onChange={handleCacheToggle}
-            />
-            Enable Cache
-          </label>
-          <input
-            type="number"
-            value={cacheTTL}
-            onChange={handleCacheTTLChange}
-            disabled={!cacheEnabled}
-          />
-        </section>
-        <section>
-          <h3>Prefetch</h3>
-          <label>
-            <input
-              type="checkbox"
-              checked={prefetchEnabled}
-              onChange={handlePrefetchToggle}
-            />
-            Enable Prefetch
-          </label>
-        </section>
-        <section>
-          <h3>Ad Block</h3>
-          <label>
-            <input
-              type="checkbox"
-              checked={adBlockEnabled}
-              onChange={handleAdBlockToggle}
-            />
-            Enable Ad Block
-          </label>
-        </section>
+        </div>
+        <div className="settings-group">
+          <label>Cache:</label>
+          <button onClick={handleCacheToggle}>
+            {cacheEnabled ? 'Enabled' : 'Disabled'}
+          </button>
+        </div>
+        <div className="settings-group">
+          <label>Ad Block:</label>
+          <button onClick={handleAdBlockToggle}>
+            {adBlockEnabled ? 'Enabled' : 'Disabled'}
+          </button>
+        </div>
+        <div className="settings-group">
+          <label>Search Engine:</label>
+          <select value={searchEngine} onChange={handleSearchEngineChange}>
+            <option value="google">Google</option>
+            <option value="bing">Bing</option>
+          </select>
+        </div>
       </div>
     </div>
   );
