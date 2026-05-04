@@ -31,6 +31,11 @@ class JSRewriter {
       return `Function('${this.escapeString(funcCode)}')`;
     });
 
+    // Handle WebSocket connections
+    jsCode = jsCode.replace(/new WebSocket\(['"]([^'"]+)['"]\)/g, (match, wsUrl) => {
+      return `new WebSocket('${this.rewriteUrl(wsUrl, url)}')`;
+    });
+
     return jsCode;
   }
 
@@ -99,24 +104,32 @@ class ProxyEngine {
     // Get the cached response if available
     const cachedResponse = await this.getCachedResponse(decodedUrl);
     if (cachedResponse) {
-      return this.sendResponse(req, res, cachedResponse);
+      return this.sendResponse(res, cachedResponse);
     }
 
     try {
       // Forward the request to the target server
       const targetResponse = await this.forwardRequest(decodedUrl, req);
 
-      // Rewrite the response HTML/JS/CSS
-      const rewrittenResponse = await this.rewriteResponse(targetResponse, decodedUrl);
-
       // Cache the response
-      await this.cacheResponse(decodedUrl, rewrittenResponse);
+      await this.cacheResponse(decodedUrl, targetResponse);
 
       // Send the response
-      return this.sendResponse(req, res, rewrittenResponse);
+      return this.sendResponse(res, targetResponse);
     } catch (error) {
+      // Handle errors
       return this.handleError(req, res, 500, 'Internal Server Error');
     }
+  }
+
+  /**
+   * Handles a direct request (not proxied).
+   * @param {object} req - The incoming request object.
+   * @param {object} res - The outgoing response object.
+   * @returns {Promise<void>} A promise that resolves when the response is sent.
+   */
+  async handleDirectRequest(req, res) {
+    // Implement direct request handling
   }
 
   /**
@@ -126,181 +139,109 @@ class ProxyEngine {
    * @returns {Promise<void>} A promise that resolves when the response is sent.
    */
   async handleWebSocketRequest(req, res) {
-    const { url: reqUrl, headers, socket, upgrade } = req;
+    // Upgrade the WebSocket connection
+    const wsUrl = this.decodeUrl(req.url);
+    const ws = new WebSocket(wsUrl);
 
-    // Decode the URL
-    const decodedUrl = this.decodeUrl(reqUrl);
+    // Handle WebSocket messages
+    ws.on('message', (message) => {
+      // Rewrite the message
+      const rewrittenMessage = this.rewriteMessage(message);
 
-    // Check if the decoded URL is valid
-    if (!decodedUrl) {
-      return this.handleError(req, res, 400, 'Invalid URL');
-    }
-
-    // Create a new WebSocket connection to the target server
-    const targetWs = new WebSocket(decodedUrl);
-
-    // Handle the WebSocket connection
-    targetWs.on('open', () => {
-      // Forward the WebSocket upgrade request to the target server
-      upgrade(targetWs, req, res, req.headers['sec-websocket-protocol']);
+      // Forward the message to the target server
+      ws.send(rewrittenMessage);
     });
 
-    targetWs.on('message', (message) => {
-      // Forward the WebSocket message to the client
-      this.wsClients.get(reqUrl).send(message);
-    });
-
-    targetWs.on('close', () => {
-      // Close the WebSocket connection
-      this.wsClients.delete(reqUrl);
-    });
-
-    targetWs.on('error', (error) => {
-      // Handle WebSocket errors
+    // Handle WebSocket errors
+    ws.on('error', (error) => {
       console.error('WebSocket error:', error);
     });
 
-    this.wsClients.set(reqUrl, targetWs);
+    // Handle WebSocket close
+    ws.on('close', () => {
+      console.log('WebSocket connection closed');
+    });
+
+    // Send the WebSocket upgrade response
+    res.writeHead(101, {
+      'Upgrade': 'websocket',
+      'Connection': 'Upgrade',
+      'Sec-WebSocket-Accept': req.headers['sec-webSocket-accept'],
+    });
+    res.end();
   }
 
   /**
-   * Decodes a URL from the request.
-   * @param {string} reqUrl - The URL from the request.
+   * Rewrites a WebSocket message.
+   * @param {string} message - The message to rewrite.
+   * @returns {string} The rewritten message.
+   */
+  rewriteMessage(message) {
+    // Implement message rewriting
+  }
+
+  /**
+   * Decodes a URL.
+   * @param {string} url - The URL to decode.
    * @returns {string} The decoded URL.
    */
-  decodeUrl(reqUrl) {
+  decodeUrl(url) {
     // Remove the URL prefix
-    const urlWithoutPrefix = reqUrl.substring(URL_PREFIX.length);
+    url = url.replace(URL_PREFIX, '');
 
-    // Decode the URL using the rotating salt
-    const decodedUrl = EncodingUtils.decodeUrl(urlWithoutPrefix, EncodingUtils.getSalt());
-
-    return decodedUrl;
-  }
-
-  /**
-   * Encodes a URL for the response.
-   * @param {string} url - The URL to encode.
-   * @returns {string} The encoded URL.
-   */
-  encodeUrl(url) {
-    // Encode the URL using the rotating salt
-    const encodedUrl = EncodingUtils.encodeUrl(url, EncodingUtils.getSalt());
-
-    // Add the URL prefix
-    const prefixedUrl = `${URL_PREFIX}/${encodedUrl}`;
-
-    return prefixedUrl;
+    // Decode the URL using the XOR + base64 encoding
+    return EncodingUtils.decodeUrl(url);
   }
 
   /**
    * Forwards a request to the target server.
-   * @param {string} decodedUrl - The decoded URL.
+   * @param {string} url - The URL of the target server.
    * @param {object} req - The incoming request object.
    * @returns {Promise<object>} A promise that resolves with the target response.
    */
-  async forwardRequest(decodedUrl, req) {
-    // Create a new request to the target server
-    const targetReq = axios.create({
-      headers: req.headers,
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity,
-    });
-
-    // Forward the request to the target server
-    const targetResponse = await targetReq({
+  async forwardRequest(url, req) {
+    // Implement request forwarding
+    const targetResponse = await axios({
       method: req.method,
-      url: decodedUrl,
-      data: req.body,
+      url,
       headers: req.headers,
+      data: req.body,
     });
 
     return targetResponse;
   }
 
   /**
-   * Rewrites the response HTML/JS/CSS.
-   * @param {object} targetResponse - The target response.
-   * @param {string} decodedUrl - The decoded URL.
-   * @returns {Promise<object>} A promise that resolves with the rewritten response.
+   * Caches a response.
+   * @param {string} url - The URL of the response.
+   * @param {object} response - The response to cache.
+   * @returns {Promise<void>} A promise that resolves when the response is cached.
    */
-  async rewriteResponse(targetResponse, decodedUrl) {
-    // Get the response HTML/JS/CSS
-    let responseBody = await targetResponse.data;
-
-    // Check if the response is HTML
-    if (targetResponse.headers['content-type'].includes('text/html')) {
-      // Rewrite the HTML
-      responseBody = this.rewriteHtml(responseBody, decodedUrl);
-    }
-
-    // Check if the response is JavaScript
-    if (targetResponse.headers['content-type'].includes('application/javascript')) {
-      // Rewrite the JavaScript
-      responseBody = this.jsRewriter.rewrite(responseBody, decodedUrl);
-    }
-
-    // Update the response headers
-    targetResponse.headers['content-length'] = Buffer.byteLength(responseBody);
-
-    // Return the rewritten response
-    return {
-      ...targetResponse,
-      data: responseBody,
-    };
+  async cacheResponse(url, response) {
+    // Implement response caching
+    this.cache.set(url, response);
   }
 
   /**
-   * Rewrites the HTML response.
-   * @param {string} html - The HTML response.
-   * @param {string} decodedUrl - The decoded URL.
-   * @returns {string} The rewritten HTML.
+   * Gets a cached response.
+   * @param {string} url - The URL of the response.
+   * @returns {Promise<object>} A promise that resolves with the cached response.
    */
-  rewriteHtml(html, decodedUrl) {
-    // Handle HTML tags
-    html = html.replace(/<script src=['"]([^'"]+)['"]>/g, (match, scriptSrc) => {
-      return `<script src="${this.rewriteUrl(scriptSrc, decodedUrl)}"></script>`;
-    });
-
-    html = html.replace(/<link href=['"]([^'"]+)['"]>/g, (match, linkHref) => {
-      return `<link href="${this.rewriteUrl(linkHref, decodedUrl)}">`;
-    });
-
-    return html;
+  async getCachedResponse(url) {
+    // Implement cached response retrieval
+    return this.cache.get(url);
   }
 
   /**
-   * Rewrites a URL in the HTML response.
-   * @param {string} url - The URL to rewrite.
-   * @param {string} baseUrl - The base URL of the HTML response.
-   * @returns {string} The rewritten URL.
-   */
-  rewriteUrl(url, baseUrl) {
-    // Handle relative URLs
-    if (!url.startsWith('http')) {
-      return new URL(url, baseUrl).href;
-    }
-
-    return url;
-  }
-
-  /**
-   * Handles a direct request.
-   * @param {object} req - The incoming request object.
+   * Sends a response.
    * @param {object} res - The outgoing response object.
+   * @param {object} response - The response to send.
    * @returns {Promise<void>} A promise that resolves when the response is sent.
    */
-  async handleDirectRequest(req, res) {
-    // Handle the direct request
-    const directResponse = await axios({
-      method: req.method,
-      url: req.url,
-      headers: req.headers,
-      data: req.body,
-    });
-
-    // Send the direct response
-    res.status(directResponse.status).set(directResponse.headers).send(directResponse.data);
+  async sendResponse(res, response) {
+    // Implement response sending
+    res.writeHead(response.status, response.headers);
+    res.end(response.data);
   }
 
   /**
@@ -308,49 +249,15 @@ class ProxyEngine {
    * @param {object} req - The incoming request object.
    * @param {object} res - The outgoing response object.
    * @param {number} statusCode - The error status code.
-   * @param {string} errorMessage - The error message.
-   * @returns {Promise<void>} A promise that resolves when the response is sent.
+   * @param {string} message - The error message.
+   * @returns {Promise<void>} A promise that resolves when the error response is sent.
    */
-  async handleError(req, res, statusCode, errorMessage) {
-    // Send the error response
-    res.status(statusCode).send(errorMessage);
-  }
-
-  /**
-   * Gets a cached response.
-   * @param {string} decodedUrl - The decoded URL.
-   * @returns {Promise<object>} A promise that resolves with the cached response.
-   */
-  async getCachedResponse(decodedUrl) {
-    // Check if the response is cached
-    if (this.cache.has(decodedUrl)) {
-      return this.cache.get(decodedUrl);
-    }
-
-    return null;
-  }
-
-  /**
-   * Caches a response.
-   * @param {string} decodedUrl - The decoded URL.
-   * @param {object} response - The response to cache.
-   * @returns {Promise<void>} A promise that resolves when the response is cached.
-   */
-  async cacheResponse(decodedUrl, response) {
-    // Cache the response
-    this.cache.set(decodedUrl, response);
-  }
-
-  /**
-   * Sends a response.
-   * @param {object} req - The incoming request object.
-   * @param {object} res - The outgoing response object.
-   * @param {object} response - The response to send.
-   * @returns {Promise<void>} A promise that resolves when the response is sent.
-   */
-  async sendResponse(req, res, response) {
-    // Send the response
-    res.status(response.status).set(response.headers).send(response.data);
+  async handleError(req, res, statusCode, message) {
+    // Implement error handling
+    res.writeHead(statusCode, {
+      'Content-Type': 'text/plain',
+    });
+    res.end(message);
   }
 }
 
