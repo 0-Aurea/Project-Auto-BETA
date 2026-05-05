@@ -18,6 +18,14 @@
   --dark-mode-search-bar-bg: #555;
   --dark-mode-search-input-bg: #666;
   --dark-mode-search-button-bg: #777;
+  --tab-bar-border-radius: 10px;
+  --tab-bar-box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --tab-content-padding: 20px;
+  --settings-panel-width: 300px;
+  --settings-panel-bg: #fff;
+  --settings-panel-border: 1px solid #ccc;
+  --bookmark-item-padding: 10px;
+  --bookmark-item-border-bottom: 1px solid #ccc;
 }
 
 * {
@@ -143,89 +151,98 @@ body.dark-mode .search-input {
   background-color: var(--primary-color);
   color: #fff;
   cursor: pointer;
-  transition: background-color var(--transition-duration) ease-in-out;
-  height: 100%;
-}
-
-.search-button:hover {
-  background-color: var(--secondary-color);
 }
 
 body.dark-mode .search-button {
-  background-color: var(--dark-mode-search-button-bg);
+  background-color: var(--dark-mode-tab-bg);
 }
 
 .tab-bar {
   display: flex;
-  justify-content: center;
-  padding: 20px;
-  transition: padding var(--transition-duration) ease-in-out;
-  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: var(--tab-bar-border-radius);
+  background-color: #fff;
+  box-shadow: var(--tab-bar-box-shadow);
+  height: var(--tab-bar-height);
+  margin-top: 20px;
+}
+
+body.dark-mode .tab-bar {
+  background-color: var(--dark-mode-tab-bg);
+  border-color: #555;
 }
 
 .tab-bar .tab {
-  margin-right: 10px;
-  padding: 10px;
+  padding: var(--tab-padding);
+  margin: var(--tab-margin);
   border: 1px solid #ccc;
   border-radius: var(--tab-border-radius);
   background-color: #fff;
-  transition: background-color var(--transition-duration) ease-in-out, border-color var(--transition-duration) ease-in-out;
+  transition: background-color var(--transition-duration) ease-in-out;
+  cursor: pointer;
+}
+
+body.dark-mode .tab-bar .tab {
+  background-color: var(--dark-mode-tab-bg);
+  border-color: #555;
 }
 
 .tab-bar .tab:hover {
   background-color: #f0f0f0;
 }
 
-body.dark-mode .tab-bar .tab {
+body.dark-mode .tab-bar .tab:hover {
   background-color: var(--dark-mode-tab-bg);
-  border-color: #555;
-  color: var(--dark-mode-text);
 }
 
-.tab-bar .tab.active {
-  background-color: var(--primary-color);
-  color: #fff;
+.tab-content {
+  padding: var(--tab-content-padding);
 }
 
 .settings-panel {
   position: fixed;
   top: 0;
   right: 0;
-  background-color: #fff;
+  width: var(--settings-panel-width);
+  background-color: var(--settings-panel-bg);
+  border: var(--settings-panel-border);
   padding: 20px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  transition: right var(--transition-duration) ease-in-out;
+  display: none;
 }
 
-body.dark-mode .settings-panel {
-  background-color: var(--dark-mode-bg);
-  border-color: #555;
+.settings-panel.show {
+  display: block;
 }
 
-.settings-panel.hide {
-  right: -300px;
+.bookmark-item {
+  padding: var(--bookmark-item-padding);
+  border-bottom: var(--bookmark-item-border-bottom);
+  cursor: pointer;
+}
+
+.bookmark-item:hover {
+  background-color: #f0f0f0;
 }
 
 .proxy-history {
-  padding: 20px;
+  margin-top: 20px;
 }
 
-.bookmarks-manager {
-  padding: 20px;
+.proxy-history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
-@media (max-width: 768px) {
-  .app-container {
-    margin: 20px auto;
-  }
-  
-  .search-bar-container {
-    padding: 10px;
-  }
-  
-  .tab-bar {
-    padding: 10px;
-  }
+.proxy-history li {
+  padding: 10px;
+  border-bottom: 1px solid #ccc;
+  cursor: pointer;
+}
+
+.proxy-history li:hover {
+  background-color: #f0f0f0;
 }
