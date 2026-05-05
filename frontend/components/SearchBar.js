@@ -1,145 +1,107 @@
-import React, { useState, useEffect } from 'react';
-import './SearchBar.css';
+import { useState, useEffect } from 'react';
 
-const SearchBar = ({ onSearchQuery }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [focused, setFocused] = useState(false);
-  const [suggestions, setSuggestions] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [searchHistory, setSearchHistory] = useState(() => {
-    const storedHistory = localStorage.getItem('searchHistory');
-    return storedHistory ? JSON.parse(storedHistory) : [];
-  });
-  const [historyExpanded, setHistoryExpanded] = useState(false);
-  const [searchEngine, setSearchEngine] = useState(() => {
-    const storedEngine = localStorage.getItem('searchEngine');
-    return storedEngine ? storedEngine : 'google';
-  });
-  const [bookmarks, setBookmarks] = useState(() => {
-    const storedBookmarks = localStorage.getItem('bookmarks');
-    return storedBookmarks ? JSON.parse(storedBookmarks) : [];
-  });
+export class SearchBar {
+  constructor({ onSearchQuery, tabManager, swConfig }) {
+    this.onSearchQuery = onSearchQuery;
+    this.tabManager = tabManager;
+    this.swConfig = swConfig;
+    this.state = {
+      searchQuery: '',
+      focused: false,
+      searchEngine: 'google',
+      showSearchHero: true,
+    };
 
-  useEffect(() => {
-    localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
-    localStorage.setItem('searchEngine', searchEngine);
-    localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
-  }, [searchHistory, searchEngine, bookmarks]);
+    this.searchInput = null;
+    this.searchForm = null;
+    this.searchEngineSelect = null;
 
-  const handleSearch = (event) => {
+    this.handleSearch = this.handleSearch.bind(this);
+    this.handleInputChange = this.handleInputChange.bind(this);
+    this.handleFocus = this.handleFocus.bind(this);
+    this.handleBlur = this.handleBlur.bind(this);
+    this.handleSearchEngineChange = this.handleSearchEngineChange.bind(this);
+  }
+
+  connectedCallback() {
+    this.render();
+  }
+
+  disconnectedCallback() {
+    this.unrender();
+  }
+
+  render() {
+    this.searchForm = document.createElement('form');
+    this.searchForm.onsubmit = this.handleSearch;
+    this.searchForm.className = 'search-bar';
+
+    this.searchInput = document.createElement('input');
+    this.searchInput.type = 'text';
+    this.searchInput.value = this.state.searchQuery;
+    this.searchInput.onchange = this.handleInputChange;
+    this.searchInput.onfocus = this.handleFocus;
+    this.searchInput.onblur = this.handleBlur;
+    this.searchInput.placeholder = 'Search or enter a URL...';
+    this.searchInput.className = 'search-input';
+
+    this.searchEngineSelect = document.createElement('select');
+    this.searchEngineSelect.value = this.state.searchEngine;
+    this.searchEngineSelect.onchange = this.handleSearchEngineChange;
+    this.searchEngineSelect.className = 'search-engine-select';
+
+    const googleOption = document.createElement('option');
+    googleOption.value = 'google';
+    googleOption.textContent = 'Google';
+    this.searchEngineSelect.appendChild(googleOption);
+
+    const bingOption = document.createElement('option');
+    bingOption.value = 'bing';
+    bingOption.textContent = 'Bing';
+    this.searchEngineSelect.appendChild(bingOption);
+
+    const searchButton = document.createElement('button');
+    searchButton.type = 'submit';
+    searchButton.textContent = 'Go';
+    searchButton.className = 'search-button';
+
+    this.searchForm.appendChild(this.searchInput);
+    this.searchForm.appendChild(this.searchEngineSelect);
+    this.searchForm.appendChild(searchButton);
+
+    document.getElementById('search-bar-container').appendChild(this.searchForm);
+  }
+
+  unrender() {
+    this.searchForm.remove();
+  }
+
+  handleSearch(event) {
     event.preventDefault();
-    const searchValue = searchQuery.trim();
+    const searchValue = this.searchInput.value.trim();
     if (searchValue) {
-      const updatedHistory = [...searchHistory, searchValue];
-      setSearchHistory(updatedHistory);
-      setSearchQuery('');
-      onSearchQuery(searchValue);
-      const url = searchEngine === 'google' ? 'https://www.google.com/search' : 'https://www.bing.com/search';
-      const params = new URLSearchParams({
-        q: searchValue,
-      });
-      // Connect to the proxy engine
-      fetch('/proxy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: `${url}?${params.toString()}`,
-          headers: {
-            'User-Agent': 'Mozilla/5.0',
-          },
-        }),
-      })
-        .then((response) => response.json())
-        .then((data) => {
-          window.open(data.url, '_blank');
-        })
-        .catch((error) => {
-          console.error(error);
-        });
+      const encodedUrl = this.swConfig.encode(searchValue);
+      this.tabManager.navigate(encodedUrl);
+      this.searchInput.value = '';
     }
-  };
+  }
 
-  const handleInputChange = (event) => {
-    setSearchQuery(event.target.value);
-    if (event.target.value.length > 0) {
-      setShowSuggestions(true);
-      const filteredSuggestions = [...searchHistory, ...bookmarks];
-      const filtered = filteredSuggestions.filter((suggestion) => suggestion.toLowerCase().includes(event.target.value.toLowerCase()));
-      setSuggestions(filtered);
-    } else {
-      setShowSuggestions(false);
-    }
-  };
+  handleInputChange(event) {
+    this.searchInput.value = event.target.value;
+  }
 
-  const handleFocus = () => {
-    setFocused(true);
-  };
+  handleFocus() {
+    this.state.focused = true;
+    this.searchInput.classList.add('focused');
+  }
 
-  const handleBlur = () => {
-    setFocused(false);
-  };
+  handleBlur() {
+    this.state.focused = false;
+    this.searchInput.classList.remove('focused');
+  }
 
-  const handleSuggestionClick = (suggestion) => {
-    setSearchQuery(suggestion);
-    setShowSuggestions(false);
-  };
-
-  const handleHistoryClick = (historyItem) => {
-    setSearchQuery(historyItem);
-    setShowSuggestions(false);
-  };
-
-  const handleSearchEngineChange = (event) => {
-    setSearchEngine(event.target.value);
-  };
-
-  return (
-    <div className="search-bar">
-      <form onSubmit={handleSearch}>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={handleInputChange}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          placeholder="Search..."
-          className="search-input"
-        />
-        {showSuggestions && (
-          <ul className="suggestions">
-            {suggestions.map((suggestion, index) => (
-              <li key={index} onClick={() => handleSuggestionClick(suggestion)}>
-                {suggestion}
-              </li>
-            ))}
-          </ul>
-        )}
-        <button type="submit" className="search-button">
-          Search
-        </button>
-        <select value={searchEngine} onChange={handleSearchEngineChange} className="search-engine-select">
-          <option value="google">Google</option>
-          <option value="bing">Bing</option>
-        </select>
-      </form>
-      <div className="search-history">
-        {historyExpanded && (
-          <ul>
-            {searchHistory.map((historyItem, index) => (
-              <li key={index} onClick={() => handleHistoryClick(historyItem)}>
-                {historyItem}
-              </li>
-            ))}
-          </ul>
-        )}
-        <button onClick={() => setHistoryExpanded(!historyExpanded)} className="history-expand-button">
-          {historyExpanded ? 'Hide History' : 'Show History'}
-        </button>
-      </div>
-    </div>
-  );
-};
-
-export default SearchBar;
+  handleSearchEngineChange(event) {
+    this.state.searchEngine = event.target.value;
+    localStorage.setItem('searchEngine', this.state.searchEngine);
+  }
+}
