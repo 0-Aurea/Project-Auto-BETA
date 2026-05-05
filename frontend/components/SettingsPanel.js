@@ -76,38 +76,70 @@ const SettingsPanel = () => {
     setAdBlockList(event.target.value.split(','));
   };
 
+  const handleOpenClose = () => {
+    setIsOpen(!isOpen);
+  };
+
   return (
     <div className={`settings-panel ${isOpen ? 'open' : ''}`}>
-      <h2>Settings</h2>
-      <div className="settings-group">
-        <label>Encoding Mode:</label>
-        <select value={encodingMode} onChange={handleEncodingModeChange}>
-          <option value="xor-base64">XOR + Base64</option>
-          <option value="base64">Base64</option>
-          <option value="xor">XOR</option>
-        </select>
-      </div>
-      <div className="settings-group">
-        <label>
-          <input type="checkbox" checked={cacheEnabled} onChange={handleCacheToggle} />
-          Enable Cache
-        </label>
-        <input type="number" value={cacheTTL} onChange={handleCacheTTLChange} />
-      </div>
-      <div className="settings-group">
-        <label>
-          <input type="checkbox" checked={adBlockEnabled} onChange={handleAdBlockToggle} />
-          Enable Ad Block
-        </label>
-        <input type="text" value={adBlockList.join(',')} onChange={handleAdBlockListChange} placeholder="Enter ad block list (comma separated)" />
-      </div>
-      <div className="settings-group">
-        <label>
-          <input type="checkbox" checked={prefetchEnabled} onChange={handlePrefetchToggle} />
-          Enable Prefetch
-        </label>
-      </div>
-      <button onClick={() => setIsOpen(!isOpen)}>Toggle Settings</button>
+      <button className="settings-toggle" onClick={handleOpenClose}>
+        {isOpen ? 'Close' : 'Settings'}
+      </button>
+      {isOpen && (
+        <div className="settings-content">
+          <h2>Settings</h2>
+          <div className="settings-group">
+            <label>Encoding Mode:</label>
+            <select value={encodingMode} onChange={handleEncodingModeChange}>
+              <option value="xor-base64">XOR + Base64</option>
+              <option value="base64">Base64</option>
+              <option value="xor">XOR</option>
+            </select>
+          </div>
+          <div className="settings-group">
+            <label>
+              <input
+                type="checkbox"
+                checked={cacheEnabled}
+                onChange={handleCacheToggle}
+              />
+              Enable Cache
+            </label>
+            <input
+              type="number"
+              value={cacheTTL}
+              onChange={handleCacheTTLChange}
+              placeholder="Cache TTL (seconds)"
+            />
+          </div>
+          <div className="settings-group">
+            <label>
+              <input
+                type="checkbox"
+                checked={adBlockEnabled}
+                onChange={handleAdBlockToggle}
+              />
+              Enable Ad Block
+            </label>
+            <input
+              type="text"
+              value={adBlockList.join(',')}
+              onChange={handleAdBlockListChange}
+              placeholder="Ad block list (comma-separated)"
+            />
+          </div>
+          <div className="settings-group">
+            <label>
+              <input
+                type="checkbox"
+                checked={prefetchEnabled}
+                onChange={handlePrefetchToggle}
+              />
+              Enable Prefetch
+            </label>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
