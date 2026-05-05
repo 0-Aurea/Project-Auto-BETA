@@ -89,151 +89,185 @@ class ProxyEngine {
     const { EncodingUtils } = await import('../utils/encodingUtils.js');
     const { URL_PREFIX, DEFAULT_ENCODING } = await import('../config/constants.js');
 
-    // Implement XOR + base64 URL encoding with a rotating salt
-    const encodingUtils = EncodingUtils;
-    const salt = encodingUtils.getSalt();
-    const encodedUrl = encodingUtils.encodeUrl(request.url, salt, DEFAULT_ENCODING);
-
-    // Check if the request is a WebSocket upgrade request
+    // Handle WebSocket upgrade
     if (request.headers['upgrade'] === 'websocket') {
-      // Handle WebSocket upgrade proxying
-      await this.handleWebSocketUpgrade(request, response, encodedUrl);
-    } else {
-      // Handle normal HTTP proxying
-      await this.handleHttpProxying(request, response, encodedUrl);
+      await this.handleWebSocketUpgrade(request, response);
+      return;
     }
+
+    // Decode the URL
+    let decodedUrl;
+    try {
+      decodedUrl = EncodingUtils.decodeUrl(request.url);
+    } catch (error) {
+      response.writeHead(400, { 'Content-Type': 'text/plain' });
+      response.end('Invalid URL encoding');
+      return;
+    }
+
+    // Rewrite the request headers
+    const rewrittenRequestHeaders = this.rewriteRequestHeaders(request.headers);
+
+    // Proxy the request
+    const targetResponse = await this.fetchTargetResponse(decodedUrl, rewrittenRequestHeaders);
+
+    // Rewrite the response headers
+    const rewrittenResponseHeaders = this.rewriteResponseHeaders(targetResponse.headers);
+
+    // Send the response
+    response.writeHead(targetResponse.status, rewrittenResponseHeaders);
+    response.end(await targetResponse.arrayBuffer());
   }
 
   /**
-   * Handle WebSocket upgrade proxying.
+   * Handle WebSocket upgrade.
    * @param {object} request - The request object.
    * @param {object} response - The response object.
-   * @param {string} encodedUrl - The encoded URL.
    */
-  async handleWebSocketUpgrade(request, response, encodedUrl) {
+  async handleWebSocketUpgrade(request, response) {
+    const { EncodingUtils } = await import('../utils/encodingUtils.js');
+    const { URL_PREFIX, DEFAULT_ENCODING } = await import('../config/constants.js');
     const WebSocket = await import('ws');
-    const wss = new WebSocket.Server({ noServer: true });
 
-    // Handle WebSocket connection
-    wss.on('connection', (ws) => {
-      // Handle WebSocket messages
-      ws.on('message', (message) => {
-        // Forward the message to the target server
-        ws.send(message);
-      });
+    // Decode the URL
+    let decodedUrl;
+    try {
+      decodedUrl = EncodingUtils.decodeUrl(request.url);
+    } catch (error) {
+      response.writeHead(400, { 'Content-Type': 'text/plain' });
+      response.end('Invalid URL encoding');
+      return;
+    }
 
-      // Handle WebSocket errors
-      ws.on('error', (error) => {
-        console.error('WebSocket error:', error);
-      });
+    // Establish a WebSocket connection to the target
+    const targetWebSocket = new WebSocket(decodedUrl);
 
-      // Handle WebSocket close
-      ws.on('close', () => {
-        // Close the WebSocket connection
-      });
+    // Handle WebSocket messages
+    targetWebSocket.on('message', (message) => {
+      response.send(message);
     });
 
-    // Upgrade the HTTP connection to a WebSocket connection
-    const server = await import('http');
-    server.createServer((req, res) => {
-      if (req.url === URL_PREFIX) {
-        wss.handleUpgrade(req, res, (ws) => {
-          wss.emit('connection', ws, req);
-        });
-      }
-    }).listen(8080);
+    // Handle WebSocket errors
+    targetWebSocket.on('error', (error) => {
+      console.error('WebSocket error:', error);
+    });
+
+    // Handle WebSocket close
+    targetWebSocket.on('close', () => {
+      response.close();
+    });
+
+    // Handle incoming WebSocket messages
+    response.on('message', (message) => {
+      targetWebSocket.send(message);
+    });
+
+    // Handle incoming WebSocket errors
+    response.on('error', (error) => {
+      console.error('WebSocket error:', error);
+    });
+
+    // Handle incoming WebSocket close
+    response.on('close', () => {
+      targetWebSocket.close();
+    });
 
     // Send the WebSocket upgrade response
     response.writeHead(101, {
       'Upgrade': 'websocket',
       'Connection': 'Upgrade',
-      'Sec-WebSocket-Accept': request.headers['sec-webSocket-key'],
     });
     response.end();
   }
 
   /**
-   * Handle normal HTTP proxying.
-   * @param {object} request - The request object.
-   * @param {object} response - The response object.
-   * @param {string} encodedUrl - The encoded URL.
+   * Rewrite the request headers.
+   * @param {object} headers - The request headers.
+   * @returns {object} The rewritten request headers.
    */
-  async handleHttpProxying(request, response, encodedUrl) {
+  rewriteRequestHeaders(headers) {
+    const rewrittenHeaders = {};
+
+    // Remove sensitive headers
+    for (const header in headers) {
+      if (header.toLowerCase() !== 'cookie' && header.toLowerCase() !== 'authorization') {
+        rewrittenHeaders[header] = headers[header];
+      }
+    }
+
+    return rewrittenHeaders;
+  }
+
+  /**
+   * Fetch the target response.
+   * @param {string} url - The target URL.
+   * @param {object} headers - The request headers.
+   * @returns {object} The target response.
+   */
+  async fetchTargetResponse(url, headers) {
     const axios = await import('axios');
 
-    // Forward the request to the target server
-    axios({
-      method: request.method,
-      url: encodedUrl,
-      headers: request.headers,
-      data: request.body,
-    })
-      .then((res) => {
-        // Rewrite the response headers
-        response.headers = res.headers;
-        response.statusCode = res.status;
-
-        // Send the response
-        response.end(res.data);
-      })
-      .catch((error) => {
-        console.error('HTTP proxying error:', error);
-      });
-  }
-
-  /**
-   * Integrated HTTPS tunnel.
-   */
-  async handleHttpsTunnel(request, response) {
-    const tls = await import('tls');
-    const server = tls.createServer((socket) => {
-      // Handle HTTPS connection
-      socket.on('data', (data) => {
-        // Forward the data to the target server
-        socket.write(data);
-      });
-
-      // Handle HTTPS errors
-      socket.on('error', (error) => {
-        console.error('HTTPS tunnel error:', error);
-      });
-
-      // Handle HTTPS close
-      socket.on('close', () => {
-        // Close the HTTPS connection
-      });
-    });
-
-    server.listen(443);
-  }
-
-  /**
-   * Full request/response header rewriting.
-   */
-  async rewriteHeaders(request, response) {
-    // Strip CSP, HSTS, X-Frame-Options headers
-    delete response.headers['content-security-policy'];
-    delete response.headers['strict-transport-security'];
-    delete response.headers['x-frame-options'];
-
-    // Rewrite Cookie header to isolate cookies per proxied origin
-    const cookieHeader = request.headers['cookie'];
-    if (cookieHeader) {
-      const cookies = cookieHeader.split(';');
-      const rewrittenCookies = [];
-      for (const cookie of cookies) {
-        const [name, value] = cookie.trim().split('=');
-        rewrittenCookies.push(`${name}=${value}; domain=${request.headers['host']}`);
-      }
-      response.headers['cookie'] = rewrittenCookies.join(';');
+    try {
+      const response = await axios.get(url, { headers });
+      return response;
+    } catch (error) {
+      console.error('Error fetching target response:', error);
+      throw error;
     }
   }
 
   /**
-   * Cookie scoping: isolate cookies per proxied origin, no leakage.
+   * Rewrite the response headers.
+   * @param {object} headers - The response headers.
+   * @returns {object} The rewritten response headers.
    */
-  async scopeCookies(request, response) {
-    // Implement cookie scoping logic here
+  rewriteResponseHeaders(headers) {
+    const rewrittenHeaders = {};
+
+    // Remove sensitive headers
+    for (const header in headers) {
+      if (header.toLowerCase() !== 'set-cookie' && header.toLowerCase() !== 'strict-transport-security') {
+        rewrittenHeaders[header] = headers[header];
+      }
+    }
+
+    return rewrittenHeaders;
+  }
+
+  /**
+   * XOR + base64 URL encoding.
+   * @param {string} url - The URL to encode.
+   * @param {Buffer} salt - The rotating salt.
+   * @returns {string} The encoded URL.
+   */
+  xorBase64Encode(url, salt) {
+    const encoder = new TextEncoder();
+    const urlBuffer = encoder.encode(url);
+    const encodedBuffer = Buffer.alloc(urlBuffer.length);
+
+    for (let i = 0; i < urlBuffer.length; i++) {
+      encodedBuffer[i] = urlBuffer[i] ^ salt[i % salt.length];
+    }
+
+    return Buffer.from(encodedBuffer).toString('base64');
+  }
+
+  /**
+   * XOR + base64 URL decoding.
+   * @param {string} encodedUrl - The encoded URL.
+   * @param {Buffer} salt - The rotating salt.
+   * @returns {string} The decoded URL.
+   */
+  xorBase64Decode(encodedUrl, salt) {
+    const decoder = new TextDecoder();
+    const encodedBuffer = Buffer.from(encodedUrl, 'base64');
+    const decodedBuffer = Buffer.alloc(encodedBuffer.length);
+
+    for (let i = 0; i < encodedBuffer.length; i++) {
+      decodedBuffer[i] = encodedBuffer[i] ^ salt[i % salt.length];
+    }
+
+    return decoder.decode(decodedBuffer);
   }
 }
 
