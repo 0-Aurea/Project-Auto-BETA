@@ -1,12 +1,72 @@
 import React, { useState, useEffect } from 'react';
 import './BookmarksManager.css';
 
+const openDB = async () => {
+  return new Promise((resolve, reject) => {
+    const request = window.indexedDB.open('bookmarksDB', 1);
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      db.createObjectStore('bookmarks', { keyPath: 'id', autoIncrement: true });
+    };
+
+    request.onsuccess = (event) => {
+      resolve(event.target.result);
+    };
+
+    request.onerror = (event) => {
+      reject(event.target.error);
+    };
+  });
+};
+
+const addBookmark = async (bookmark) => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(['bookmarks'], 'readwrite');
+    const store = transaction.objectStore('bookmarks');
+    const request = store.add(bookmark);
+    request.onsuccess = () => resolve();
+    request.onerror = (event) => reject(event.target.error);
+  });
+};
+
+const getAllBookmarks = async () => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(['bookmarks'], 'readonly');
+    const store = transaction.objectStore('bookmarks');
+    const request = store.getAll();
+    request.onsuccess = (event) => resolve(event.target.result);
+    request.onerror = (event) => reject(event.target.error);
+  });
+};
+
+const updateBookmark = async (id, bookmark) => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(['bookmarks'], 'readwrite');
+    const store = transaction.objectStore('bookmarks');
+    const request = store.put(bookmark);
+    request.onsuccess = () => resolve();
+    request.onerror = (event) => reject(event.target.error);
+  });
+};
+
+const deleteBookmark = async (id) => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(['bookmarks'], 'readwrite');
+    const store = transaction.objectStore('bookmarks');
+    const request = store.delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = (event) => reject(event.target.error);
+  });
+};
+
 const BookmarksManager = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [bookmarks, setBookmarks] = useState(() => {
-    const storedBookmarks = localStorage.getItem('bookmarks');
-    return storedBookmarks ? JSON.parse(storedBookmarks) : [];
-  });
+  const [bookmarks, setBookmarks] = useState([]);
   const [newBookmarkTitle, setNewBookmarkTitle] = useState('');
   const [newBookmarkURL, setNewBookmarkURL] = useState('');
   const [editBookmarkId, setEditBookmarkId] = useState(null);
@@ -14,8 +74,12 @@ const BookmarksManager = () => {
   const [editedBookmarkURL, setEditedBookmarkURL] = useState('');
 
   useEffect(() => {
-    localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
-  }, [bookmarks]);
+    const fetchBookmarks = async () => {
+      const storedBookmarks = await getAllBookmarks();
+      setBookmarks(storedBookmarks);
+    };
+    fetchBookmarks();
+  }, []);
 
   const handleToggle = () => {
     setIsOpen(!isOpen);
@@ -25,18 +89,21 @@ const BookmarksManager = () => {
     e.preventDefault();
     if (newBookmarkTitle && newBookmarkURL) {
       const newBookmark = {
-        id: Date.now(),
         title: newBookmarkTitle,
         url: newBookmarkURL,
       };
-      setBookmarks([...bookmarks, newBookmark]);
-      setNewBookmarkTitle('');
-      setNewBookmarkURL('');
+      addBookmark(newBookmark).then(() => {
+        setNewBookmarkTitle('');
+        setNewBookmarkURL('');
+        getAllBookmarks().then((bookmarks) => setBookmarks(bookmarks));
+      });
     }
   };
 
   const handleRemoveBookmark = (id) => {
-    setBookmarks(bookmarks.filter((bookmark) => bookmark.id !== id));
+    deleteBookmark(id).then(() => {
+      getAllBookmarks().then((bookmarks) => setBookmarks(bookmarks));
+    });
   };
 
   const handleEditBookmark = (id) => {
@@ -51,16 +118,17 @@ const BookmarksManager = () => {
   const handleSaveEditedBookmark = (e) => {
     e.preventDefault();
     if (editBookmarkId) {
-      setBookmarks(
-        bookmarks.map((bookmark) =>
-          bookmark.id === editBookmarkId
-            ? { ...bookmark, title: editedBookmarkTitle, url: editedBookmarkURL }
-            : bookmark
-        )
-      );
-      setEditBookmarkId(null);
-      setEditedBookmarkTitle('');
-      setEditedBookmarkURL('');
+      const updatedBookmark = {
+        id: editBookmarkId,
+        title: editedBookmarkTitle,
+        url: editedBookmarkURL,
+      };
+      updateBookmark(editBookmarkId, updatedBookmark).then(() => {
+        setEditBookmarkId(null);
+        setEditedBookmarkTitle('');
+        setEditedBookmarkURL('');
+        getAllBookmarks().then((bookmarks) => setBookmarks(bookmarks));
+      });
     }
   };
 
@@ -102,25 +170,13 @@ const BookmarksManager = () => {
                   </form>
                 ) : (
                   <>
-                    <input
-                      type="text"
-                      value={bookmark.title}
-                      readOnly
-                    />
-                    <input
-                      type="text"
-                      value={bookmark.url}
-                      readOnly
-                    />
-                  </>
-                )}
-                {editBookmarkId !== bookmark.id && (
-                  <>
+                    <span>{bookmark.title}</span>
+                    <span>{bookmark.url}</span>
                     <button onClick={() => handleEditBookmark(bookmark.id)}>
                       Edit
                     </button>
                     <button onClick={() => handleRemoveBookmark(bookmark.id)}>
-                      Remove
+                      Delete
                     </button>
                   </>
                 )}
