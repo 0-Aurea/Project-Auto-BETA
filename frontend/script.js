@@ -4,7 +4,6 @@ import { SettingsManager } from './components/SettingsManager.js';
 import { HistoryManager } from './components/HistoryManager.js';
 import { BookmarkManager } from './components/BookmarkManager.js';
 import { encode, decode } from './sw-config.js';
-import './style.css';
 
 const settingsToggle = document.getElementById('settings-toggle');
 const bookmarksToggle = document.getElementById('bookmarks-toggle');
@@ -27,10 +26,14 @@ const settingsManager = new SettingsManager(settingsPanelElement);
 const bookmarksManager = new BookmarkManager(bookmarksPanelElement);
 const historyManager = new HistoryManager(proxyHistoryPanelElement);
 const tabManager = new TabManager(tabBarElement);
-const searchBar = new SearchBar({ onSearchQuery: (query) => {
-  const encodedUrl = encode(query);
-  tabManager.openNewTab(encodedUrl);
-}, tabManager, swConfig: { encode, decode } });
+const searchBar = new SearchBar({ 
+  onSearchQuery: (query) => {
+    const encodedUrl = encode(query);
+    tabManager.openNewTab(encodedUrl);
+  }, 
+  tabManager, 
+  swConfig: { encode, decode } 
+});
 
 settingsToggle.addEventListener('click', () => {
   settingsPanelElement.classList.toggle('open');
