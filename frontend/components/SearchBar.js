@@ -88,14 +88,7 @@ const SearchBar = ({ onSearchQuery }) => {
 
   const handleHistoryClick = (historyItem) => {
     setSearchQuery(historyItem);
-  };
-
-  const handleHistoryClear = () => {
-    setSearchHistory([]);
-  };
-
-  const handleHistoryToggle = () => {
-    setHistoryExpanded(!historyExpanded);
+    setShowSuggestions(false);
   };
 
   const handleSearchEngineChange = (event) => {
@@ -106,12 +99,13 @@ const SearchBar = ({ onSearchQuery }) => {
     <div className="search-bar">
       <form onSubmit={handleSearch}>
         <input
-          type="search"
+          type="text"
           value={searchQuery}
           onChange={handleInputChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
-          placeholder="Search"
+          placeholder="Search..."
+          className="search-input"
         />
         {showSuggestions && (
           <ul className="suggestions">
@@ -122,28 +116,27 @@ const SearchBar = ({ onSearchQuery }) => {
             ))}
           </ul>
         )}
-        <button type="submit">Search</button>
-      </form>
-      <div className="search-history">
-        <h2>Search History</h2>
-        <ul>
-          {searchHistory.map((historyItem, index) => (
-            <li key={index}>
-              <span onClick={() => handleHistoryClick(historyItem)}>{historyItem}</span>
-              <button onClick={() => setSearchHistory(searchHistory.filter((item) => item !== historyItem))}>
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
-        <button onClick={handleHistoryClear}>Clear History</button>
-        <button onClick={handleHistoryToggle}>{historyExpanded ? 'Hide' : 'Show'} History</button>
-      </div>
-      <div className="search-engine">
-        <select value={searchEngine} onChange={handleSearchEngineChange}>
+        <button type="submit" className="search-button">
+          Search
+        </button>
+        <select value={searchEngine} onChange={handleSearchEngineChange} className="search-engine-select">
           <option value="google">Google</option>
           <option value="bing">Bing</option>
         </select>
+      </form>
+      <div className="search-history">
+        {historyExpanded && (
+          <ul>
+            {searchHistory.map((historyItem, index) => (
+              <li key={index} onClick={() => handleHistoryClick(historyItem)}>
+                {historyItem}
+              </li>
+            ))}
+          </ul>
+        )}
+        <button onClick={() => setHistoryExpanded(!historyExpanded)} className="history-expand-button">
+          {historyExpanded ? 'Hide History' : 'Show History'}
+        </button>
       </div>
     </div>
   );
