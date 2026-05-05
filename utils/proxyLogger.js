@@ -1,9 +1,8 @@
 const { performance } = require('perf_hooks');
-const fs = require('fs');
-const path = require('path');
+const { URL } = require('url');
 
 /**
- * Proxy logger utility class for handling logging and error reporting.
+ * Proxy logger and error reporting utility class.
  */
 class ProxyLogger {
   /**
@@ -14,6 +13,7 @@ class ProxyLogger {
     INFO: 'info',
     WARN: 'warn',
     ERROR: 'error',
+    CRITICAL: 'critical',
   };
 
   /**
@@ -22,101 +22,105 @@ class ProxyLogger {
   static logLevel = ProxyLogger.LOG_LEVELS.INFO;
 
   /**
-   * Logger instance.
+   * Log timestamp format.
    */
-  static logger;
+  static logTimestampFormat = 'YYYY-MM-DD HH:mm:ss';
 
   /**
-   * Initializes the proxy logger with a custom logger instance or defaults to console logging.
-   * @param {object} [logger] - A custom logger instance.
+   * Formats a log message with a timestamp.
+   * @param {string} message - The log message.
+   * @returns {string} The formatted log message.
    */
-  static init(logger) {
-    if (logger) {
-      ProxyLogger.logger = logger;
-    } else {
-      ProxyLogger.logger = console;
-    }
-
-    // Create logs directory if it doesn't exist
-    const logsDir = path.join(__dirname, '../logs');
-    if (!fs.existsSync(logsDir)) {
-      fs.mkdirSync(logsDir);
-    }
+  static formatLogMessage(message) {
+    const timestamp = new Date().toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    return `[${timestamp}] ${message}`;
   }
 
   /**
    * Logs a debug message.
    * @param {string} message - The log message.
-   * @param {object} [meta] - Additional metadata to log.
    */
-  static debug(message, meta) {
+  static debug(message) {
     if (ProxyLogger.logLevel === ProxyLogger.LOG_LEVELS.DEBUG) {
-      const logMessage = `${new Date().toISOString()} [DEBUG] ${message}`;
-      ProxyLogger.logger.debug(logMessage, meta);
-      ProxyLogger.writeToLogFile('debug.log', logMessage, meta);
+      console.log(ProxyLogger.formatLogMessage(`[DEBUG] ${message}`));
     }
   }
 
   /**
    * Logs an info message.
    * @param {string} message - The log message.
-   * @param {object} [meta] - Additional metadata to log.
    */
-  static info(message, meta) {
-    const logMessage = `${new Date().toISOString()} [INFO] ${message}`;
-    ProxyLogger.logger.info(logMessage, meta);
-    ProxyLogger.writeToLogFile('info.log', logMessage, meta);
+  static info(message) {
+    console.log(ProxyLogger.formatLogMessage(`[INFO] ${message}`));
   }
 
   /**
    * Logs a warning message.
    * @param {string} message - The log message.
-   * @param {object} [meta] - Additional metadata to log.
    */
-  static warn(message, meta) {
-    const logMessage = `${new Date().toISOString()} [WARN] ${message}`;
-    ProxyLogger.logger.warn(logMessage, meta);
-    ProxyLogger.writeToLogFile('warn.log', logMessage, meta);
+  static warn(message) {
+    console.warn(ProxyLogger.formatLogMessage(`[WARN] ${message}`));
   }
 
   /**
    * Logs an error message.
    * @param {string} message - The log message.
-   * @param {object} [meta] - Additional metadata to log.
-   * @param {Error} [error] - The error object.
+   * @param {Error} [error] - Optional error object.
    */
-  static error(message, meta, error) {
-    const logMessage = `${new Date().toISOString()} [ERROR] ${message}`;
-    ProxyLogger.logger.error(logMessage, meta, error);
-    ProxyLogger.writeToLogFile('error.log', logMessage, meta, error);
+  static error(message, error) {
+    console.error(ProxyLogger.formatLogMessage(`[ERROR] ${message}`));
+    if (error) {
+      console.error(error.stack);
+    }
   }
 
   /**
-   * Writes a log message to a file.
-   * @param {string} fileName - The log file name.
+   * Logs a critical message.
    * @param {string} message - The log message.
-   * @param {object} [meta] - Additional metadata to log.
-   * @param {Error} [error] - The error object.
+   * @param {Error} [error] - Optional error object.
    */
-  static writeToLogFile(fileName, message, meta, error) {
-    const logFilePath = path.join(__dirname, '../logs', fileName);
-    const logEntry = `${message}\n${JSON.stringify(meta, null, 2)}\n${error ? error.stack : ''}\n`;
-    fs.appendFileSync(logFilePath, logEntry);
+  static critical(message, error) {
+    console.error(ProxyLogger.formatLogMessage(`[CRITICAL] ${message}`));
+    if (error) {
+      console.error(error.stack);
+    }
   }
 
   /**
-   * Measures the performance of a function.
-   * @param {function} fn - The function to measure.
-   * @returns {function} A wrapper function that measures performance.
+   * Tracks a request error.
+   * @param {string} requestUrl - The URL of the request.
+   * @param {Error} error - The error object.
    */
-  static measurePerformance(fn) {
-    return (...args) => {
-      const start = performance.now();
-      const result = fn(...args);
-      const end = performance.now();
-      ProxyLogger.debug(`Function ${fn.name} took ${end - start}ms to execute.`);
-      return result;
+  static trackRequestError(requestUrl, error) {
+    const requestMetadata = {
+      url: requestUrl,
+      error: error.message,
+      timestamp: performance.now(),
     };
+    // Add request metadata to a log or database for analysis
+  }
+
+  /**
+   * Tracks a proxy error.
+   * @param {string} errorMessage - The error message.
+   * @param {Error} error - The error object.
+   */
+  static trackProxyError(errorMessage, error) {
+    const proxyErrorMetadata = {
+      error: errorMessage,
+      timestamp: performance.now(),
+    };
+    if (error) {
+      proxyErrorMetadata.stack = error.stack;
+    }
+    // Add proxy error metadata to a log or database for analysis
   }
 }
 
