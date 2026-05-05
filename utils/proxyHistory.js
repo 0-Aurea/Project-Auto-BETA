@@ -104,10 +104,10 @@ class ProxyHistory {
   }
 
   /**
-   * Deletes an entry from the proxy history by its URL.
+   * Removes an entry from the proxy history by its URL.
    * @param {string} url - The URL of the page.
    */
-  static async deleteEntry(url) {
+  static async removeEntry(url) {
     if (!url) {
       throw new Error('URL is required');
     }
@@ -119,10 +119,17 @@ class ProxyHistory {
   /**
    * Clears all entries from the proxy history.
    */
-  static async clearAllEntries() {
+  static async clearHistory() {
     const tx = ProxyHistory.db.transaction(ProxyHistory.OBJECT_STORE_NAME, 'readwrite');
     const store = tx.objectStore(ProxyHistory.OBJECT_STORE_NAME);
     await store.clear();
+  }
+
+  /**
+   * Closes the IndexedDB database instance.
+   */
+  static async closeDB() {
+    await deleteDB(ProxyHistory.DB_NAME);
   }
 }
 
