@@ -1,66 +1,79 @@
-const LRU = require('lru-cache');
+'use strict';
 
 /**
- * Cache manager utility class for handling caching with LRU eviction policy.
+ * Cache manager utility class for handling caching and cache invalidation.
  */
 class CacheManager {
   /**
-   * Constructor for CacheManager.
-   * @param {object} options - Options for the LRU cache.
+   * Cache storage.
    */
-  constructor(options) {
-    this.cache = new LRU(options);
-  }
+  static cache = {};
+
+  /**
+   * Cache TTL (time to live) in milliseconds.
+   */
+  static TTL = 5 * 60 * 1000; // 5 minutes
+
+  /**
+   * Cache entry class.
+   */
+  static CacheEntry = class {
+    /**
+     * Constructs a cache entry.
+     * @param {string} key - The cache key.
+     * @param {*} value - The cache value.
+     */
+    constructor(key, value) {
+      this.key = key;
+      this.value = value;
+      this.timestamp = Date.now();
+    }
+
+    /**
+     * Checks if the cache entry is valid (not expired).
+     * @returns {boolean} True if the cache entry is valid, false otherwise.
+     */
+    isValid() {
+      return Date.now() - this.timestamp < CacheManager.TTL;
+    }
+  };
 
   /**
    * Gets a value from the cache.
-   * @param {string} key - The key to retrieve from the cache.
-   * @returns {*} The cached value or undefined if not found.
+   * @param {string} key - The cache key.
+   * @returns {*} The cached value, or undefined if not found or expired.
    */
-  get(key) {
-    return this.cache.get(key);
+  static get(key) {
+    const entry = CacheManager.cache[key];
+    if (entry && entry.isValid()) {
+      return entry.value;
+    }
+    delete CacheManager.cache[key];
+    return undefined;
   }
 
   /**
    * Sets a value in the cache.
-   * @param {string} key - The key to store in the cache.
-   * @param {*} value - The value to store in the cache.
-   * @param {number} [ttl] - The time to live in milliseconds.
+   * @param {string} key - The cache key.
+   * @param {*} value - The cache value.
    */
-  set(key, value, ttl) {
-    this.cache.set(key, value, ttl);
+  static set(key, value) {
+    CacheManager.cache[key] = new CacheManager.CacheEntry(key, value);
   }
 
   /**
-   * Deletes a value from the cache.
-   * @param {string} key - The key to delete from the cache.
+   * Invalidates the entire cache.
    */
-  delete(key) {
-    this.cache.del(key);
+  static invalidate() {
+    CacheManager.cache = {};
   }
 
   /**
-   * Checks if a key exists in the cache.
-   * @param {string} key - The key to check in the cache.
-   * @returns {boolean} True if the key exists, false otherwise.
+   * Invalidates a specific cache entry.
+   * @param {string} key - The cache key.
    */
-  has(key) {
-    return this.cache.has(key);
-  }
-
-  /**
-   * Clears the entire cache.
-   */
-  clear() {
-    this.cache.clear();
-  }
-
-  /**
-   * Returns the number of items in the cache.
-   * @returns {number} The number of items in the cache.
-   */
-  size() {
-    return this.cache.size;
+  static invalidateEntry(key) {
+    delete CacheManager.cache[key];
   }
 }
 
