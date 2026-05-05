@@ -80,66 +80,53 @@ bookmarksManager.onBookmarkClick = (bookmark) => {
 };
 
 settingsPanel.onSettingsChange = (settings) => {
-  localStorage.setItem('encodingMode', settings.encodingMode);
-  localStorage.setItem('cacheEnabled', settings.cacheEnabled);
-  localStorage.setItem('adBlockEnabled', settings.adBlockEnabled);
   proxySettings.updateSettings(settings);
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-  searchBar.render();
-  tabBar.render();
-  tabManager.render();
-  proxyHistory.render();
-  bookmarksManager.render();
-  settingsPanel.render();
-  proxySettings.render();
-});
-
-tabManager.onTabUpdate = (tab) => {
-  tabBar.updateTab(tab);
+tabManager.onTabClose = (tab) => {
+  proxyHistory.addEntry(tab.url);
 };
 
-tabBar.onTabClose = (tab) => {
-  tabManager.closeTab(tab);
+tabBar.onTabReorder = (oldIndex, newIndex) => {
+  tabManager.reorderTabs(oldIndex, newIndex);
 };
 
-tabBar.onNewTab = () => {
-  tabManager.openNewTab();
-};
-
-searchBar.onSearchEngineChange = (engine) => {
-  localStorage.setItem('searchEngine', engine);
+searchBar.onSearchError = (error) => {
+  console.error('Search error:', error);
 };
 
 proxyHistory.onClearHistory = () => {
-  tabManager.clearHistory();
+  tabManager.clearTabs();
 };
 
-bookmarksManager.onBookmarkChange = (bookmark) => {
-  tabManager.updateBookmark(bookmark);
+bookmarksManager.onBookmarkAdd = (bookmark) => {
+  console.log('Bookmark added:', bookmark);
 };
 
 settingsPanel.onCacheClear = () => {
   tabManager.clearCache();
 };
 
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') {
-    tabManager.saveState();
-  } else if (document.visibilityState === 'visible') {
-    tabManager.restoreState();
-  }
+document.addEventListener('DOMContentLoaded', () => {
+  tabManager.init();
+  searchBar.init();
+  bookmarksManager.init();
+  proxyHistory.init();
+  settingsPanel.init();
+  tabBar.init();
 });
 
 window.addEventListener('beforeunload', () => {
-  tabManager.saveState();
+  tabManager.saveTabs();
+  bookmarksManager.saveBookmarks();
+  proxyHistory.saveHistory();
+  settingsPanel.saveSettings();
 });
 
-tabManager.init();
-searchBar.init();
-tabBar.init();
-bookmarksManager.init();
-proxyHistory.init();
-settingsPanel.init();
-proxySettings.init();
+window.addEventListener('unload', () => {
+  tabManager.clearTabs();
+  bookmarksManager.clearBookmarks();
+  proxyHistory.clearHistory();
+  settingsPanel.clearSettings();
+});
+```
