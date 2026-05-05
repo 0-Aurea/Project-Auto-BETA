@@ -15,11 +15,16 @@ const SearchBar = ({ onSearchQuery }) => {
     const storedEngine = localStorage.getItem('searchEngine');
     return storedEngine ? storedEngine : 'google';
   });
+  const [bookmarks, setBookmarks] = useState(() => {
+    const storedBookmarks = localStorage.getItem('bookmarks');
+    return storedBookmarks ? JSON.parse(storedBookmarks) : [];
+  });
 
   useEffect(() => {
     localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
     localStorage.setItem('searchEngine', searchEngine);
-  }, [searchHistory, searchEngine]);
+    localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
+  }, [searchHistory, searchEngine, bookmarks]);
 
   const handleSearch = (event) => {
     event.preventDefault();
@@ -60,17 +65,9 @@ const SearchBar = ({ onSearchQuery }) => {
     setSearchQuery(event.target.value);
     if (event.target.value.length > 0) {
       setShowSuggestions(true);
-      // Fetch suggestions from the proxy service
-      fetch('/suggestions', {
-        method: 'GET',
-      })
-        .then((response) => response.json())
-        .then((data) => {
-          setSuggestions(data);
-        })
-        .catch((error) => {
-          console.error(error);
-        });
+      const filteredSuggestions = [...searchHistory, ...bookmarks];
+      const filtered = filteredSuggestions.filter((suggestion) => suggestion.toLowerCase().includes(event.target.value.toLowerCase()));
+      setSuggestions(filtered);
     } else {
       setShowSuggestions(false);
     }
@@ -114,7 +111,7 @@ const SearchBar = ({ onSearchQuery }) => {
           onChange={handleInputChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
-          placeholder="Search..."
+          placeholder="Search"
         />
         {showSuggestions && (
           <ul className="suggestions">
@@ -125,24 +122,29 @@ const SearchBar = ({ onSearchQuery }) => {
             ))}
           </ul>
         )}
-        {historyExpanded && (
-          <ul className="search-history">
-            {searchHistory.map((historyItem, index) => (
-              <li key={index} onClick={() => handleHistoryClick(historyItem)}>
-                {historyItem}
-              </li>
-            ))}
-            <li onClick={handleHistoryClear}>Clear History</li>
-          </ul>
-        )}
-        {!historyExpanded && (
-          <button onClick={handleHistoryToggle}>History</button>
-        )}
+        <button type="submit">Search</button>
+      </form>
+      <div className="search-history">
+        <h2>Search History</h2>
+        <ul>
+          {searchHistory.map((historyItem, index) => (
+            <li key={index}>
+              <span onClick={() => handleHistoryClick(historyItem)}>{historyItem}</span>
+              <button onClick={() => setSearchHistory(searchHistory.filter((item) => item !== historyItem))}>
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+        <button onClick={handleHistoryClear}>Clear History</button>
+        <button onClick={handleHistoryToggle}>{historyExpanded ? 'Hide' : 'Show'} History</button>
+      </div>
+      <div className="search-engine">
         <select value={searchEngine} onChange={handleSearchEngineChange}>
           <option value="google">Google</option>
           <option value="bing">Bing</option>
         </select>
-      </form>
+      </div>
     </div>
   );
 };
