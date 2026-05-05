@@ -135,11 +135,11 @@ class JSRewriter {
     });
 
     js = js.replace(this.historyPushStateRegex, (match) => {
-      return `history.pushState(${this.rewriteHistoryState(match)})`;
+      return `history.pushState(${this.rewriteHistory(match)})`;
     });
 
     js = js.replace(this.historyReplaceStateRegex, (match) => {
-      return `history.replaceState(${this.rewriteHistoryState(match)})`;
+      return `history.replaceState(${this.rewriteHistory(match)})`;
     });
 
     return js;
@@ -165,8 +165,8 @@ class JSRewriter {
     return url;
   }
 
-  rewriteHistoryState(state) {
-    return state;
+  rewriteHistory(js) {
+    return js;
   }
 }
 
@@ -212,17 +212,17 @@ class HTMLRewriter {
 // CSS Rewriter class
 class CSSRewriter {
   constructor() {
-    this.urlRegex = /url\(\s*['"]([^'"]+)['"]\s*\)/g;
+    this.urlRegex = /url\(['"]([^'"]+)['"]\)/g;
     this.importRegex = /@import\s+['"]([^'"]+)['"]/g;
   }
 
   rewriteCSS(css) {
     css = css.replace(this.urlRegex, (match, p1) => {
-      return `url(${this.rewriteURL(p1)})`;
+      return `url('${this.rewriteURL(p1)}')`;
     });
 
     css = css.replace(this.importRegex, (match, p1) => {
-      return `@import ${this.rewriteURL(p1)}`;
+      return `@import '${this.rewriteURL(p1)}'`;
     });
 
     return css;
@@ -247,9 +247,11 @@ async function handleFetch(request) {
   try {
     const response = await fetch(request);
     const responseToCache = new Response(response.body, response);
+    responseToCache.headers.set('Cache-Control', 'max-age=3600');
     await putResponse(request, responseToCache);
-    return response;
+    return responseToCache;
   } catch (error) {
+    console.error('Error handling fetch:', error);
     return new Response('Error', { status: 500 });
   }
 }
