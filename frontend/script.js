@@ -27,7 +27,10 @@ const settingsManager = new SettingsManager(settingsPanelElement);
 const bookmarksManager = new BookmarkManager(bookmarksPanelElement);
 const historyManager = new HistoryManager(proxyHistoryPanelElement);
 const tabManager = new TabManager(tabBarElement);
-const searchBar = new SearchBar(searchBarElement);
+const searchBar = new SearchBar({ onSearchQuery: (query) => {
+  const encodedUrl = encode(query);
+  tabManager.openNewTab(encodedUrl);
+}, tabManager, swConfig: { encode, decode } });
 
 settingsToggle.addEventListener('click', () => {
   settingsPanelElement.classList.toggle('open');
@@ -46,11 +49,6 @@ proxyHistoryToggle.addEventListener('click', () => {
   settingsPanelElement.classList.remove('open');
   bookmarksPanelElement.classList.remove('open');
 });
-
-searchBar.onSearchQuery = (query) => {
-  const encodedUrl = encode(query);
-  tabManager.openNewTab(encodedUrl);
-};
 
 tabManager.onTabChange = (tab) => {
   searchBar.setSearchQuery(tab.url);
