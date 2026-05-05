@@ -1,12 +1,9 @@
-import { register } from './serviceWorker.js';
-import { WebRTCLeakProtector } from './WebRTCLeakProtector.js';
 import { TabManager } from './components/TabManager.js';
-import { ProxyHistory } from './components/ProxyHistory.js';
-import { BookmarksManager } from './components/BookmarksManager.js';
 import { SearchBar } from './components/SearchBar.js';
-import { SettingsPanel } from './components/SettingsPanel.js';
-import { TabBar } from './components/TabBar.js';
-import { ProxySettings } from './components/ProxySettings.js';
+import { SettingsManager } from './components/SettingsManager.js';
+import { HistoryManager } from './components/HistoryManager.js';
+import { BookmarkManager } from './components/BookmarkManager.js';
+import { encode, decode } from './sw-config.js';
 import './style.css';
 
 const settingsToggle = document.getElementById('settings-toggle');
@@ -26,24 +23,11 @@ document.body.appendChild(settingsPanelElement);
 document.body.appendChild(bookmarksPanelElement);
 document.body.appendChild(proxyHistoryPanelElement);
 
-let webrtcProtector;
-
-const settingsPanel = new SettingsPanel(settingsPanelElement);
-const bookmarksManager = new BookmarksManager(bookmarksPanelElement);
-const proxyHistory = new ProxyHistory(proxyHistoryPanelElement);
+const settingsManager = new SettingsManager(settingsPanelElement);
+const bookmarksManager = new BookmarkManager(bookmarksPanelElement);
+const historyManager = new HistoryManager(proxyHistoryPanelElement);
 const tabManager = new TabManager(tabBarElement);
 const searchBar = new SearchBar(searchBarElement);
-const tabBar = new TabBar(tabBarElement);
-const proxySettings = new ProxySettings();
-
-register({
-  onProxyRequest: (event) => {
-    if (!webrtcProtector) {
-      webrtcProtector = new WebRTCLeakProtector();
-    }
-    webrtcProtector.protect(event);
-  },
-});
 
 settingsToggle.addEventListener('click', () => {
   settingsPanelElement.classList.toggle('open');
@@ -64,14 +48,15 @@ proxyHistoryToggle.addEventListener('click', () => {
 });
 
 searchBar.onSearchQuery = (query) => {
-  tabManager.openNewTab(query);
+  const encodedUrl = encode(query);
+  tabManager.openNewTab(encodedUrl);
 };
 
 tabManager.onTabChange = (tab) => {
   searchBar.setSearchQuery(tab.url);
 };
 
-proxyHistory.onHistoryChange = (history) => {
+historyManager.onHistoryChange = (history) => {
   searchBar.setSearchQuery(history[history.length - 1].url);
 };
 
@@ -79,18 +64,17 @@ bookmarksManager.onBookmarkClick = (bookmark) => {
   tabManager.openNewTab(bookmark.url);
 };
 
-settingsPanel.onSettingsChange = (settings) => {
-  proxySettings.updateSettings(settings);
+settingsManager.onSettingsChange = (settings) => {
   tabManager.updateTabSettings(settings);
   searchBar.updateSearchSettings(settings);
 };
 
 tabManager.onTabClose = (tab) => {
-  proxyHistory.removeHistoryEntry(tab.url);
+  historyManager.removeHistoryEntry(tab.url);
 };
 
 tabManager.onTabUpdate = (tab) => {
-  proxyHistory.updateHistoryEntry(tab.url);
+  historyManager.updateHistoryEntry(tab.url);
 };
 
 searchBar.onSearchError = (error) => {
@@ -98,19 +82,19 @@ searchBar.onSearchError = (error) => {
 };
 
 bookmarksManager.onBookmarkAdd = (bookmark) => {
-  proxyHistory.addHistoryEntry(bookmark.url);
+  historyManager.addHistoryEntry(bookmark.url);
 };
 
 bookmarksManager.onBookmarkRemove = (bookmark) => {
-  proxyHistory.removeHistoryEntry(bookmark.url);
+  historyManager.removeHistoryEntry(bookmark.url);
 };
 
-proxyHistory.onHistoryClear = () => {
+historyManager.onHistoryClear = () => {
   tabManager.clearTabs();
 };
 
-settingsPanel.onCacheClear = () => {
-  proxyHistory.clearHistory();
+settingsManager.onCacheClear = () => {
+  historyManager.clearHistory();
   tabManager.clearTabs();
 };
 
@@ -118,17 +102,28 @@ document.addEventListener('DOMContentLoaded', () => {
   tabManager.init();
   searchBar.init();
   bookmarksManager.init();
-  proxyHistory.init();
-  settingsPanel.init();
+  historyManager.init();
+  settingsManager.init();
 });
 
 window.addEventListener('beforeunload', () => {
   tabManager.saveTabs();
-  bookmarksManager.saveBookmarks();
-  proxyHistory.saveHistory();
-  settingsPanel.saveSettings();
 });
 
-window.addEventListener('unload', () => {
-  tabManager.closeTabs();
+navigator.serviceWorker.register('./sw.js')
+  .then((registration) => {
+    console.log('Service Worker registered:', registration);
+  })
+  .catch((error) => {
+    console.error('Service Worker registration failed:', error);
+  });
+
+document.addEventListener('keydown', (event) => {
+  if (event.ctrlKey && event.key === 't') {
+    tabManager.openNewTab('');
+  } else if (event.ctrlKey && event.key === 'w') {
+    tabManager.closeActiveTab();
+  } else if (event.ctrlKey && event.key === 'l') {
+    searchBar.focus();
+  }
 });
