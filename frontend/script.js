@@ -5,22 +5,25 @@ import { ProxyHistory } from './components/ProxyHistory.js';
 import { BookmarksManager } from './components/BookmarksManager.js';
 import { SearchBar } from './components/SearchBar.js';
 import { SettingsPanel } from './components/SettingsPanel.js';
+import { TabBar } from './components/TabBar.js';
+import { ProxySettings } from './components/ProxySettings.js';
 import './style.css';
 
 const settingsToggle = document.getElementById('settings-toggle');
 const bookmarksToggle = document.getElementById('bookmarks-toggle');
 const proxyHistoryToggle = document.getElementById('proxy-history-toggle');
-
+const tabBarElement = document.getElementById('tab-bar');
+const searchBarElement = document.getElementById('search-bar');
 const settingsPanelElement = document.createElement('div');
-settingsPanelElement.classList.add('settings-panel');
-document.body.appendChild(settingsPanelElement);
-
 const bookmarksPanelElement = document.createElement('div');
-bookmarksPanelElement.classList.add('bookmarks-panel');
-document.body.appendChild(bookmarksPanelElement);
-
 const proxyHistoryPanelElement = document.createElement('div');
+
+settingsPanelElement.classList.add('settings-panel');
+bookmarksPanelElement.classList.add('bookmarks-panel');
 proxyHistoryPanelElement.classList.add('proxy-history-panel');
+
+document.body.appendChild(settingsPanelElement);
+document.body.appendChild(bookmarksPanelElement);
 document.body.appendChild(proxyHistoryPanelElement);
 
 let webrtcProtector;
@@ -28,8 +31,10 @@ let webrtcProtector;
 const settingsPanel = new SettingsPanel(settingsPanelElement);
 const bookmarksManager = new BookmarksManager(bookmarksPanelElement);
 const proxyHistory = new ProxyHistory(proxyHistoryPanelElement);
-const tabManager = new TabManager();
-const searchBar = new SearchBar();
+const tabManager = new TabManager(tabBarElement);
+const searchBar = new SearchBar(searchBarElement);
+const tabBar = new TabBar(tabBarElement);
+const proxySettings = new ProxySettings();
 
 register({
   onProxyRequest: (event) => {
@@ -78,41 +83,63 @@ settingsPanel.onSettingsChange = (settings) => {
   localStorage.setItem('encodingMode', settings.encodingMode);
   localStorage.setItem('cacheEnabled', settings.cacheEnabled);
   localStorage.setItem('adBlockEnabled', settings.adBlockEnabled);
+  proxySettings.updateSettings(settings);
 };
 
 document.addEventListener('DOMContentLoaded', () => {
   searchBar.render();
+  tabBar.render();
   tabManager.render();
   proxyHistory.render();
   bookmarksManager.render();
   settingsPanel.render();
+  proxySettings.render();
+});
 
-  const storedSettings = {
-    encodingMode: localStorage.getItem('encodingMode'),
-    cacheEnabled: localStorage.getItem('cacheEnabled') === 'true',
-    adBlockEnabled: localStorage.getItem('adBlockEnabled') === 'true',
-  };
-  settingsPanel.updateSettings(storedSettings);
+tabManager.onTabUpdate = (tab) => {
+  tabBar.updateTab(tab);
+};
+
+tabBar.onTabClose = (tab) => {
+  tabManager.closeTab(tab);
+};
+
+tabBar.onNewTab = () => {
+  tabManager.openNewTab();
+};
+
+searchBar.onSearchEngineChange = (engine) => {
+  localStorage.setItem('searchEngine', engine);
+};
+
+proxyHistory.onClearHistory = () => {
+  tabManager.clearHistory();
+};
+
+bookmarksManager.onBookmarkChange = (bookmark) => {
+  tabManager.updateBookmark(bookmark);
+};
+
+settingsPanel.onCacheClear = () => {
+  tabManager.clearCache();
+};
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    tabManager.saveState();
+  } else if (document.visibilityState === 'visible') {
+    tabManager.restoreState();
+  }
 });
 
 window.addEventListener('beforeunload', () => {
-  tabManager.saveTabs();
-  proxyHistory.saveHistory();
-  bookmarksManager.saveBookmarks();
+  tabManager.saveState();
 });
 
-window.addEventListener('unload', () => {
-  searchBar.destroy();
-  tabManager.destroy();
-  proxyHistory.destroy();
-  bookmarksManager.destroy();
-  settingsPanel.destroy();
-});
-
-window.onerror = (event) => {
-  console.error('Error:', event);
-};
-
-window.onunhandledrejection = (event) => {
-  console.error('Unhandled rejection:', event);
-};
+tabManager.init();
+searchBar.init();
+tabBar.init();
+bookmarksManager.init();
+proxyHistory.init();
+settingsPanel.init();
+proxySettings.init();
