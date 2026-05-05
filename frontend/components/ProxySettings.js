@@ -1,42 +1,41 @@
 import React, { useState, useEffect } from 'react';
+import './ProxySettings.css';
 
 const ProxySettings = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [encodingMode, setEncodingMode] = useState('xor-base64');
-  const [cacheEnabled, setCacheEnabled] = useState(true);
-  const [cacheTTL, setCacheTTL] = useState(3600); // 1 hour default
-  const [prefetchEnabled, setPrefetchEnabled] = useState(true);
-  const [adBlockEnabled, setAdBlockEnabled] = useState(true);
+  const [encodingMode, setEncodingMode] = useState(() => {
+    const storedMode = localStorage.getItem('encodingMode');
+    return storedMode ? storedMode : 'xor-base64';
+  });
+  const [cacheEnabled, setCacheEnabled] = useState(() => {
+    const storedEnabled = localStorage.getItem('cacheEnabled');
+    return storedEnabled ? storedEnabled === 'true' : true;
+  });
+  const [cacheTTL, setCacheTTL] = useState(() => {
+    const storedTTL = localStorage.getItem('cacheTTL');
+    return storedTTL ? parseInt(storedTTL) : 3600; // 1 hour default
+  });
+  const [prefetchEnabled, setPrefetchEnabled] = useState(() => {
+    const storedPrefetchEnabled = localStorage.getItem('prefetchEnabled');
+    return storedPrefetchEnabled ? storedPrefetchEnabled === 'true' : true;
+  });
+  const [adBlockEnabled, setAdBlockEnabled] = useState(() => {
+    const storedAdBlockEnabled = localStorage.getItem('adBlockEnabled');
+    return storedAdBlockEnabled ? storedAdBlockEnabled === 'true' : true;
+  });
   const [adBlockList, setAdBlockList] = useState(() => {
     const storedAdBlockList = localStorage.getItem('adBlockList');
     return storedAdBlockList ? JSON.parse(storedAdBlockList) : [];
   });
 
   useEffect(() => {
-    const storedSettings = localStorage.getItem('proxySettings');
-    if (storedSettings) {
-      const settings = JSON.parse(storedSettings);
-      setEncodingMode(settings.encodingMode);
-      setCacheEnabled(settings.cacheEnabled);
-      setCacheTTL(settings.cacheTTL);
-      setPrefetchEnabled(settings.prefetchEnabled);
-      setAdBlockEnabled(settings.adBlockEnabled);
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('proxySettings', JSON.stringify({
-      encodingMode,
-      cacheEnabled,
-      cacheTTL,
-      prefetchEnabled,
-      adBlockEnabled,
-    }));
-  }, [encodingMode, cacheEnabled, cacheTTL, prefetchEnabled, adBlockEnabled]);
-
-  useEffect(() => {
+    localStorage.setItem('encodingMode', encodingMode);
+    localStorage.setItem('cacheEnabled', cacheEnabled.toString());
+    localStorage.setItem('cacheTTL', cacheTTL.toString());
+    localStorage.setItem('prefetchEnabled', prefetchEnabled.toString());
+    localStorage.setItem('adBlockEnabled', adBlockEnabled.toString());
     localStorage.setItem('adBlockList', JSON.stringify(adBlockList));
-  }, [adBlockList]);
+  }, [encodingMode, cacheEnabled, cacheTTL, prefetchEnabled, adBlockEnabled, adBlockList]);
 
   const handleToggle = () => {
     setIsOpen(!isOpen);
@@ -51,7 +50,10 @@ const ProxySettings = () => {
   };
 
   const handleCacheTTLChange = (event) => {
-    setCacheTTL(event.target.value);
+    const value = parseInt(event.target.value);
+    if (!isNaN(value) && value > 0) {
+      setCacheTTL(value);
+    }
   };
 
   const handlePrefetchEnabledChange = (event) => {
@@ -63,7 +65,7 @@ const ProxySettings = () => {
   };
 
   const handleAdBlockListChange = (event) => {
-    setAdBlockList(event.target.value.split(','));
+    setAdBlockList(event.target.value.split(',').map(item => item.trim()));
   };
 
   return (
@@ -100,7 +102,7 @@ const ProxySettings = () => {
             </label>
             <label>
               Ad Block List (comma-separated):
-              <input type="text" value={adBlockList.join(',')} onChange={handleAdBlockListChange} />
+              <input type="text" value={adBlockList.join(', ')} onChange={handleAdBlockListChange} />
             </label>
           </form>
         </div>
