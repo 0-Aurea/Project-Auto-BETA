@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './SearchBar.css';
 
-const SearchBar = () => {
+const SearchBar = ({ onSearchQuery }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [focused, setFocused] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
@@ -28,6 +28,7 @@ const SearchBar = () => {
       const updatedHistory = [...searchHistory, searchValue];
       setSearchHistory(updatedHistory);
       setSearchQuery('');
+      onSearchQuery(searchValue);
       const url = searchEngine === 'google' ? 'https://www.google.com/search' : 'https://www.bing.com/search';
       const params = new URLSearchParams({
         q: searchValue,
@@ -113,7 +114,7 @@ const SearchBar = () => {
           onChange={handleInputChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
-          placeholder="Search"
+          placeholder="Search..."
         />
         {showSuggestions && (
           <ul className="suggestions">
@@ -135,20 +136,13 @@ const SearchBar = () => {
           </ul>
         )}
         {!historyExpanded && (
-          <button className="history-toggle" onClick={handleHistoryToggle}>
-            History
-          </button>
+          <button onClick={handleHistoryToggle}>History</button>
         )}
-        {historyExpanded && (
-          <button className="history-toggle" onClick={handleHistoryToggle}>
-            Hide History
-          </button>
-        )}
+        <select value={searchEngine} onChange={handleSearchEngineChange}>
+          <option value="google">Google</option>
+          <option value="bing">Bing</option>
+        </select>
       </form>
-      <select value={searchEngine} onChange={handleSearchEngineChange}>
-        <option value="google">Google</option>
-        <option value="bing">Bing</option>
-      </select>
     </div>
   );
 };
