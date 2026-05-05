@@ -81,58 +81,61 @@ bookmarksManager.onBookmarkClick = (bookmark) => {
 
 settingsPanel.onSettingsChange = (settings) => {
   proxySettings.updateSettings(settings);
+  tabManager.updateTabSettings(settings);
+  searchBar.updateSearchSettings(settings);
 };
 
-// Initialize service worker
-navigator.serviceWorker.register('serviceWorker.js')
-  .then((registration) => {
-    console.log('Service worker registered:', registration);
-  })
-  .catch((error) => {
-    console.error('Service worker registration failed:', error);
-  });
+document.addEventListener('DOMContentLoaded', async () => {
+  await proxyHistory.init();
+  await bookmarksManager.init();
+  settingsPanel.init();
+});
 
-// Handle tab updates
-tabManager.onTabUpdate = (tab) => {
-  // Update search bar query
-  searchBar.setSearchQuery(tab.url);
-
-  // Update proxy history
-  proxyHistory.addHistoryEntry(tab.url);
+tabManager.onTabClose = (tab) => {
+  proxyHistory.removeHistoryEntry(tab.url);
 };
 
-// Handle search bar input
-searchBar.onSearchInput = (query) => {
-  // Update tab bar query
-  tabManager.updateTabQuery(query);
+searchBar.onSearchSubmit = (query) => {
+  tabManager.openNewTab(query);
+  searchBar.clearSearchQuery();
 };
 
-// Initialize UI components
-settingsPanel.init();
-bookmarksManager.init();
-proxyHistory.init();
-tabManager.init();
-searchBar.init();
+tabBar.onTabReorder = (tabs) => {
+  tabManager.updateTabOrder(tabs);
+};
 
-// Establish communication with service worker
-navigator.serviceWorker.addEventListener('message', (event) => {
-  if (event.data.type === 'proxyRequest') {
-    // Handle proxy request from service worker
-    const { url, headers } = event.data;
-    // Process proxy request...
-  } else if (event.data.type === 'proxyResponse') {
-    // Handle proxy response from service worker
-    const { url, headers, body } = event.data;
-    // Process proxy response...
+settingsPanel.onCacheClear = () => {
+  proxyHistory.clearHistory();
+  tabManager.clearTabCache();
+};
+
+bookmarksManager.onBookmarkRemove = (bookmark) => {
+  tabManager.removeTab(bookmark.url);
+};
+
+window.addEventListener('beforeunload', () => {
+  proxyHistory.closeDB();
+  bookmarksManager.closeDB();
+});
+
+window.addEventListener('unload', () => {
+  tabManager.clearTabCache();
+});
+
+settingsToggle.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    settingsPanelElement.classList.remove('open');
   }
 });
 
-// Handle errors
-window.addEventListener('error', (event) => {
-  console.error('Error occurred:', event.error);
+bookmarksToggle.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    bookmarksPanelElement.classList.remove('open');
+  }
 });
 
-// Cleanup on unload
-window.addEventListener('unload', () => {
-  // Clean up resources...
+proxyHistoryToggle.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    proxyHistoryPanelElement.classList.remove('open');
+  }
 });
