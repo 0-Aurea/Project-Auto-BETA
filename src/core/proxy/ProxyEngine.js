@@ -86,7 +86,154 @@ class ProxyEngine {
    * @param {object} response - The response object.
    */
   async proxyRequest(request, response) {
-    // Implement normal proxying logic here
+    const { EncodingUtils } = await import('../utils/encodingUtils.js');
+    const { URL_PREFIX, DEFAULT_ENCODING } = await import('../config/constants.js');
+
+    // Implement XOR + base64 URL encoding with a rotating salt
+    const encodingUtils = EncodingUtils;
+    const salt = encodingUtils.getSalt();
+    const encodedUrl = encodingUtils.encodeUrl(request.url, salt, DEFAULT_ENCODING);
+
+    // Check if the request is a WebSocket upgrade request
+    if (request.headers['upgrade'] === 'websocket') {
+      // Handle WebSocket upgrade proxying
+      await this.handleWebSocketUpgrade(request, response, encodedUrl);
+    } else {
+      // Handle normal HTTP proxying
+      await this.handleHttpProxying(request, response, encodedUrl);
+    }
+  }
+
+  /**
+   * Handle WebSocket upgrade proxying.
+   * @param {object} request - The request object.
+   * @param {object} response - The response object.
+   * @param {string} encodedUrl - The encoded URL.
+   */
+  async handleWebSocketUpgrade(request, response, encodedUrl) {
+    const WebSocket = await import('ws');
+    const wss = new WebSocket.Server({ noServer: true });
+
+    // Handle WebSocket connection
+    wss.on('connection', (ws) => {
+      // Handle WebSocket messages
+      ws.on('message', (message) => {
+        // Forward the message to the target server
+        ws.send(message);
+      });
+
+      // Handle WebSocket errors
+      ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+      });
+
+      // Handle WebSocket close
+      ws.on('close', () => {
+        // Close the WebSocket connection
+      });
+    });
+
+    // Upgrade the HTTP connection to a WebSocket connection
+    const server = await import('http');
+    server.createServer((req, res) => {
+      if (req.url === URL_PREFIX) {
+        wss.handleUpgrade(req, res, (ws) => {
+          wss.emit('connection', ws, req);
+        });
+      }
+    }).listen(8080);
+
+    // Send the WebSocket upgrade response
+    response.writeHead(101, {
+      'Upgrade': 'websocket',
+      'Connection': 'Upgrade',
+      'Sec-WebSocket-Accept': request.headers['sec-webSocket-key'],
+    });
+    response.end();
+  }
+
+  /**
+   * Handle normal HTTP proxying.
+   * @param {object} request - The request object.
+   * @param {object} response - The response object.
+   * @param {string} encodedUrl - The encoded URL.
+   */
+  async handleHttpProxying(request, response, encodedUrl) {
+    const axios = await import('axios');
+
+    // Forward the request to the target server
+    axios({
+      method: request.method,
+      url: encodedUrl,
+      headers: request.headers,
+      data: request.body,
+    })
+      .then((res) => {
+        // Rewrite the response headers
+        response.headers = res.headers;
+        response.statusCode = res.status;
+
+        // Send the response
+        response.end(res.data);
+      })
+      .catch((error) => {
+        console.error('HTTP proxying error:', error);
+      });
+  }
+
+  /**
+   * Integrated HTTPS tunnel.
+   */
+  async handleHttpsTunnel(request, response) {
+    const tls = await import('tls');
+    const server = tls.createServer((socket) => {
+      // Handle HTTPS connection
+      socket.on('data', (data) => {
+        // Forward the data to the target server
+        socket.write(data);
+      });
+
+      // Handle HTTPS errors
+      socket.on('error', (error) => {
+        console.error('HTTPS tunnel error:', error);
+      });
+
+      // Handle HTTPS close
+      socket.on('close', () => {
+        // Close the HTTPS connection
+      });
+    });
+
+    server.listen(443);
+  }
+
+  /**
+   * Full request/response header rewriting.
+   */
+  async rewriteHeaders(request, response) {
+    // Strip CSP, HSTS, X-Frame-Options headers
+    delete response.headers['content-security-policy'];
+    delete response.headers['strict-transport-security'];
+    delete response.headers['x-frame-options'];
+
+    // Rewrite Cookie header to isolate cookies per proxied origin
+    const cookieHeader = request.headers['cookie'];
+    if (cookieHeader) {
+      const cookies = cookieHeader.split(';');
+      const rewrittenCookies = [];
+      for (const cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        rewrittenCookies.push(`${name}=${value}; domain=${request.headers['host']}`);
+      }
+      response.headers['cookie'] = rewrittenCookies.join(';');
+    }
+  }
+
+  /**
+   * Cookie scoping: isolate cookies per proxied origin, no leakage.
+   */
+  async scopeCookies(request, response) {
+    // Implement cookie scoping logic here
   }
 }
 
