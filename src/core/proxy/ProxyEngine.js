@@ -89,102 +89,151 @@ class ProxyEngine {
     const { EncodingUtils } = await import('../utils/encodingUtils.js');
     const { URL_PREFIX, DEFAULT_ENCODING } = await import('../config/constants.js');
 
-    // Handle WebSocket upgrade
-    if (request.headers['upgrade'] === 'websocket') {
-      await this.handleWebSocketUpgrade(request, response);
-      return;
+    // Get the URL from the request
+    const url = new URL(request.url);
+
+    // Check if the request is for the proxy
+    if (url.pathname.startsWith(URL_PREFIX)) {
+      // Get the encoded URL
+      const encodedUrl = url.pathname.substring(URL_PREFIX.length);
+
+      // Decode the URL
+      let decodedUrl;
+      switch (DEFAULT_ENCODING) {
+        case 'xor_base64':
+          decodedUrl = EncodingUtils.decodeXORBase64(encodedUrl);
+          break;
+        case 'base64':
+          decodedUrl = EncodingUtils.decodeBase64(encodedUrl);
+          break;
+        default:
+          throw new Error(`Unsupported encoding: ${DEFAULT_ENCODING}`);
+      }
+
+      // Proxy the request
+      const proxiedRequest = await this.createProxiedRequest(request, decodedUrl);
+
+      // Pipe the response
+      const proxiedResponse = await this.pipeResponse(proxiedRequest);
+
+      // Rewrite the response headers
+      await this.rewriteResponseHeaders(response, proxiedResponse);
+
+      // End the response
+      response.end(await this.streamToBuffer(proxiedResponse));
+    } else {
+      // If not a proxy request, proceed with normal handling
+      response.writeHead(404);
+      response.end('Not Found');
     }
-
-    // XOR + base64 URL encoding
-    const encodedUrl = EncodingUtils.encodeUrl(request.url, DEFAULT_ENCODING);
-
-    // Integrated HTTPS tunnel
-    const targetUrl = `${URL_PREFIX}/${encodedUrl}`;
-    const targetRequest = {
-      ...request,
-      url: targetUrl,
-    };
-
-    // Full request/response header rewriting
-    const targetResponse = await this.rewriteResponseHeaders(request, response);
-
-    // Cookie scoping: isolate cookies per proxied origin
-    await this.scopeCookies(request, response);
-
-    // Send the request to the target server
-    const serverResponse = await this.sendRequestToTargetServer(targetRequest);
-
-    // Rewrite the response headers
-    await this.rewriteResponseHeaders(serverResponse, response);
-
-    // Return the response to the client
-    response.end(serverResponse);
   }
 
   /**
-   * Handle WebSocket upgrade.
-   * @param {object} request - The request object.
-   * @param {object} response - The response object.
+   * Create a proxied request.
+   * @param {object} request - The original request.
+   * @param {string} url - The URL to proxy to.
+   * @returns {object} The proxied request.
    */
-  async handleWebSocketUpgrade(request, response) {
-    // WebSocket upgrade proxying with header rewriting
-    const { WebSocket } = await import('ws');
-    const wss = new WebSocket.Server({ noServer: true });
+  async createProxiedRequest(request, url) {
+    const { URL } = await import('url');
+    const { http } = await import('http');
 
-    wss.on('connection', (ws) => {
-      // Handle WebSocket messages
-      ws.on('message', (message) => {
-        // Rewrite the WebSocket message
-        const rewrittenMessage = this.rewriteWebSocketMessage(message);
-        ws.send(rewrittenMessage);
+    // Create a new request
+    const proxiedRequest = http.request({
+      hostname: new URL(url).hostname,
+      port: new URL(url).port,
+      path: new URL(url).pathname,
+      method: request.method,
+      headers: request.headers,
+    });
+
+    // Pipe the request body
+    request.pipe(proxiedRequest);
+
+    return proxiedRequest;
+  }
+
+  /**
+   * Pipe the response.
+   * @param {object} proxiedRequest - The proxied request.
+   * @returns {object} The proxied response.
+   */
+  async pipeResponse(proxiedRequest) {
+    return new Promise((resolve, reject) => {
+      const proxiedResponse = [];
+      proxiedRequest.on('response', (response) => {
+        response.on('data', (chunk) => {
+          proxiedResponse.push(chunk);
+        });
+        response.on('end', () => {
+          resolve(Buffer.concat(proxiedResponse));
+        });
+      });
+      proxiedRequest.on('error', (error) => {
+        reject(error);
       });
     });
-
-    // Upgrade the WebSocket connection
-    response.writeHead(101, {
-      'Upgrade': 'websocket',
-      'Connection': 'upgrade',
-    });
-    response.end();
   }
 
   /**
-   * Rewrite the WebSocket message.
-   * @param {string} message - The WebSocket message.
-   * @returns {string} The rewritten WebSocket message.
+   * Rewrite the response headers.
+   * @param {object} response - The original response.
+   * @param {object} proxiedResponse - The proxied response.
    */
-  rewriteWebSocketMessage(message) {
-    // Implement WebSocket message rewriting logic here
-    return message;
+  async rewriteResponseHeaders(response, proxiedResponse) {
+    // Get the headers from the proxied response
+    const headers = proxiedResponse.headers;
+
+    // Remove headers that should not be proxied
+    delete headers['set-cookie'];
+    delete headers['content-security-policy'];
+    delete headers['strict-transport-security'];
+    delete headers['x-frame-options'];
+
+    // Rewrite the headers
+    response.writeHead(proxiedResponse.statusCode, headers);
   }
 
   /**
-   * Rewrite response headers.
-   * @param {object} request - The request object.
-   * @param {object} response - The response object.
-   * @returns {object} The rewritten response object.
+   * XOR + base64 URL encoding.
+   * @param {string} url - The URL to encode.
+   * @param {string} salt - The salt to use.
+   * @returns {string} The encoded URL.
    */
-  async rewriteResponseHeaders(request, response) {
-    // Implement response header rewriting logic here
-    return response;
+  xorBase64Encode(url, salt) {
+    const encoder = new TextEncoder();
+    const urlBuffer = encoder.encode(url);
+    const saltBuffer = encoder.encode(salt);
+
+    // XOR the URL with the salt
+    const xoredBuffer = Buffer.alloc(urlBuffer.length);
+    for (let i = 0; i < urlBuffer.length; i++) {
+      xoredBuffer[i] = urlBuffer[i] ^ saltBuffer[i % saltBuffer.length];
+    }
+
+    // Base64 encode the XORed buffer
+    return Buffer.from(xoredBuffer).toString('base64');
   }
 
   /**
-   * Scope cookies per proxied origin.
-   * @param {object} request - The request object.
-   * @param {object} response - The response object.
+   * XOR + base64 URL decoding.
+   * @param {string} encodedUrl - The encoded URL.
+   * @param {string} salt - The salt to use.
+   * @returns {string} The decoded URL.
    */
-  async scopeCookies(request, response) {
-    // Implement cookie scoping logic here
-  }
+  xorBase64Decode(encodedUrl, salt) {
+    const decoder = new TextDecoder();
+    const encodedBuffer = Buffer.from(encodedUrl, 'base64');
+    const saltBuffer = Buffer.from(salt);
 
-  /**
-   * Send the request to the target server.
-   * @param {object} request - The request object.
-   * @returns {object} The server response.
-   */
-  async sendRequestToTargetServer(request) {
-    // Implement request sending logic here
+    // XOR the encoded buffer with the salt
+    const xoredBuffer = Buffer.alloc(encodedBuffer.length);
+    for (let i = 0; i < encodedBuffer.length; i++) {
+      xoredBuffer[i] = encodedBuffer[i] ^ saltBuffer[i % saltBuffer.length];
+    }
+
+    // Return the decoded URL
+    return decoder.decode(xoredBuffer);
   }
 }
 
