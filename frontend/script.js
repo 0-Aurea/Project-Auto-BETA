@@ -75,7 +75,9 @@ bookmarksManager.onBookmarkClick = (bookmark) => {
 };
 
 settingsPanel.onSettingsChange = (settings) => {
-  // Update settings
+  localStorage.setItem('encodingMode', settings.encodingMode);
+  localStorage.setItem('cacheEnabled', settings.cacheEnabled);
+  localStorage.setItem('adBlockEnabled', settings.adBlockEnabled);
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -84,6 +86,13 @@ document.addEventListener('DOMContentLoaded', () => {
   proxyHistory.render();
   bookmarksManager.render();
   settingsPanel.render();
+
+  const storedSettings = {
+    encodingMode: localStorage.getItem('encodingMode'),
+    cacheEnabled: localStorage.getItem('cacheEnabled') === 'true',
+    adBlockEnabled: localStorage.getItem('adBlockEnabled') === 'true',
+  };
+  settingsPanel.updateSettings(storedSettings);
 });
 
 window.addEventListener('beforeunload', () => {
@@ -92,43 +101,18 @@ window.addEventListener('beforeunload', () => {
   bookmarksManager.saveBookmarks();
 });
 
-window.addEventListener('message', (event) => {
-  if (event.data.type === 'tab-update') {
-    tabManager.updateTab(event.data.tab);
-  } else if (event.data.type === 'search-query') {
-    searchBar.setSearchQuery(event.data.query);
-  }
+window.addEventListener('unload', () => {
+  searchBar.destroy();
+  tabManager.destroy();
+  proxyHistory.destroy();
+  bookmarksManager.destroy();
+  settingsPanel.destroy();
 });
 
-tabManager.onTabClose = (tab) => {
-  searchBar.removeSearchQuery(tab.url);
+window.onerror = (event) => {
+  console.error('Error:', event);
 };
 
-tabManager.onTabUpdate = (tab) => {
-  searchBar.updateSearchQuery(tab.url);
+window.onunhandledrejection = (event) => {
+  console.error('Unhandled rejection:', event);
 };
-
-searchBar.onSearchFocus = () => {
-  tabManager.updateActiveTab();
-};
-
-searchBar.onSearchBlur = () => {
-  tabManager.updateActiveTab();
-};
-
-settingsPanelElement.addEventListener('click', (event) => {
-  if (event.target.classList.contains('ad-block-toggle')) {
-    const adBlockEnabled = event.target.checked;
-    settingsPanel.updateSettings({ adBlockEnabled });
-  }
-
-  if (event.target.classList.contains('cache-toggle')) {
-    const cacheEnabled = event.target.checked;
-    settingsPanel.updateSettings({ cacheEnabled });
-  }
-
-  if (event.target.classList.contains('encoding-mode-select')) {
-    const encodingMode = event.target.value;
-    settingsPanel.updateSettings({ encodingMode });
-  }
-});
