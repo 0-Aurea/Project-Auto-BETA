@@ -53,21 +53,27 @@ const TabBar = () => {
 
   const handleDragStart = (tab) => {
     setIsDragging(true);
+    window.dispatchEvent(new CustomEvent('dragstart', { detail: tab }));
   };
 
   const handleDragEnd = () => {
     setIsDragging(false);
   };
 
-  const handleDrop = (tab, event) => {
+  const handleDrop = (event) => {
     event.preventDefault();
-    const updatedTabs = tabs.map((t) => (t.id === tab.id ? { ...t } : t));
-    const draggedTab = tabs.find((t) => t.id === event.dataTransfer.getData('tabId'));
+    const draggedTabId = event.dataTransfer.getData('tabId');
+    const draggedTab = tabs.find((t) => t.id === parseInt(draggedTabId));
     if (draggedTab) {
-      const index = updatedTabs.indexOf(tab);
-      const draggedIndex = updatedTabs.indexOf(draggedTab);
-      updatedTabs.splice(index, 0, updatedTabs.splice(draggedIndex, 1)[0]);
-      setTabs(updatedTabs);
+      const tabId = event.target.dataset.tabId;
+      const tab = tabs.find((t) => t.id === parseInt(tabId));
+      if (tab) {
+        const index = tabs.indexOf(tab);
+        const draggedIndex = tabs.indexOf(draggedTab);
+        const updatedTabs = [...tabs];
+        updatedTabs.splice(index, 0, updatedTabs.splice(draggedIndex, 1)[0]);
+        setTabs(updatedTabs);
+      }
     }
   };
 
@@ -98,7 +104,11 @@ const TabBar = () => {
   };
 
   return (
-    <div className="tab-bar">
+    <div
+      className="tab-bar"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={handleDrop}
+    >
       {tabs.map((tab) => (
         <div
           key={tab.id}
@@ -107,42 +117,51 @@ const TabBar = () => {
           draggable
           onDragStart={() => handleDragStart(tab)}
           onDragEnd={handleDragEnd}
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => handleDrop(tab, event)}
-          onContextMenu={(event) => handleContextMenu(event, tab)}
+          data-tab-id={tab.id}
         >
           <span className="tab-title">{tab.title}</span>
-          <span className="tab-icon">{tab.icon}</span>
-          <button className="tab-close" onClick={() => handleTabClose(tab)}>
+          <button
+            className="tab-close"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleTabClose(tab);
+            }}
+          >
             ×
           </button>
+          <div
+            className="tab-context-menu"
+            onContextMenu={(e) => handleContextMenu(e, tab)}
+          >
+            <button onClick={() => handleAboutBlankCloaking(tab)}>
+              Toggle About:blank Cloaking
+            </button>
+            <input
+              type="text"
+              value={tabTitle}
+              onChange={(e) => setTabTitle(e.target.value)}
+              placeholder="Custom Tab Title"
+            />
+            <button onClick={() => handleCustomTabTitle(tab, tabTitle)}>
+              Set Custom Title
+            </button>
+            <input
+              type="text"
+              value={tabIcon}
+              onChange={(e) => setTabIcon(e.target.value)}
+              placeholder="Custom Tab Icon"
+            />
+            <button onClick={() => handleCustomTabIcon(tab, tabIcon)}>
+              Set Custom Icon
+            </button>
+          </div>
         </div>
       ))}
       <button className="new-tab" onClick={handleNewTab}>
         +
       </button>
-      <div
-        id="context-menu"
-        className="context-menu"
-        onClick={handleContextMenuClose}
-      >
-        <ul>
-          <li onClick={() => handleAboutBlankCloaking(activeTab)}>Toggle about:blank cloaking</li>
-          <li>
-            <input
-              type="text"
-              placeholder="Custom tab title"
-              onBlur={(event) => handleCustomTabTitle(activeTab, event.target.value)}
-            />
-          </li>
-          <li>
-            <input
-              type="text"
-              placeholder="Custom tab icon"
-              onBlur={(event) => handleCustomTabIcon(activeTab, event.target.value)}
-            />
-          </li>
-        </ul>
+      <div id="context-menu" className="context-menu">
+        <button onClick={handleContextMenuClose}>Close</button>
       </div>
     </div>
   );
