@@ -145,28 +145,28 @@ class JSRewriter {
     return js;
   }
 
-  rewriteEval(match) {
-    return match.slice(5, -1);
+  rewriteEval(js) {
+    return js.slice(5, -1);
   }
 
-  rewriteFunction(match) {
-    return match.slice(9, -1);
+  rewriteFunction(js) {
+    return js.slice(9, -1);
   }
 
-  rewriteDynamicImport(match) {
-    return match;
+  rewriteDynamicImport(js) {
+    return js;
   }
 
-  rewriteRequire(match) {
-    return match.slice(8, -1);
+  rewriteRequire(js) {
+    return js;
   }
 
   rewriteURL(url) {
     return url;
   }
 
-  rewriteHistoryState(match) {
-    return match;
+  rewriteHistoryState(state) {
+    return state;
   }
 }
 
@@ -212,17 +212,17 @@ class HTMLRewriter {
 // CSS Rewriter class
 class CSSRewriter {
   constructor() {
-    this.urlRegex = /url\(['"]([^'"]+)['"]\)/g;
+    this.urlRegex = /url\(\s*['"]([^'"]+)['"]\s*\)/g;
     this.importRegex = /@import\s+['"]([^'"]+)['"]/g;
   }
 
   rewriteCSS(css) {
     css = css.replace(this.urlRegex, (match, p1) => {
-      return `url('${this.rewriteURL(p1)}')`;
+      return `url(${this.rewriteURL(p1)})`;
     });
 
     css = css.replace(this.importRegex, (match, p1) => {
-      return `@import '${this.rewriteURL(p1)}'`;
+      return `@import ${this.rewriteURL(p1)}`;
     });
 
     return css;
@@ -235,77 +235,23 @@ class CSSRewriter {
 
 async function handleFetch(request) {
   const url = new URL(request.url);
-  const isProxyRequest = url.pathname.startsWith('/proxy/');
+  const cache = await getCache();
 
-  if (isProxyRequest) {
-    const proxiedRequest = await handleProxiedRequest(request);
-    return proxiedRequest;
+  if (request.method === 'GET') {
+    const cachedResponse = await cache.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
   }
 
-  const response = await getResponse(request);
-  if (response) {
+  try {
+    const response = await fetch(request);
+    const responseToCache = new Response(response.body, response);
+    await putResponse(request, responseToCache);
     return response;
-  }
-
-  try {
-    const fetchResponse = await fetch(request);
-    await putResponse(request, fetchResponse.clone());
-    return fetchResponse;
   } catch (error) {
-    console.error('Error handling fetch:', error);
-    return new Response('Error handling fetch', { status: 500 });
+    return new Response('Error', { status: 500 });
   }
-}
-
-async function handleProxiedRequest(request) {
-  const url = new URL(request.url);
-  const proxiedURL = url.pathname.slice(7);
-
-  const proxiedRequest = new Request(proxiedURL, {
-    method: request.method,
-    headers: request.headers,
-    body: request.body,
-  });
-
-  try {
-    const response = await fetch(proxiedRequest);
-    const rewrittenResponse = await rewriteResponse(response);
-    return rewrittenResponse;
-  } catch (error) {
-    console.error('Error handling proxied request:', error);
-    return new Response('Error handling proxied request', { status: 500 });
-  }
-}
-
-async function rewriteResponse(response) {
-  const contentType = response.headers.get('content-type');
-  if (contentType && contentType.includes('text/html')) {
-    const html = await response.text();
-    const rewriter = new HTMLRewriter();
-    const rewrittenHTML = rewriter.rewriteHTML(html);
-    return new Response(rewrittenHTML, {
-      status: response.status,
-      headers: response.headers,
-    });
-  } else if (contentType && contentType.includes('application/javascript')) {
-    const js = await response.text();
-    const rewriter = new JSRewriter();
-    const rewrittenJS = rewriter.rewriteJS(js);
-    return new Response(rewrittenJS, {
-      status: response.status,
-      headers: response.headers,
-    });
-  } else if (contentType && contentType.includes('text/css')) {
-    const css = await response.text();
-    const rewriter = new CSSRewriter();
-    const rewrittenCSS = rewriter.rewriteCSS(css);
-    return new Response(rewrittenCSS, {
-      status: response.status,
-      headers: response.headers,
-    });
-  }
-
-  return response;
 }
 
 function updateTab(tabId, url) {
@@ -320,4 +266,6 @@ function search(query, engine) {
   // Implement search functionality
 }
 
-generateSalt();
+function generateCacheKey(request) {
+  return request.url;
+}
