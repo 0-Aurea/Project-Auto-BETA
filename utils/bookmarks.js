@@ -1,5 +1,6 @@
 const { URL } = require('url');
 const { CacheUtils } = require('./cache');
+const { ValidationUtils } = require('./validation');
 
 /**
  * Bookmark utility class for managing bookmarks.
@@ -52,10 +53,12 @@ class BookmarkUtils {
   static async addBookmark(title, url) {
     await BookmarkUtils.openDB();
 
+    const validatedUrl = ValidationUtils.validateAndSanitizeUrl(url);
+
     return new Promise((resolve, reject) => {
       const transaction = BookmarkUtils.db.transaction(['bookmarks'], 'readwrite');
       const bookmarksStore = transaction.objectStore('bookmarks');
-      const request = bookmarksStore.add({ title, url });
+      const request = bookmarksStore.add({ title, url: validatedUrl });
 
       request.onsuccess = () => {
         resolve();
@@ -99,6 +102,8 @@ class BookmarkUtils {
   static async updateBookmark(id, title, url) {
     await BookmarkUtils.openDB();
 
+    const validatedUrl = ValidationUtils.validateAndSanitizeUrl(url);
+
     return new Promise((resolve, reject) => {
       const transaction = BookmarkUtils.db.transaction(['bookmarks'], 'readwrite');
       const bookmarksStore = transaction.objectStore('bookmarks');
@@ -108,9 +113,14 @@ class BookmarkUtils {
         const bookmark = event.target.result;
         if (bookmark) {
           bookmark.title = title;
-          bookmark.url = url;
-          bookmarksStore.put(bookmark);
-          resolve();
+          bookmark.url = validatedUrl;
+          const updateRequest = bookmarksStore.put(bookmark);
+          updateRequest.onsuccess = () => {
+            resolve();
+          };
+          updateRequest.onerror = (updateEvent) => {
+            reject(updateEvent.target.error);
+          };
         } else {
           reject(new Error(`Bookmark with ID ${id} not found`));
         }
@@ -146,4 +156,4 @@ class BookmarkUtils {
   }
 }
 
-module.exports = { BookmarkUtils };
+module.exports = BookmarkUtils;
