@@ -111,101 +111,145 @@ class JSRewriter {
     });
 
     js = js.replace(this.dynamicImportRegex, (match, p1) => {
-      return `import('${this.rewriteURL(p1)}')`;
+      return `import(${this.rewriteDynamicImport(p1)})`;
     });
 
     js = js.replace(this.workerRegex, (match, p1) => {
-      return `new Worker('${this.rewriteURL(p1)}')`;
+      return `new Worker(${this.rewriteWorker(p1)})`;
     });
 
     js = js.replace(this.importScriptsRegex, (match, p1) => {
-      return `importScripts('${this.rewriteURL(p1)}')`;
+      return `importScripts(${this.rewriteImportScripts(p1)})`;
     });
 
     js = js.replace(this.documentDomainRegex, (match, p1) => {
-      return `document.domain = '${this.rewriteURL(p1)}'`;
+      return `document.domain = ${this.rewriteDocumentDomain(p1)}`;
     });
 
     js = js.replace(this.windowLocationRegex, (match, p1) => {
-      return `window.location = '${this.rewriteURL(p1)}'`;
+      return `window.location = ${this.rewriteWindowLocation(p1)}`;
     });
 
     js = js.replace(this.windowOpenRegex, (match, p1) => {
-      return `window.open('${this.rewriteURL(p1)}')`;
+      return `window.open(${this.rewriteWindowOpen(p1)})`;
     });
 
     js = js.replace(this.historyPushStateRegex, (match) => {
-      return `history.pushState(${this.rewriteHistory(match)})`;
+      return `history.pushState(${this.rewriteHistoryPushState(match)})`;
     });
 
     js = js.replace(this.historyReplaceStateRegex, (match) => {
-      return `history.replaceState(${this.rewriteHistory(match)})`;
+      return `history.replaceState(${this.rewriteHistoryReplaceState(match)})`;
     });
 
     return js;
   }
 
-  rewriteEval(js) {
-    return js.slice(5, -1);
+  rewriteEval(evalStr) {
+    return evalStr.replace(/[^a-zA-Z0-9]/g, '');
   }
 
-  rewriteFunction(js) {
-    return js.slice(9, -1);
+  rewriteFunction(funcStr) {
+    return funcStr.replace(/[^a-zA-Z0-9]/g, '');
   }
 
-  rewriteDynamicImport(js) {
-    return js;
+  rewriteDynamicImport(importStr) {
+    return this.xorBase64Encode(importStr, generateSalt());
   }
 
-  rewriteRequire(js) {
-    return js;
+  rewriteRequire(requireStr) {
+    return this.xorBase64Encode(requireStr, generateSalt());
   }
 
-  rewriteURL(url) {
-    return url;
+  rewriteWorker(workerStr) {
+    return this.xorBase64Encode(workerStr, generateSalt());
   }
 
-  rewriteHistory(js) {
-    return js;
+  rewriteImportScripts(importScriptsStr) {
+    return this.xorBase64Encode(importScriptsStr, generateSalt());
+  }
+
+  rewriteDocumentDomain(domain) {
+    return domain;
+  }
+
+  rewriteWindowLocation(location) {
+    return location;
+  }
+
+  rewriteWindowOpen(openStr) {
+    return openStr;
+  }
+
+  rewriteHistoryPushState(pushStateStr) {
+    return pushStateStr;
+  }
+
+  rewriteHistoryReplaceState(replaceStateStr) {
+    return replaceStateStr;
+  }
+
+  xorBase64Encode(data, salt) {
+    return xorBase64Encode(data, salt);
   }
 }
 
 // HTML Rewriter class
 class HTMLRewriter {
   constructor() {
-    this.srcRegex = /src\s*=\s*['"]([^'"]+)['"]/g;
-    this.hrefRegex = /href\s*=\s*['"]([^'"]+)['"]/g;
-    this.actionRegex = /action\s*=\s*['"]([^'"]+)['"]/g;
-    this.srcsetRegex = /srcset\s*=\s*['"]([^'"]+)['"]/g;
-    this.dataRegex = /data\s*=\s*['"]([^'"]+)['"]/g;
+    this.srcRegex = /src=['"]([^'"]+)['"]/g;
+    this.hrefRegex = /href=['"]([^'"]+)['"]/g;
+    this.actionRegex = /action=['"]([^'"]+)['"]/g;
+    this.srcsetRegex = /srcset=['"]([^'"]+)['"]/g;
+    this.dataRegex = /data-([a-zA-Z0-9-]+)=['"]([^'"]+)['"]/g;
   }
 
   rewriteHTML(html) {
     html = html.replace(this.srcRegex, (match, p1) => {
-      return `src="${this.rewriteURL(p1)}"`;
+      return `src=${this.rewriteSrc(p1)}`;
     });
 
     html = html.replace(this.hrefRegex, (match, p1) => {
-      return `href="${this.rewriteURL(p1)}"`;
+      return `href=${this.rewriteHref(p1)}`;
     });
 
     html = html.replace(this.actionRegex, (match, p1) => {
-      return `action="${this.rewriteURL(p1)}"`;
+      return `action=${this.rewriteAction(p1)}`;
     });
 
     html = html.replace(this.srcsetRegex, (match, p1) => {
-      return `srcset="${this.rewriteURL(p1)}"`;
+      return `srcset=${this.rewriteSrcset(p1)}`;
     });
 
-    html = html.replace(this.dataRegex, (match, p1) => {
-      return `data="${this.rewriteURL(p1)}"`;
+    html = html.replace(this.dataRegex, (match, p1, p2) => {
+      return `data-${p1}=${this.rewriteData(p2)}`;
     });
 
     return html;
   }
 
-  rewriteURL(url) {
-    return url;
+  rewriteSrc(src) {
+    return this.xorBase64Encode(src, generateSalt());
+  }
+
+  rewriteHref(href) {
+    return this.xorBase64Encode(href, generateSalt());
+  }
+
+  rewriteAction(action) {
+    return this.xorBase64Encode(action, generateSalt());
+  }
+
+  rewriteSrcset(srcset) {
+    return this.xorBase64Encode(srcset, generateSalt());
+  }
+
+  rewriteData(data) {
+    return this.xorBase64Encode(data, generateSalt());
+  }
+
+  xorBase64Encode(data, salt) {
+    return xorBase64Encode(data, salt);
   }
 }
 
@@ -214,60 +258,113 @@ class CSSRewriter {
   constructor() {
     this.urlRegex = /url\(['"]([^'"]+)['"]\)/g;
     this.importRegex = /@import\s+['"]([^'"]+)['"]/g;
+    this.contentRegex = /content:\s*url\(['"]([^'"]+)['"]\)/g;
   }
 
   rewriteCSS(css) {
     css = css.replace(this.urlRegex, (match, p1) => {
-      return `url('${this.rewriteURL(p1)}')`;
+      return `url(${this.rewriteURL(p1)})`;
     });
 
     css = css.replace(this.importRegex, (match, p1) => {
-      return `@import '${this.rewriteURL(p1)}'`;
+      return `@import ${this.rewriteImport(p1)}`;
+    });
+
+    css = css.replace(this.contentRegex, (match, p1) => {
+      return `content: url(${this.rewriteContent(p1)})`;
     });
 
     return css;
   }
 
   rewriteURL(url) {
-    return url;
+    return this.xorBase64Encode(url, generateSalt());
+  }
+
+  rewriteImport(importStr) {
+    return this.xorBase64Encode(importStr, generateSalt());
+  }
+
+  rewriteContent(content) {
+    return this.xorBase64Encode(content, generateSalt());
+  }
+
+  xorBase64Encode(data, salt) {
+    return xorBase64Encode(data, salt);
   }
 }
 
+// handleFetch function
 async function handleFetch(request) {
   const url = new URL(request.url);
   const cache = await getCache();
+  const cachedResponse = await cache.match(request);
 
-  if (request.method === 'GET') {
-    const cachedResponse = await cache.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
+  if (cachedResponse) {
+    return cachedResponse;
   }
 
   try {
     const response = await fetch(request);
-    const responseToCache = new Response(response.body, response);
-    responseToCache.headers.set('Cache-Control', 'max-age=3600');
-    await putResponse(request, responseToCache);
-    return responseToCache;
+    const clonedResponse = response.clone();
+
+    if (response.ok) {
+      const responseBody = await response.text();
+      const rewrittenResponseBody = rewriteResponseBody(responseBody, request);
+      const rewrittenResponse = new Response(rewrittenResponseBody, response);
+
+      await putResponse(request, rewrittenResponse);
+
+      return rewrittenResponse;
+    } else {
+      return response;
+    }
   } catch (error) {
     console.error('Error handling fetch:', error);
-    return new Response('Error', { status: 500 });
+    return new Response('Error handling fetch', { status: 500 });
   }
 }
 
+// rewriteResponseBody function
+function rewriteResponseBody(responseBody, request) {
+  const contentType = request.headers.get('Content-Type');
+
+  if (contentType && contentType.includes('text/html')) {
+    const htmlRewriter = new HTMLRewriter();
+    return htmlRewriter.rewriteHTML(responseBody);
+  } else if (contentType && contentType.includes('application/javascript')) {
+    const jsRewriter = new JSRewriter();
+    return jsRewriter.rewriteJS(responseBody);
+  } else if (contentType && contentType.includes('text/css')) {
+    const cssRewriter = new CSSRewriter();
+    return cssRewriter.rewriteCSS(responseBody);
+  }
+
+  return responseBody;
+}
+
+// updateTab function
 function updateTab(tabId, url) {
   tabs[tabId] = url;
 }
 
+// closeTab function
 function closeTab(tabId) {
   delete tabs[tabId];
 }
 
+// search function
 function search(query, engine) {
-  // Implement search functionality
+  // TO DO: implement search functionality
 }
 
-function generateCacheKey(request) {
-  return request.url;
+// Generate a random salt and encode the request URL
+function encodeRequestURL(requestURL) {
+  const salt = generateSalt();
+  return xorBase64Encode(requestURL, salt);
+}
+
+// Decode the response URL
+function decodeResponseURL(encodedURL, salt) {
+  return xorBase64Decode(encodedURL, salt);
 }
