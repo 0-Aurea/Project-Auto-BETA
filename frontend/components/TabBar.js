@@ -120,13 +120,27 @@ const TabBar = () => {
           onClick={() => handleTabClick(tab)}
           onContextMenu={(event) => handleContextMenu(event, tab)}
         >
-          <span className="tab-title">{tab.title}</span>
-          <button className="tab-close" onClick={() => handleTabClose(tab)}>
-            ×
-          </button>
+          <input
+            type="text"
+            value={tab.title}
+            onChange={(event) => handleCustomTabTitle(tab, event.target.value)}
+            placeholder="Tab title"
+          />
+          <input
+            type="text"
+            value={tab.icon}
+            onChange={(event) => handleCustomTabIcon(tab, event.target.value)}
+            placeholder="Tab icon"
+          />
+          <span
+            className="close-button"
+            onClick={() => handleTabClose(tab)}
+          >
+            &#215;
+          </span>
         </div>
       ))}
-      <button className="new-tab" onClick={handleNewTab}>
+      <button className="new-tab-button" onClick={handleNewTab}>
         +
       </button>
       <div
@@ -135,25 +149,7 @@ const TabBar = () => {
         onClick={handleContextMenuClose}
       >
         <ul>
-          <li onClick={() => handleAboutBlankCloaking(activeTab)}>Toggle About:blank Cloaking</li>
-          <li>
-            <input
-              type="text"
-              value={tabTitle}
-              onChange={(event) => setTabTitle(event.target.value)}
-              placeholder="Custom Tab Title"
-            />
-            <button onClick={() => handleCustomTabTitle(activeTab, tabTitle)}>Apply</button>
-          </li>
-          <li>
-            <input
-              type="text"
-              value={tabIcon}
-              onChange={(event) => setTabIcon(event.target.value)}
-              placeholder="Custom Tab Icon"
-            />
-            <button onClick={() => handleCustomTabIcon(activeTab, tabIcon)}>Apply</button>
-          </li>
+          <li onClick={() => handleAboutBlankCloaking(activeTab)}>Toggle about:blank cloaking</li>
         </ul>
       </div>
     </div>
