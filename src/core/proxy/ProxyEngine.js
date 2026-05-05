@@ -89,107 +89,84 @@ class ProxyEngine {
     const { EncodingUtils } = await import('../utils/encodingUtils.js');
     const { URL_PREFIX, DEFAULT_ENCODING } = await import('../config/constants.js');
 
-    const url = new URL(request.url);
-    const encoding = request.headers['x-encoding'] || DEFAULT_ENCODING;
+    // Get the current salt
+    const salt = EncodingUtils.getSalt();
 
-    // Handle WebSocket upgrade
-    if (request.headers['upgrade'] === 'websocket') {
-      await this.handleWebSocketUpgrade(request, response, encoding);
-    } else {
-      // Proxy the request
-      const proxiedRequest = await this.createProxiedRequest(request, encoding);
-      const proxiedResponse = await this.forwardRequest(proxiedRequest);
+    // XOR and base64 encode the URL
+    const encodedUrl = EncodingUtils.encodeUrl(request.url, salt);
 
-      // Rewrite the response headers
-      response.writeHead(proxiedResponse.statusCode, proxiedResponse.headers);
-      response.end(await this.streamToBuffer(proxiedResponse));
-    }
-  }
+    // Rewrite the request URL
+    const rewrittenUrl = `${URL_PREFIX}/${encodedUrl}`;
 
-  /**
-   * Handle WebSocket upgrade.
-   * @param {object} request - The request object.
-   * @param {object} response - The response object.
-   * @param {string} encoding - The encoding to use.
-   */
-  async handleWebSocketUpgrade(request, response, encoding) {
-    const { WebSocket } = await import('ws');
-    const wss = new WebSocket.Server({ noServer: true });
-
-    wss.on('connection', (ws) => {
-      // Handle WebSocket connection
-      ws.on('message', (message) => {
-        // Forward the message to the proxied WebSocket
-        ws.send(message);
-      });
-
-      ws.on('close', () => {
-        // Handle WebSocket close
-      });
-    });
-
-    // Handle WebSocket upgrade request
-    response.writeHead(101, {
-      'Upgrade': 'websocket',
-      'Connection': 'Upgrade',
-    });
-    response.end();
-
-    // Create a new WebSocket connection to the proxied server
-    const proxiedWebSocket = new WebSocket(`ws://${request.headers['host']}${request.url}`);
-
-    // Forward messages between the client and proxied WebSocket
-    request.on('data', (data) => {
-      proxiedWebSocket.send(data);
-    });
-
-    proxiedWebSocket.on('message', (message) => {
-      response.write(message);
-    });
-  }
-
-  /**
-   * Create a proxied request.
-   * @param {object} request - The request object.
-   * @param {string} encoding - The encoding to use.
-   * @returns {object} The proxied request.
-   */
-  async createProxiedRequest(request, encoding) {
-    const { EncodingUtils } = await import('../utils/encodingUtils.js');
-    const { URL_PREFIX } = await import('../config/constants.js');
-
-    const url = new URL(request.url);
-    const proxiedUrl = `${URL_PREFIX}/${EncodingUtils.encode(url.href, encoding)}`;
-
+    // Proxy the request
     const proxiedRequest = {
-      method: request.method,
-      headers: request.headers,
-      url: proxiedUrl,
+      ...request,
+      url: rewrittenUrl,
     };
 
-    return proxiedRequest;
+    // Forward the request to the target server
+    const targetResponse = await this.forwardRequest(proxiedRequest);
+
+    // Rewrite the response headers
+    response.writeHead(targetResponse.statusCode, targetResponse.headers);
+
+    // Pipe the response body
+    targetResponse.pipe(response);
   }
 
   /**
-   * Forward a request.
+   * Forward the request to the target server.
    * @param {object} request - The request object.
    * @returns {object} The response object.
    */
   async forwardRequest(request) {
+    const { URL } = await import('url');
     const { http } = await import('http');
 
-    return new Promise((resolve, reject) => {
-      const req = http.request(request, (res) => {
-        resolve(res);
-      });
+    // Parse the target URL
+    const targetUrl = new URL(request.url);
 
-      req.on('error', (err) => {
-        reject(err);
-      });
-
-      req.end();
+    // Create a new request to the target server
+    const targetRequest = http.request({
+      hostname: targetUrl.hostname,
+      port: targetUrl.port,
+      path: targetUrl.pathname,
+      method: request.method,
+      headers: request.headers,
     });
+
+    // Pipe the request body
+    request.pipe(targetRequest);
+
+    // Handle the response
+    return new Promise((resolve, reject) => {
+      targetRequest.on('response', (response) => {
+        resolve(response);
+      });
+
+      targetRequest.on('error', (error) => {
+        reject(error);
+      });
+    });
+  }
+
+  /**
+   * XOR and base64 encode a URL.
+   * @param {string} url - The URL to encode.
+   * @param {Buffer} salt - The salt to use for encoding.
+   * @returns {string} The encoded URL.
+   */
+  async xorBase64EncodeUrl(url, salt) {
+    const { EncodingUtils } = await import('../utils/encodingUtils.js');
+
+    // XOR the URL with the salt
+    const xorBuffer = EncodingUtils.xorBuffer(Buffer.from(url), salt);
+
+    // Base64 encode the XOR buffer
+    const encodedBuffer = Buffer.from(xorBuffer.toString('base64'));
+
+    return encodedBuffer.toString();
   }
 }
 
-module.exports = ProxyEngine;
+export default ProxyEngine;
