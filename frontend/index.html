@@ -33,14 +33,10 @@
         />
       </div>
       <div class="tab-manager-container">
-        <TabManager 
-          onTabChange={handleTabChange} 
-          onNewTab={handleNewTab} 
-          onTabClose={handleTabClose}
-        />
+        <!-- TabManager component will be rendered here -->
       </div>
       <div class="settings-panel-container">
-        <SettingsPanel 
+        <ProxySettings 
           onCacheEnabledChange={handleCacheEnabledChange}
           onCacheTTLChange={handleCacheTTLChange}
           onPrefetchEnabledChange={handlePrefetchEnabledChange}
@@ -48,10 +44,7 @@
         />
       </div>
       <div class="proxy-history-container">
-        <ProxyHistory 
-          onHistoryChange={handleHistoryChange} 
-          onFilteredHistoryChange={handleFilteredHistoryChange}
-        />
+        <!-- ProxyHistory component will be rendered here -->
       </div>
       <div class="bookmarks-manager-container">
         <BookmarksManager 
