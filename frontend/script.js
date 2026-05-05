@@ -4,25 +4,32 @@ import { TabManager } from './components/TabManager.js';
 import { ProxyHistory } from './components/ProxyHistory.js';
 import { BookmarksManager } from './components/BookmarksManager.js';
 import { SearchBar } from './components/SearchBar.js';
+import { SettingsPanel } from './components/SettingsPanel.js';
 import './style.css';
 
 const settingsToggle = document.getElementById('settings-toggle');
 const bookmarksToggle = document.getElementById('bookmarks-toggle');
 const proxyHistoryToggle = document.getElementById('proxy-history-toggle');
 
-const settingsPanel = document.createElement('div');
-settingsPanel.classList.add('settings-panel');
-document.body.appendChild(settingsPanel);
+const settingsPanelElement = document.createElement('div');
+settingsPanelElement.classList.add('settings-panel');
+document.body.appendChild(settingsPanelElement);
 
-const bookmarksPanel = document.createElement('div');
-bookmarksPanel.classList.add('bookmarks-panel');
-document.body.appendChild(bookmarksPanel);
+const bookmarksPanelElement = document.createElement('div');
+bookmarksPanelElement.classList.add('bookmarks-panel');
+document.body.appendChild(bookmarksPanelElement);
 
-const proxyHistoryPanel = document.createElement('div');
-proxyHistoryPanel.classList.add('proxy-history-panel');
-document.body.appendChild(proxyHistoryPanel);
+const proxyHistoryPanelElement = document.createElement('div');
+proxyHistoryPanelElement.classList.add('proxy-history-panel');
+document.body.appendChild(proxyHistoryPanelElement);
 
 let webrtcProtector;
+
+const settingsPanel = new SettingsPanel(settingsPanelElement);
+const bookmarksManager = new BookmarksManager(bookmarksPanelElement);
+const proxyHistory = new ProxyHistory(proxyHistoryPanelElement);
+const tabManager = new TabManager();
+const searchBar = new SearchBar();
 
 register({
   onProxyRequest: (event) => {
@@ -34,27 +41,22 @@ register({
 });
 
 settingsToggle.addEventListener('click', () => {
-  settingsPanel.classList.toggle('open');
-  bookmarksPanel.classList.remove('open');
-  proxyHistoryPanel.classList.remove('open');
+  settingsPanelElement.classList.toggle('open');
+  bookmarksPanelElement.classList.remove('open');
+  proxyHistoryPanelElement.classList.remove('open');
 });
 
 bookmarksToggle.addEventListener('click', () => {
-  bookmarksPanel.classList.toggle('open');
-  settingsPanel.classList.remove('open');
-  proxyHistoryPanel.classList.remove('open');
+  bookmarksPanelElement.classList.toggle('open');
+  settingsPanelElement.classList.remove('open');
+  proxyHistoryPanelElement.classList.remove('open');
 });
 
 proxyHistoryToggle.addEventListener('click', () => {
-  proxyHistoryPanel.classList.toggle('open');
-  settingsPanel.classList.remove('open');
-  bookmarksPanel.classList.remove('open');
+  proxyHistoryPanelElement.classList.toggle('open');
+  settingsPanelElement.classList.remove('open');
+  bookmarksPanelElement.classList.remove('open');
 });
-
-const tabManager = new TabManager();
-const proxyHistory = new ProxyHistory();
-const bookmarksManager = new BookmarksManager();
-const searchBar = new SearchBar();
 
 searchBar.onSearchQuery = (query) => {
   tabManager.openNewTab(query);
@@ -72,32 +74,61 @@ bookmarksManager.onBookmarkClick = (bookmark) => {
   tabManager.openNewTab(bookmark.url);
 };
 
-settingsPanel.addEventListener('click', (event) => {
-  if (event.target.classList.contains('ad-block-toggle')) {
-    const adBlockEnabled = event.target.checked;
-    // Update ad block settings
-  }
-
-  if (event.target.classList.contains('cache-toggle')) {
-    const cacheEnabled = event.target.checked;
-    // Update cache settings
-  }
-
-  if (event.target.classList.contains('encoding-mode-select')) {
-    const encodingMode = event.target.value;
-    // Update encoding mode
-  }
-});
+settingsPanel.onSettingsChange = (settings) => {
+  // Update settings
+};
 
 document.addEventListener('DOMContentLoaded', () => {
   searchBar.render();
   tabManager.render();
   proxyHistory.render();
   bookmarksManager.render();
+  settingsPanel.render();
 });
 
 window.addEventListener('beforeunload', () => {
   tabManager.saveTabs();
   proxyHistory.saveHistory();
   bookmarksManager.saveBookmarks();
+});
+
+window.addEventListener('message', (event) => {
+  if (event.data.type === 'tab-update') {
+    tabManager.updateTab(event.data.tab);
+  } else if (event.data.type === 'search-query') {
+    searchBar.setSearchQuery(event.data.query);
+  }
+});
+
+tabManager.onTabClose = (tab) => {
+  searchBar.removeSearchQuery(tab.url);
+};
+
+tabManager.onTabUpdate = (tab) => {
+  searchBar.updateSearchQuery(tab.url);
+};
+
+searchBar.onSearchFocus = () => {
+  tabManager.updateActiveTab();
+};
+
+searchBar.onSearchBlur = () => {
+  tabManager.updateActiveTab();
+};
+
+settingsPanelElement.addEventListener('click', (event) => {
+  if (event.target.classList.contains('ad-block-toggle')) {
+    const adBlockEnabled = event.target.checked;
+    settingsPanel.updateSettings({ adBlockEnabled });
+  }
+
+  if (event.target.classList.contains('cache-toggle')) {
+    const cacheEnabled = event.target.checked;
+    settingsPanel.updateSettings({ cacheEnabled });
+  }
+
+  if (event.target.classList.contains('encoding-mode-select')) {
+    const encodingMode = event.target.value;
+    settingsPanel.updateSettings({ encodingMode });
+  }
 });
