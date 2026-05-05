@@ -81,101 +81,58 @@ bookmarksManager.onBookmarkClick = (bookmark) => {
 
 settingsPanel.onSettingsChange = (settings) => {
   proxySettings.updateSettings(settings);
-  tabManager.updateTabSettings(settings);
-  searchBar.updateSearchSettings(settings);
 };
 
-tabManager.onTabClose = (tab) => {
-  proxyHistory.removeHistoryEntry(tab.url);
-};
+// Initialize service worker
+navigator.serviceWorker.register('serviceWorker.js')
+  .then((registration) => {
+    console.log('Service worker registered:', registration);
+  })
+  .catch((error) => {
+    console.error('Service worker registration failed:', error);
+  });
 
+// Handle tab updates
 tabManager.onTabUpdate = (tab) => {
-  proxyHistory.updateHistoryEntry(tab.url);
+  // Update search bar query
+  searchBar.setSearchQuery(tab.url);
+
+  // Update proxy history
+  proxyHistory.addHistoryEntry(tab.url);
 };
 
-searchBar.onSearchEngineChange = (engine) => {
-  settingsPanel.updateSettings({ searchEngine: engine });
+// Handle search bar input
+searchBar.onSearchInput = (query) => {
+  // Update tab bar query
+  tabManager.updateTabQuery(query);
 };
 
-bookmarksManager.onBookmarkAdd = (bookmark) => {
-  proxyHistory.addHistoryEntry(bookmark.url);
-};
+// Initialize UI components
+settingsPanel.init();
+bookmarksManager.init();
+proxyHistory.init();
+tabManager.init();
+searchBar.init();
 
-bookmarksManager.onBookmarkRemove = (bookmark) => {
-  proxyHistory.removeHistoryEntry(bookmark.url);
-};
-
-window.addEventListener('beforeunload', () => {
-  tabManager.saveTabs();
-  bookmarksManager.saveBookmarks();
-  proxyHistory.saveHistory();
-});
-
-window.addEventListener('load', () => {
-  tabManager.restoreTabs();
-  bookmarksManager.restoreBookmarks();
-  proxyHistory.restoreHistory();
-});
-
-window.addEventListener('online', () => {
-  tabManager.updateTabStatus();
-});
-
-window.addEventListener('offline', () => {
-  tabManager.updateTabStatus();
-});
-
-searchBarElement.addEventListener('focus', () => {
-  searchBarElement.classList.add('focused');
-});
-
-searchBarElement.addEventListener('blur', () => {
-  searchBarElement.classList.remove('focused');
-});
-
-tabBarElement.addEventListener('dragover', (e) => {
-  e.preventDefault();
-});
-
-tabBarElement.addEventListener('drop', (e) => {
-  e.preventDefault();
-  const tab = tabManager.getTabAtPosition(e.clientX);
-  if (tab) {
-    tabManager.moveTab(tab, e.clientX);
+// Establish communication with service worker
+navigator.serviceWorker.addEventListener('message', (event) => {
+  if (event.data.type === 'proxyRequest') {
+    // Handle proxy request from service worker
+    const { url, headers } = event.data;
+    // Process proxy request...
+  } else if (event.data.type === 'proxyResponse') {
+    // Handle proxy response from service worker
+    const { url, headers, body } = event.data;
+    // Process proxy response...
   }
 });
 
-tabBarElement.addEventListener('dragstart', (e) => {
-  const tab = tabManager.getTabAtPosition(e.clientX);
-  if (tab) {
-    e.dataTransfer.setData('text', tab.id);
-  }
+// Handle errors
+window.addEventListener('error', (event) => {
+  console.error('Error occurred:', event.error);
 });
 
-tabBarElement.addEventListener('dragend', (e) => {
-  tabManager.updateTabPositions();
-});
-
-settingsPanelElement.addEventListener('animationstart', () => {
-  settingsPanelElement.classList.add('animating');
-});
-
-settingsPanelElement.addEventListener('animationend', () => {
-  settingsPanelElement.classList.remove('animating');
-});
-
-bookmarksPanelElement.addEventListener('animationstart', () => {
-  bookmarksPanelElement.classList.add('animating');
-});
-
-bookmarksPanelElement.addEventListener('animationend', () => {
-  bookmarksPanelElement.classList.remove('animating');
-});
-
-proxyHistoryPanelElement.addEventListener('animationstart', () => {
-  proxyHistoryPanelElement.classList.add('animating');
-});
-
-proxyHistoryPanelElement.addEventListener('animationend', () => {
-  proxyHistoryPanelElement.classList.remove('animating');
+// Cleanup on unload
+window.addEventListener('unload', () => {
+  // Clean up resources...
 });
