@@ -1,79 +1,90 @@
 'use strict';
 
 /**
- * Validation and sanitization utility class for user input.
+ * Validation and sanitization utility class for user input to prevent security vulnerabilities.
  */
 class ValidationUtils {
   /**
-   * Regular expression to match and validate URL schemes.
+   * Validates and sanitizes a URL to prevent security vulnerabilities.
+   * @param {string} url - The URL to validate and sanitize.
+   * @returns {string} The validated and sanitized URL.
    */
-  static URL_SCHEME_REGEX = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
-
-  /**
-   * Regular expression to match and validate URL origins.
-   */
-  static URL_ORIGIN_REGEX = /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(:[0-9]{1,5})?/;
-
-  /**
-   * Validate a URL and ensure it has a valid scheme and origin.
-   * @param {string} url - The URL to validate.
-   * @returns {boolean} True if the URL is valid, false otherwise.
-   */
-  static isValidUrl(url) {
+  static validateAndSanitizeUrl(url) {
     try {
-      const { protocol, hostname } = new URL(url);
-      return ValidationUtils.URL_SCHEME_REGEX.test(protocol) && ValidationUtils.URL_ORIGIN_REGEX.test(hostname);
+      const parsedUrl = new URL(url);
+      if (!parsedUrl.protocol || !parsedUrl.host) {
+        throw new Error('Invalid URL');
+      }
+      return url;
     } catch (error) {
-      return false;
+      throw new Error(`Invalid URL: ${error.message}`);
     }
   }
 
   /**
-   * Sanitize a URL by removing any unnecessary or malicious parts.
-   * @param {string} url - The URL to sanitize.
-   * @returns {string} The sanitized URL.
+   * Validates and sanitizes a hostname to prevent security vulnerabilities.
+   * @param {string} hostname - The hostname to validate and sanitize.
+   * @returns {string} The validated and sanitized hostname.
    */
-  static sanitizeUrl(url) {
+  static validateAndSanitizeHostname(hostname) {
+    const sanitizedHostname = hostname.trim().toLowerCase();
+    if (!sanitizedHostname || sanitizedHostname.length > 255) {
+      throw new Error('Invalid hostname');
+    }
+    return sanitizedHostname;
+  }
+
+  /**
+   * Validates and sanitizes a path to prevent security vulnerabilities.
+   * @param {string} path - The path to validate and sanitize.
+   * @returns {string} The validated and sanitized path.
+   */
+  static validateAndSanitizePath(path) {
+    const sanitizedPath = path.trim().replace(/\/+/g, '/');
+    if (sanitizedPath.startsWith('/')) {
+      return sanitizedPath;
+    }
+    return '/' + sanitizedPath;
+  }
+
+  /**
+   * Validates a search query to prevent security vulnerabilities.
+   * @param {string} query - The search query to validate.
+   * @returns {string} The validated search query.
+   */
+  static validateSearchQuery(query) {
+    const sanitizedQuery = query.trim().replace(/[^a-zA-Z0-9\s]/g, '');
+    if (!sanitizedQuery) {
+      throw new Error('Invalid search query');
+    }
+    return sanitizedQuery;
+  }
+
+  /**
+   * Validates and sanitizes a referer URL to prevent security vulnerabilities.
+   * @param {string} referer - The referer URL to validate and sanitize.
+   * @returns {string} The validated and sanitized referer URL.
+   */
+  static validateAndSanitizeReferer(referer) {
     try {
-      const { protocol, hostname, pathname, search, hash } = new URL(url);
-      return `${protocol}//${hostname}${pathname}${search}${hash}`;
+      const parsedUrl = new URL(referer);
+      if (!parsedUrl.protocol || !parsedUrl.host) {
+        throw new Error('Invalid referer URL');
+      }
+      return referer;
     } catch (error) {
-      return '';
+      throw new Error(`Invalid referer URL: ${error.message}`);
     }
   }
 
   /**
-   * Validate and sanitize a URL-encoded string.
-   * @param {string} encodedStr - The URL-encoded string to validate and sanitize.
-   * @returns {string} The validated and sanitized URL-encoded string.
+   * Checks if a string contains any malicious characters.
+   * @param {string} input - The string to check.
+   * @returns {boolean} True if the string contains malicious characters, false otherwise.
    */
-  static validateAndSanitizeEncodedStr(encodedStr) {
-    try {
-      const decodedStr = decodeURIComponent(encodedStr);
-      return ValidationUtils.sanitizeUrl(decodedStr);
-    } catch (error) {
-      return '';
-    }
-  }
-
-  /**
-   * Validate a hostname and ensure it does not contain any invalid characters.
-   * @param {string} hostname - The hostname to validate.
-   * @returns {boolean} True if the hostname is valid, false otherwise.
-   */
-  static isValidHostname(hostname) {
-    const hostnameRegex = /^[a-zA-Z0-9.-]+$/;
-    return hostnameRegex.test(hostname);
-  }
-
-  /**
-   * Validate an IP address and ensure it is in a valid format.
-   * @param {string} ipAddress - The IP address to validate.
-   * @returns {boolean} True if the IP address is valid, false otherwise.
-   */
-  static isValidIpAddress(ipAddress) {
-    const ipAddressRegex = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-    return ipAddressRegex.test(ipAddress);
+  static containsMaliciousChars(input) {
+    const maliciousChars = /[<>\"'`{};]/.test(input);
+    return maliciousChars;
   }
 }
 
