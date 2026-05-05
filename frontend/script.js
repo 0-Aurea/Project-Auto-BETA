@@ -84,27 +84,33 @@ settingsPanel.onSettingsChange = (settings) => {
 };
 
 tabManager.onTabClose = (tab) => {
-  proxyHistory.addEntry(tab.url);
+  proxyHistory.removeHistoryEntry(tab.url);
+  bookmarksManager.removeBookmark(tab.url);
 };
 
-tabBar.onTabReorder = (oldIndex, newIndex) => {
-  tabManager.reorderTabs(oldIndex, newIndex);
+tabManager.onTabUpdate = (tab) => {
+  proxyHistory.updateHistoryEntry(tab.url);
 };
 
 searchBar.onSearchError = (error) => {
   console.error('Search error:', error);
 };
 
-proxyHistory.onClearHistory = () => {
-  tabManager.clearTabs();
+bookmarksManager.onBookmarkAdd = (bookmark) => {
+  proxyHistory.addHistoryEntry({ url: bookmark.url, title: bookmark.title });
 };
 
-bookmarksManager.onBookmarkAdd = (bookmark) => {
-  console.log('Bookmark added:', bookmark);
+bookmarksManager.onBookmarkRemove = (bookmark) => {
+  proxyHistory.removeHistoryEntry(bookmark.url);
+};
+
+proxyHistory.onHistoryClear = () => {
+  bookmarksManager.clearBookmarks();
 };
 
 settingsPanel.onCacheClear = () => {
-  tabManager.clearCache();
+  proxyHistory.clearHistory();
+  bookmarksManager.clearBookmarks();
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -113,20 +119,20 @@ document.addEventListener('DOMContentLoaded', () => {
   bookmarksManager.init();
   proxyHistory.init();
   settingsPanel.init();
-  tabBar.init();
 });
 
 window.addEventListener('beforeunload', () => {
   tabManager.saveTabs();
+  searchBar.saveSearchQuery();
   bookmarksManager.saveBookmarks();
   proxyHistory.saveHistory();
   settingsPanel.saveSettings();
 });
 
 window.addEventListener('unload', () => {
-  tabManager.clearTabs();
+  tabManager.closeTabs();
+  searchBar.clearSearchQuery();
   bookmarksManager.clearBookmarks();
   proxyHistory.clearHistory();
   settingsPanel.clearSettings();
 });
-```
