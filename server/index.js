@@ -102,15 +102,16 @@ const handleProxyRequest = async (req, res) => {
       delete responseHeaders['strict-transport-security'];
       delete responseHeaders['x-frame-options'];
 
-      // Set proxied headers
-      responseHeaders['x-nexus-proxied-host'] = proxiedHost;
+      // Rewrite response headers
+      Object.keys(responseHeaders).forEach((header) => {
+        res.set(header, responseHeaders[header]);
+      });
 
-      // Recompress response if necessary
-      if (encoding === 'br' || encoding === 'gzip') {
-        res.set(responseHeaders);
+      res.status(targetRes.statusCode);
+
+      if (decompressedResponse) {
         targetRes.pipe(decompressedResponse).pipe(res);
       } else {
-        res.set(responseHeaders);
         targetRes.pipe(res);
       }
     });
@@ -120,14 +121,7 @@ const handleProxyRequest = async (req, res) => {
       res.status(500).send({ error: 'Internal Server Error' });
     });
 
-    req.headers['x-nexus-proxied-host'] = proxiedHost;
-    req.headers['x-nexus-target-host'] = targetHost;
-    req.headers['x-nexus-target-port'] = targetPort;
-
-    // Rewrite request headers
-    delete req.headers['host'];
-
-    targetReq.end(req.body);
+    req.pipe(targetReq);
   } catch (error) {
     logger.error('Error occurred during proxy request:', error);
     res.status(500).send({ error: 'Internal Server Error' });
@@ -136,52 +130,30 @@ const handleProxyRequest = async (req, res) => {
 
 app.all('*', handleProxyRequest);
 
-const handleWebSocketProxy = (req, socket, head) => {
-  try {
-    const { hostname: proxiedHost } = req.headers['x-nexus-proxied-host'];
-    if (!proxiedHost) {
-      socket.destroy();
-      return;
-    }
+server.listen(config.server.port, config.server.host, () => {
+  logger.info(`Server listening on ${config.server.host}:${config.server.port}`);
+});
 
-    const targetHost = req.headers['x-nexus-target-host'];
-    const targetPort = req.headers['x-nexus-target-port'];
-
-    if (!targetHost || !targetPort) {
-      socket.destroy();
-      return;
-    }
-
-    const targetUrl = `ws://${targetHost}:${targetPort}${req.url}`;
-
-    const targetSocket = new WebSocket(targetUrl);
-
-    targetSocket.on('open', () => {
-      socket.pipe(targetSocket);
-      targetSocket.pipe(socket);
-    });
-
-    targetSocket.on('error', (error) => {
-      logger.error('Error occurred during WebSocket proxy:', error);
-      socket.destroy();
-    });
-
-    socket.on('error', (error) => {
-      logger.error('Error occurred during WebSocket proxy:', error);
-      targetSocket.close();
-    });
-  } catch (error) {
-    logger.error('Error occurred during WebSocket proxy:', error);
-    socket.destroy();
-  }
-};
-
-server.on('upgrade', handleWebSocketProxy);
-
-const startServer = () => {
-  server.listen(config.server.port, config.server.host, () => {
-    logger.info(`Server listening on ${config.server.host}:${config.server.port}`);
+process.on('SIGINT', () => {
+  logger.info('Received SIGINT, shutting down...');
+  server.close(() => {
+    process.exit(0);
   });
-};
+});
 
-startServer();
+process.on('SIGTERM', () => {
+  logger.info('Received SIGTERM, shutting down...');
+  server.close(() => {
+    process.exit(0);
+  });
+});
+
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught exception:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled rejection:', reason);
+  process.exit(1);
+});
