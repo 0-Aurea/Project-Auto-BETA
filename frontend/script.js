@@ -81,58 +81,101 @@ bookmarksManager.onBookmarkClick = (bookmark) => {
 
 settingsPanel.onSettingsChange = (settings) => {
   proxySettings.updateSettings(settings);
+  tabManager.updateTabSettings(settings);
+  searchBar.updateSearchSettings(settings);
 };
 
 tabManager.onTabClose = (tab) => {
   proxyHistory.removeHistoryEntry(tab.url);
-  bookmarksManager.removeBookmark(tab.url);
 };
 
 tabManager.onTabUpdate = (tab) => {
   proxyHistory.updateHistoryEntry(tab.url);
 };
 
-searchBar.onSearchError = (error) => {
-  console.error('Search error:', error);
+searchBar.onSearchEngineChange = (engine) => {
+  settingsPanel.updateSettings({ searchEngine: engine });
 };
 
 bookmarksManager.onBookmarkAdd = (bookmark) => {
-  proxyHistory.addHistoryEntry({ url: bookmark.url, title: bookmark.title });
+  proxyHistory.addHistoryEntry(bookmark.url);
 };
 
 bookmarksManager.onBookmarkRemove = (bookmark) => {
   proxyHistory.removeHistoryEntry(bookmark.url);
 };
 
-proxyHistory.onHistoryClear = () => {
-  bookmarksManager.clearBookmarks();
-};
-
-settingsPanel.onCacheClear = () => {
-  proxyHistory.clearHistory();
-  bookmarksManager.clearBookmarks();
-};
-
-document.addEventListener('DOMContentLoaded', () => {
-  tabManager.init();
-  searchBar.init();
-  bookmarksManager.init();
-  proxyHistory.init();
-  settingsPanel.init();
-});
-
 window.addEventListener('beforeunload', () => {
   tabManager.saveTabs();
-  searchBar.saveSearchQuery();
   bookmarksManager.saveBookmarks();
   proxyHistory.saveHistory();
-  settingsPanel.saveSettings();
 });
 
-window.addEventListener('unload', () => {
-  tabManager.closeTabs();
-  searchBar.clearSearchQuery();
-  bookmarksManager.clearBookmarks();
-  proxyHistory.clearHistory();
-  settingsPanel.clearSettings();
+window.addEventListener('load', () => {
+  tabManager.restoreTabs();
+  bookmarksManager.restoreBookmarks();
+  proxyHistory.restoreHistory();
+});
+
+window.addEventListener('online', () => {
+  tabManager.updateTabStatus();
+});
+
+window.addEventListener('offline', () => {
+  tabManager.updateTabStatus();
+});
+
+searchBarElement.addEventListener('focus', () => {
+  searchBarElement.classList.add('focused');
+});
+
+searchBarElement.addEventListener('blur', () => {
+  searchBarElement.classList.remove('focused');
+});
+
+tabBarElement.addEventListener('dragover', (e) => {
+  e.preventDefault();
+});
+
+tabBarElement.addEventListener('drop', (e) => {
+  e.preventDefault();
+  const tab = tabManager.getTabAtPosition(e.clientX);
+  if (tab) {
+    tabManager.moveTab(tab, e.clientX);
+  }
+});
+
+tabBarElement.addEventListener('dragstart', (e) => {
+  const tab = tabManager.getTabAtPosition(e.clientX);
+  if (tab) {
+    e.dataTransfer.setData('text', tab.id);
+  }
+});
+
+tabBarElement.addEventListener('dragend', (e) => {
+  tabManager.updateTabPositions();
+});
+
+settingsPanelElement.addEventListener('animationstart', () => {
+  settingsPanelElement.classList.add('animating');
+});
+
+settingsPanelElement.addEventListener('animationend', () => {
+  settingsPanelElement.classList.remove('animating');
+});
+
+bookmarksPanelElement.addEventListener('animationstart', () => {
+  bookmarksPanelElement.classList.add('animating');
+});
+
+bookmarksPanelElement.addEventListener('animationend', () => {
+  bookmarksPanelElement.classList.remove('animating');
+});
+
+proxyHistoryPanelElement.addEventListener('animationstart', () => {
+  proxyHistoryPanelElement.classList.add('animating');
+});
+
+proxyHistoryPanelElement.addEventListener('animationend', () => {
+  proxyHistoryPanelElement.classList.remove('animating');
 });
