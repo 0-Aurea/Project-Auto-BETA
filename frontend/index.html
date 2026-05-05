@@ -20,43 +20,58 @@
     </header>
     <main>
       <div class="search-bar-container">
-        <SearchBar 
-          onSearchQuery={handleSearchQuery} 
-          onSearchEngineChange={handleSearchEngineChange}
-        />
+        <input type="search" id="search-input" placeholder="Search...">
+        <select id="search-engine-select">
+          <option value="google">Google</option>
+          <option value="bing">Bing</option>
+        </select>
+        <button id="search-button">Search</button>
       </div>
       <div class="tab-bar-container">
-        <TabBar 
-          onTabChange={handleTabChange} 
-          onNewTab={handleNewTab} 
-          onTabClose={handleTabClose}
-        />
+        <div class="tab-bar">
+          <div class="tab" id="tab-0">New Tab</div>
+        </div>
+        <button id="new-tab-button">New Tab</button>
       </div>
       <div class="tab-manager-container">
-        <TabManager 
-          onTabChange={handleTabChange} 
-          onNewTab={handleNewTab} 
-          onTabClose={handleTabClose}
-        />
+        <iframe src="about:blank" id="tab-iframe-0" frameborder="0"></iframe>
       </div>
       <div class="settings-panel-container">
-        <SettingsPanel 
-          onCacheEnabledChange={handleCacheEnabledChange}
-          onCacheTTLChange={handleCacheTTLChange}
-          onPrefetchEnabledChange={handlePrefetchEnabledChange}
-          onAdBlockEnabledChange={handleAdBlockEnabledChange}
-        />
+        <div class="settings-panel">
+          <h2>Settings</h2>
+          <label>
+            <input type="checkbox" id="cache-enabled-checkbox">
+            Cache Enabled
+          </label>
+          <label>
+            <input type="number" id="cache-ttl-input" value="3600">
+            Cache TTL (seconds)
+          </label>
+          <label>
+            <input type="checkbox" id="prefetch-enabled-checkbox">
+            Prefetch Enabled
+          </label>
+          <label>
+            <input type="checkbox" id="ad-block-enabled-checkbox">
+            Ad Block Enabled
+          </label>
+          <label>
+            <select id="encoding-mode-select">
+              <option value="xor-base64">XOR + Base64</option>
+            </select>
+            Encoding Mode
+          </label>
+        </div>
       </div>
       <div class="proxy-history-container">
-        <ProxyHistory 
-          onClearHistory={handleClearHistory} 
-          onRemoveEntry={handleRemoveEntry}
-        />
+        <h2>Proxy History</h2>
+        <ul id="proxy-history-list"></ul>
+        <button id="clear-history-button">Clear History</button>
       </div>
       <div class="bookmarks-manager-container">
-        <BookmarksManager 
-          onBookmarksChange={handleBookmarksChange}
-        />
+        <h2>Bookmarks</h2>
+        <ul id="bookmarks-list"></ul>
+        <button id="add-bookmark-button">Add Bookmark</button>
       </div>
     </main>
   </div>
