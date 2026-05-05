@@ -114,7 +114,6 @@ const SearchBar = () => {
           onFocus={handleFocus}
           onBlur={handleBlur}
           placeholder="Search"
-          className={focused ? 'focused' : ''}
         />
         {showSuggestions && (
           <ul className="suggestions">
@@ -125,28 +124,31 @@ const SearchBar = () => {
             ))}
           </ul>
         )}
-      </form>
-      <div className="search-history">
         {historyExpanded && (
-          <ul>
+          <ul className="search-history">
             {searchHistory.map((historyItem, index) => (
               <li key={index} onClick={() => handleHistoryClick(historyItem)}>
                 {historyItem}
               </li>
             ))}
+            <li onClick={handleHistoryClear}>Clear History</li>
           </ul>
         )}
-        <button onClick={handleHistoryToggle}>
-          {historyExpanded ? 'Hide History' : 'Show History'}
-        </button>
-        <button onClick={handleHistoryClear}>Clear History</button>
-      </div>
-      <div className="search-engine-selector">
-        <select value={searchEngine} onChange={handleSearchEngineChange}>
-          <option value="google">Google</option>
-          <option value="bing">Bing</option>
-        </select>
-      </div>
+        {!historyExpanded && (
+          <button className="history-toggle" onClick={handleHistoryToggle}>
+            History
+          </button>
+        )}
+        {historyExpanded && (
+          <button className="history-toggle" onClick={handleHistoryToggle}>
+            Hide History
+          </button>
+        )}
+      </form>
+      <select value={searchEngine} onChange={handleSearchEngineChange}>
+        <option value="google">Google</option>
+        <option value="bing">Bing</option>
+      </select>
     </div>
   );
 };
