@@ -85,57 +85,50 @@ settingsPanel.onSettingsChange = (settings) => {
   searchBar.updateSearchSettings(settings);
 };
 
-document.addEventListener('DOMContentLoaded', async () => {
-  await proxyHistory.init();
-  await bookmarksManager.init();
-  settingsPanel.init();
-});
-
 tabManager.onTabClose = (tab) => {
   proxyHistory.removeHistoryEntry(tab.url);
 };
 
-searchBar.onSearchSubmit = (query) => {
-  tabManager.openNewTab(query);
-  searchBar.clearSearchQuery();
+tabManager.onTabUpdate = (tab) => {
+  proxyHistory.updateHistoryEntry(tab.url);
 };
 
-tabBar.onTabReorder = (tabs) => {
-  tabManager.updateTabOrder(tabs);
+searchBar.onSearchError = (error) => {
+  console.error('Search error:', error);
+};
+
+bookmarksManager.onBookmarkAdd = (bookmark) => {
+  proxyHistory.addHistoryEntry(bookmark.url);
+};
+
+bookmarksManager.onBookmarkRemove = (bookmark) => {
+  proxyHistory.removeHistoryEntry(bookmark.url);
+};
+
+proxyHistory.onHistoryClear = () => {
+  tabManager.clearTabs();
 };
 
 settingsPanel.onCacheClear = () => {
   proxyHistory.clearHistory();
-  tabManager.clearTabCache();
+  tabManager.clearTabs();
 };
 
-bookmarksManager.onBookmarkRemove = (bookmark) => {
-  tabManager.removeTab(bookmark.url);
-};
+document.addEventListener('DOMContentLoaded', () => {
+  tabManager.init();
+  searchBar.init();
+  bookmarksManager.init();
+  proxyHistory.init();
+  settingsPanel.init();
+});
 
 window.addEventListener('beforeunload', () => {
-  proxyHistory.closeDB();
-  bookmarksManager.closeDB();
+  tabManager.saveTabs();
+  bookmarksManager.saveBookmarks();
+  proxyHistory.saveHistory();
+  settingsPanel.saveSettings();
 });
 
 window.addEventListener('unload', () => {
-  tabManager.clearTabCache();
-});
-
-settingsToggle.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    settingsPanelElement.classList.remove('open');
-  }
-});
-
-bookmarksToggle.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    bookmarksPanelElement.classList.remove('open');
-  }
-});
-
-proxyHistoryToggle.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    proxyHistoryPanelElement.classList.remove('open');
-  }
+  tabManager.closeTabs();
 });
