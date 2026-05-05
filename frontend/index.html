@@ -6,6 +6,9 @@
   <title>Nexus Proxy</title>
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="favicon.ico" type="image/x-icon">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=JetBrains+Mono:wght@100;200;300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <div class="app-container">
@@ -20,21 +23,23 @@
     </header>
     <main>
       <div class="search-bar-container">
-        <input type="search" id="search-input" placeholder="Search...">
-        <select id="search-engine-select">
-          <option value="google">Google</option>
-          <option value="bing">Bing</option>
-        </select>
-        <button id="search-button">Search</button>
+        <div class="search-bar">
+          <input type="search" id="search-input" placeholder="Search...">
+          <select id="search-engine-select">
+            <option value="google">Google</option>
+            <option value="bing">Bing</option>
+          </select>
+          <button id="search-button">Search</button>
+        </div>
       </div>
       <div class="tab-bar-container">
-        <div class="tab-bar">
+        <div class="tab-bar" id="tab-bar">
           <div class="tab" id="tab-0">New Tab</div>
         </div>
         <button id="new-tab-button">New Tab</button>
       </div>
       <div class="tab-manager-container">
-        <iframe src="about:blank" id="tab-iframe-0" frameborder="0"></iframe>
+        <div id="viewport"></div>
       </div>
       <div class="settings-panel-container">
         <div class="settings-panel">
@@ -75,6 +80,6 @@
       </div>
     </main>
   </div>
-  <script src="script.js"></script>
+  <script type="module" src="script.js"></script>
 </body>
 </html>
