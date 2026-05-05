@@ -72,6 +72,10 @@ const SettingsPanel = () => {
     setPrefetchEnabled(!prefetchEnabled);
   };
 
+  const handleAdBlockListChange = (event) => {
+    setAdBlockList(event.target.value.split(','));
+  };
+
   return (
     <div className={`settings-panel ${isOpen ? 'open' : ''}`}>
       <h2>Settings</h2>
@@ -89,13 +93,13 @@ const SettingsPanel = () => {
           Enable Cache
         </label>
         <input type="number" value={cacheTTL} onChange={handleCacheTTLChange} />
-        <span>Cache TTL (seconds)</span>
       </div>
       <div className="settings-group">
         <label>
           <input type="checkbox" checked={adBlockEnabled} onChange={handleAdBlockToggle} />
           Enable Ad Block
         </label>
+        <input type="text" value={adBlockList.join(',')} onChange={handleAdBlockListChange} placeholder="Enter ad block list (comma separated)" />
       </div>
       <div className="settings-group">
         <label>
@@ -103,6 +107,7 @@ const SettingsPanel = () => {
           Enable Prefetch
         </label>
       </div>
+      <button onClick={() => setIsOpen(!isOpen)}>Toggle Settings</button>
     </div>
   );
 };
