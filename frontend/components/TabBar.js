@@ -106,62 +106,55 @@ const TabBar = () => {
   return (
     <div
       className="tab-bar"
-      onDragOver={(e) => e.preventDefault()}
+      onDragOver={(event) => event.preventDefault()}
       onDrop={handleDrop}
     >
       {tabs.map((tab) => (
         <div
           key={tab.id}
           className={`tab ${activeTab?.id === tab.id ? 'active' : ''}`}
-          onClick={() => handleTabClick(tab)}
+          data-tab-id={tab.id}
           draggable
           onDragStart={() => handleDragStart(tab)}
           onDragEnd={handleDragEnd}
-          data-tab-id={tab.id}
+          onClick={() => handleTabClick(tab)}
+          onContextMenu={(event) => handleContextMenu(event, tab)}
         >
           <span className="tab-title">{tab.title}</span>
-          <button
-            className="tab-close"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleTabClose(tab);
-            }}
-          >
+          <button className="tab-close" onClick={() => handleTabClose(tab)}>
             ×
           </button>
-          <div
-            className="tab-context-menu"
-            onContextMenu={(e) => handleContextMenu(e, tab)}
-          >
-            <button onClick={() => handleAboutBlankCloaking(tab)}>
-              Toggle About:blank Cloaking
-            </button>
-            <input
-              type="text"
-              value={tabTitle}
-              onChange={(e) => setTabTitle(e.target.value)}
-              placeholder="Custom Tab Title"
-            />
-            <button onClick={() => handleCustomTabTitle(tab, tabTitle)}>
-              Set Custom Title
-            </button>
-            <input
-              type="text"
-              value={tabIcon}
-              onChange={(e) => setTabIcon(e.target.value)}
-              placeholder="Custom Tab Icon"
-            />
-            <button onClick={() => handleCustomTabIcon(tab, tabIcon)}>
-              Set Custom Icon
-            </button>
-          </div>
         </div>
       ))}
       <button className="new-tab" onClick={handleNewTab}>
         +
       </button>
-      <div id="context-menu" className="context-menu">
-        <button onClick={handleContextMenuClose}>Close</button>
+      <div
+        id="context-menu"
+        className="context-menu"
+        onClick={handleContextMenuClose}
+      >
+        <ul>
+          <li onClick={() => handleAboutBlankCloaking(activeTab)}>Toggle About:blank Cloaking</li>
+          <li>
+            <input
+              type="text"
+              value={tabTitle}
+              onChange={(event) => setTabTitle(event.target.value)}
+              placeholder="Custom Tab Title"
+            />
+            <button onClick={() => handleCustomTabTitle(activeTab, tabTitle)}>Apply</button>
+          </li>
+          <li>
+            <input
+              type="text"
+              value={tabIcon}
+              onChange={(event) => setTabIcon(event.target.value)}
+              placeholder="Custom Tab Icon"
+            />
+            <button onClick={() => handleCustomTabIcon(activeTab, tabIcon)}>Apply</button>
+          </li>
+        </ul>
       </div>
     </div>
   );
