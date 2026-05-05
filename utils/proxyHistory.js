@@ -96,7 +96,7 @@ class ProxyHistory {
           await store.put(entry);
           resolve();
         } else {
-          reject(new Error(`Entry not found: ${url}`));
+          reject(new Error(`Entry not found for URL: ${url}`));
         }
       };
       request.onerror = () => reject(request.error);
@@ -104,7 +104,7 @@ class ProxyHistory {
   }
 
   /**
-   * Deletes an entry from the proxy history.
+   * Deletes an entry from the proxy history by its URL.
    * @param {string} url - The URL of the page.
    */
   static async deleteEntry(url) {
@@ -119,7 +119,7 @@ class ProxyHistory {
   /**
    * Clears all entries from the proxy history.
    */
-  static async clearHistory() {
+  static async clearAllEntries() {
     const tx = ProxyHistory.db.transaction(ProxyHistory.OBJECT_STORE_NAME, 'readwrite');
     const store = tx.objectStore(ProxyHistory.OBJECT_STORE_NAME);
     await store.clear();
