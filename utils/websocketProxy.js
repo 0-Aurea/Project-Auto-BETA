@@ -76,6 +76,7 @@ class WebSocketProxyUtils {
 
         ws.on('close', () => {
           // Handle client WebSocket closure
+          PerformanceMonitor.endMetric('websocketMessageHandling');
         });
       } catch (error) {
         console.error('WebSocket proxy error:', error);
@@ -127,21 +128,12 @@ class WebSocketProxyUtils {
       // Remove sensitive headers
       const filteredHeaders = EncodingUtils.filterHeaders(headers, REQUEST_HEADER_REWRITE_LIST);
 
-      // Isolate cookies per proxied origin
-      const cookieHeader = headers['cookie'];
-      const isolatedCookieHeader = CookieScopingUtils.isolateCookies(cookieHeader, origin);
-
-      // Rewrite headers
+      // Add or rewrite specific headers
       const rewrittenHeaders = {
         ...filteredHeaders,
-        'Cookie': isolatedCookieHeader,
         'Origin': origin,
+        'Sec-WebSocket-Protocol': headers['sec-webSocket-protocol'],
       };
-
-      // Handle WebSocket subprotocols
-      if (headers['sec-websocket-protocol']) {
-        rewrittenHeaders['sec-websocket-protocol'] = headers['sec-websocket-protocol'];
-      }
 
       return rewrittenHeaders;
     } catch (error) {
