@@ -124,36 +124,5 @@ document.addEventListener('keydown', (event) => {
 
 tabManager.onTabChange = (tab) => {
   searchBar.setSearchQuery(tab.url);
+  historyManager.addHistoryEntry(tab.url);
 };
-
-tabManager.addEventListener('tab-change', (tab) => {
-  searchBar.setSearchQuery(tab.url);
-});
-
-searchBar.addEventListener('search', (query) => {
-  const encodedUrl = encode(query);
-  tabManager.navigate(encodedUrl);
-});
-
-settingsManager.addEventListener('settings-change', (settings) => {
-  localStorage.setItem('adBlockEnabled', settings.adBlockEnabled);
-  localStorage.setItem('darkModeEnabled', settings.darkModeEnabled);
-  localStorage.setItem('searchEngine', settings.searchEngine);
-});
-
-bookmarksManager.addEventListener('bookmark-add', (bookmark) => {
-  historyManager.addHistoryEntry(bookmark.url);
-});
-
-bookmarksManager.addEventListener('bookmark-remove', (bookmark) => {
-  historyManager.removeHistoryEntry(bookmark.url);
-});
-
-historyManager.addEventListener('history-clear', () => {
-  tabManager.clearTabs();
-});
-
-settingsManager.addEventListener('cache-clear', () => {
-  historyManager.clearHistory();
-  tabManager.clearTabs();
-});
