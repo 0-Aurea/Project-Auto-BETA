@@ -1,100 +1,128 @@
 const express = require('express');
 const http = require('http');
 const https = require('https');
+const WebSocket = require('ws');
 const url = require('url');
 const querystring = require('querystring');
-const cookieParser = require('cookie-parser');
 const config = require('./lib/config');
 const logger = require('./lib/logger');
-const cookieScoping = require('./lib/cookieScoping');
+const cookieParser = require('cookie-parser');
+const cookieScoping = require('./middleware/cookieScoping');
+const authMiddleware = require('./middleware/auth');
 
 const app = express();
 
-app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
-const allowlist = ['http://localhost:8080', 'http://localhost:8081'];
+app.use(authMiddleware);
+app.use(cookieScoping);
 
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  next();
-});
+const server = http.createServer(app);
 
-const handleProxyRequest = async (req, res) => {
+const wss = new WebSocket.Server({ server });
+
+app.get('/service/:encodedUrl', async (req, res) => {
   try {
-    const { encodedUrl } = req.params;
+    const encodedUrl = req.params.encodedUrl;
     const decodedUrl = Buffer.from(encodedUrl, 'base64').toString('utf8');
-    const targetUrl = url.parse(decodedUrl);
-
-    if (!targetUrl.protocol || !targetUrl.host) {
-      return res.status(400).send({ error: 'Bad Request' });
-    }
+    const targetUrl = new url.URL(decodedUrl);
 
     const options = {
       method: req.method,
       headers: req.headers,
-      path: targetUrl.path,
-      host: targetUrl.host,
+      followRedirect: true,
     };
 
-    const targetReq = http.request(options, (targetRes) => {
-      res.writeHead(targetRes.statusCode, targetRes.headers);
+    const proxyReq = await fetch(decodedUrl, options);
 
-      targetRes.on('data', (chunk) => {
-        res.write(chunk);
-      });
+    const responseHeaders = {};
+    for (const [key, value] of proxyReq.headers) {
+      if (key !== 'set-cookie') {
+        responseHeaders[key] = value;
+      } else {
+        const cookieValue = value;
+        const scopedCookieValue = cookieValue.replace(/domain=[^;]*/, '');
+        responseHeaders['set-cookie'] = scopedCookieValue;
+      }
+    }
 
-      targetRes.on('end', () => {
-        res.end();
-      });
-    });
+    if (proxyReq.status === 301 || proxyReq.status === 302) {
+      const locationHeader = proxyReq.headers['location'];
+      if (locationHeader.startsWith('http')) {
+        const absoluteUrl = new url.URL(locationHeader);
+        const relativeUrl = `${targetUrl.protocol}://${targetUrl.host}${absoluteUrl.pathname}`;
+        responseHeaders['location'] = relativeUrl;
+      }
+    }
 
-    targetReq.on('error', (error) => {
-      logger.error('Proxy error:', error);
-      res.status(500).send({ error: 'Internal Server Error' });
-    });
+    res.writeHead(proxyReq.status, responseHeaders);
 
-    req.on('data', (chunk) => {
-      targetReq.write(chunk);
-    });
-
-    req.on('end', () => {
-      targetReq.end();
-    });
+    const proxyRes = await proxyReq.arrayBuffer();
+    res.end(Buffer.from(proxyRes));
   } catch (error) {
     logger.error('Proxy error:', error);
     res.status(500).send({ error: 'Internal Server Error' });
   }
-};
-
-app.get('/service/:encodedUrl', handleProxyRequest);
-app.post('/service/:encodedUrl', handleProxyRequest);
-
-const httpServer = http.createServer(app);
-const httpsServer = https.createServer({
-  key: fs.readFileSync(config.server.https.key),
-  cert: fs.readFileSync(config.server.https.cert),
-}, app);
-
-httpServer.listen(config.server.port, () => {
-  logger.info(`HTTP server listening on port ${config.server.port}`);
 });
 
-httpsServer.listen(config.server.https.port, () => {
-  logger.info(`HTTPS server listening on port ${config.server.https.port}`);
+wss.on('connection', (ws, req) => {
+  try {
+    const { hostname: proxiedHost } = req.headers['x-nexus-proxied-host'];
+    const targetUrl = new url.URL(`ws://${proxiedHost}`);
+
+    const options = {
+      method: 'GET',
+      headers: req.headers,
+    };
+
+    const proxyWs = new WebSocket(targetUrl.href);
+
+    ws.on('message', (message) => {
+      proxyWs.send(message);
+    });
+
+    ws.on('close', () => {
+      proxyWs.close();
+    });
+
+    proxyWs.on('message', (message) => {
+      ws.send(message);
+    });
+
+    proxyWs.on('close', () => {
+      ws.close();
+    });
+
+    proxyWs.on('error', (error) => {
+      logger.error('WebSocket proxy error:', error);
+      ws.close();
+    });
+  } catch (error) {
+    logger.error('WebSocket connection error:', error);
+    ws.close();
+  }
+});
+
+server.listen(config.server.port, config.server.host, () => {
+  logger.info(`Server listening on ${config.server.host}:${config.server.port}`);
+});
+
+https.createServer({
+  key: fs.readFileSync(config.server.https.key),
+  cert: fs.readFileSync(config.server.https.cert),
+}, app).listen(config.server.https.port, () => {
+  logger.info(`HTTPS server listening on ${config.server.https.port}`);
 });
 
 process.on('SIGINT', () => {
-  httpServer.close();
-  httpsServer.close();
+  server.close();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  httpServer.close();
-  httpsServer.close();
+  server.close();
   process.exit(0);
 });
 
