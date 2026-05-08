@@ -9,6 +9,9 @@ export function encode(url) {
 }
 
 export function decode(encodedStr) {
+  if (!encodedStr.startsWith(PREFIX)) {
+    throw new Error('Invalid encoded string');
+  }
   const safeBase64String = encodedStr.substring(PREFIX.length);
   const paddedBase64String = safeBase64String + '='.repeat((4 - safeBase64String.length % 4) % 4);
   const uint8Array = new Uint8Array(atob(paddedBase64String.replace(/-/g, '+').replace(/_/g, '/')).split('').map(c => c.charCodeAt(0)));
