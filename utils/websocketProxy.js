@@ -128,11 +128,10 @@ class WebSocketProxyUtils {
       // Remove sensitive headers
       const filteredHeaders = EncodingUtils.filterHeaders(headers, REQUEST_HEADER_REWRITE_LIST);
 
-      // Add or rewrite specific headers
+      // Add or modify headers as needed
       const rewrittenHeaders = {
         ...filteredHeaders,
         'Origin': origin,
-        'Sec-WebSocket-Protocol': headers['sec-webSocket-protocol'],
       };
 
       return rewrittenHeaders;
