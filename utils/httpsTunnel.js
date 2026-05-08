@@ -124,29 +124,52 @@ class HTTSTunnelUtils {
           res.headers['x-frame-options'] = '';
           res.headers['access-control-allow-origin'] = '*';
           res.headers['access-control-allow-headers'] = 'Origin, X-Requested-With, Content-Type, Accept';
+
+          // Rewrite Location header
+          if (proxyRes.headers.location) {
+            const locationUrl = new URL(proxyRes.headers.location, targetUrl);
+            proxyRes.headers.location = locationUrl.href;
+          }
+
+          // Rewrite Set-Cookie header
+          if (proxyRes.headers['set-cookie']) {
+            const setCookieHeader = proxyRes.headers['set-cookie'];
+            const rewrittenSetCookieHeader = setCookieHeader.replace(/Domain=[^;]*/g, '');
+            proxyRes.headers['set-cookie'] = rewrittenSetCookieHeader;
+          }
         },
       });
-      proxyMiddleware(req, res);
-    } else if (pathname === '/websocket') {
-      // Handle WebSocket connection
-      const ws = new WebSocket(req, req.headers['sec-websocket-protocol']);
-      ws.on('message', (message) => {
-        console.log(`Received WebSocket message: ${message}`);
-        ws.send(`Server response: ${message}`);
-      });
 
-      ws.on('close', () => {
-        console.log('WebSocket connection closed');
-      });
-
-      ws.on('error', (error) => {
-        console.error('WebSocket error:', error);
+      await new Promise((resolve, reject) => {
+        proxyMiddleware(req, res, (error) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve();
+          }
+        });
       });
     } else {
-      // Handle other URLs
+      // Handle unknown requests
       res.writeHead(404);
       res.end('Not Found');
     }
+  }
+
+  /**
+   * Start the HTTPS tunnel server.
+   * @param {number} port - The port to listen on.
+   * @returns {Promise<void>}
+   */
+  static async startServer(port) {
+    await new Promise((resolve, reject) => {
+      HTTSTunnelUtils.httpsServer.listen(port, () => {
+        console.log(`HTTPS tunnel server listening on port ${port}`);
+        resolve();
+      }).on('error', (error) => {
+        reject(error);
+      });
+    });
   }
 }
 
