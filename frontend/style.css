@@ -239,7 +239,6 @@ iframe {
   height: 100%;
   background-color: rgba(0,0,0,0.5);
   backdrop-filter: blur(10px);
-  z-index: -1;
 }
 
 .settings-header, .history-header, .bookmarks-header {
@@ -255,59 +254,69 @@ iframe {
   margin: 0;
 }
 
-.settings-toggle, .history-toggle, .bookmarks-toggle {
+.settings-header button, .history-header button, .bookmarks-header button {
   background-color: var(--bg-surface);
+  border: none;
   padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  font-size: 1rem;
   cursor: pointer;
 }
 
-.settings-toggle:hover, .history-toggle:hover, .bookmarks-toggle:hover {
-  background-color: var(--bg-elevated);
+.settings-toggle, .history-toggle, .bookmarks-toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
 }
 
-.ad-block-toggle, .dark-mode-toggle {
-  display: flex;
-  align-items: center;
-  margin-bottom: var(--space-2);
+.settings-toggle input, .history-toggle input, .bookmarks-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
 }
 
-.ad-block-toggle label, .dark-mode-toggle label {
-  margin-left: var(--space-1);
-}
-
-.search-engine-select {
+.settings-toggle .slider, .history-toggle .slider, .bookmarks-toggle .slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background-color: var(--bg-surface);
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  transition: 0.2s;
 }
 
-.search-engine-select option {
+.settings-toggle .slider::before, .history-toggle .slider::before, .bookmarks-toggle .slider::before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 2px;
+  bottom: 2px;
   background-color: var(--bg-base);
-  color: var(--text-primary);
-  padding: var(--space-1);
-  border: none;
+  transition: 0.2s;
 }
 
-.search-engine-select option:hover {
-  background-color: var(--bg-elevated);
+.settings-toggle input:checked + .slider, .history-toggle input:checked + .slider, .bookmarks-toggle input:checked + .slider {
+  background-color: var(--accent);
 }
 
-.history-entry {
-  padding: var(--space-1) var(--space-2);
-  border-bottom: 1px solid var(--border);
+.settings-toggle input:checked + .slider::before, .history-toggle input:checked + .slider::before, .bookmarks-toggle input:checked + .slider::before {
+  transform: translateX(20px);
 }
 
-.history-entry:last-child {
-  border-bottom: none;
+.slider.round {
+  border-radius: 24px;
 }
 
-.history-entry .favicon {
-  width: 16px;
-  height: 16px;
-  margin-right: var(--space-1);
+.slider.round::before {
+  border-radius: 50%;
+}
+
+.bookmarks-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
 }
 
 .bookmark-card {
@@ -315,32 +324,60 @@ iframe {
   padding: var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  margin-bottom: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-.bookmark-card .favicon {
-  width: 24px;
-  height: 24px;
-  margin-right: var(--space-1);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  * {
-    transition: none !important;
-    animation: none !important;
-  }
-}
-
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: var(--border);
+.bookmark-card img {
+  width: 100%;
+  height: 100px;
+  object-fit: cover;
   border-radius: var(--radius-lg);
 }
 
-::-webkit-scrollbar-track {
-  background-color: transparent;
+.bookmark-card h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: var(--space-1) 0;
+}
+
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.history-item {
+  background-color: var(--bg-surface);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-1);
+}
+
+.history-item img {
+  width: 20px;
+  height: 20px;
+  margin-right: var(--space-1);
+}
+
+.history-item span {
+  font-size: 1rem;
+}
+
+.loading-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.2s ease;
+}
+
+.loading-bar.show {
+  transform: scaleX(1);
 }
