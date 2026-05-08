@@ -34,6 +34,8 @@ const proxyEngine = async (req, res) => {
         'User-Agent': 'NEXUS Proxy',
       },
       responseType: 'stream',
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
     };
 
     if (req.body) {
@@ -53,6 +55,11 @@ const proxyEngine = async (req, res) => {
           return cookie.replace(/Domain=[^;]*/, `Domain=${parsedTargetUrl.host}`);
         });
       }
+
+      // Add CORS headers
+      rewrittenHeaders['access-control-allow-origin'] = config.server.cors.origin;
+      rewrittenHeaders['access-control-allow-methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
+      rewrittenHeaders['access-control-allow-headers'] = 'Content-Type, Authorization';
 
       return rewrittenHeaders;
     };
