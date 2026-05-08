@@ -4,7 +4,8 @@
   "description": "A fully self-hosted web proxy",
   "main": "server/index.js",
   "scripts": {
-    "start": "node server/index.js",
+    "start": "nodemon server/index.js",
+    "dev": "nodemon server/index.js",
     "build": "npm run lint && npm run test && npm run build:sw && npm run build:server",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -50,7 +51,8 @@
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-standard": "^5.3.1",
     "jest": "^29.5.0",
-    "prettier": "^2.8.8"
+    "prettier": "^2.8.8",
+    "nodemon": "^2.0.16"
   },
   "repository": {
     "type": "git",
