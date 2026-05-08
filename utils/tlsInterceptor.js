@@ -1,7 +1,7 @@
 const { TLSSocket } = require('tls');
 const { Socket } = require('net');
 const { createServer } = require('https');
-const { Certificate } = require('crypto');
+const { Certificate, createDecipher, createCipher } = require('crypto');
 
 /**
  * TLS interceptor utility class for handling TLS interception and decryption.
@@ -19,6 +19,7 @@ class TLSInterceptor {
       this.handleSocket(socket);
     });
     this.sessionCache = new Map();
+    this.cipherCache = new Map();
   }
 
   /**
@@ -26,11 +27,17 @@ class TLSInterceptor {
    * @param {TLSSocket} socket - The TLS socket.
    */
   handleSocket(socket) {
-    socket.on('data', (data) => {
+    socket.on('data', async (data) => {
       try {
-        const decryptedData = this.decrypt(data, socket);
+        const { decryptedData, encryptedData } = await this.decrypt(data, socket);
         // Handle decrypted data
         globalThis.console.log(decryptedData.toString());
+
+        // Forward decrypted data to the target server
+        const targetSocket = this.getTargetSocket(socket);
+        if (targetSocket) {
+          targetSocket.write(encryptedData);
+        }
       } catch (error) {
         globalThis.console.error('Error decrypting data:', error);
       }
@@ -39,6 +46,7 @@ class TLSInterceptor {
     socket.on('end', () => {
       socket.destroy();
       this.sessionCache.delete(socket);
+      this.cipherCache.delete(socket);
     });
 
     socket.on('error', (error) => {
@@ -67,12 +75,72 @@ class TLSInterceptor {
    * Decrypts TLS data.
    * @param {Buffer} data - The data to decrypt.
    * @param {TLSSocket} socket - The TLS socket.
-   * @returns {Buffer} The decrypted data.
+   * @returns {Promise<{ decryptedData: Buffer, encryptedData: Buffer }>} 
+   *   The decrypted data and the encrypted data to forward to the target server.
    */
-  decrypt(data, socket) {
-    // Implement TLS decryption logic here
-    // For demonstration purposes, we'll just return the original data
-    return data;
+  async decrypt(data, socket) {
+    const cipher = this.getCipher(socket);
+    if (!cipher) {
+      throw new Error('No cipher found for socket');
+    }
+
+    const decipher = createDecipheriv(cipher, null, { authTagLength: 16 });
+    decipher.setAutoPadding(true);
+
+    const encryptedData = Buffer.alloc(data.length);
+    const decryptedData = Buffer.alloc(data.length);
+
+    let offset = 0;
+    while (offset < data.length) {
+      const chunkSize = Math.min(4096, data.length - offset);
+      const chunk = data.slice(offset, offset + chunkSize);
+      offset += chunkSize;
+
+      decipher.write(chunk, 'utf8', 'base64', (err, encrypted) => {
+        if (err) {
+          throw err;
+        }
+        encryptedData.write(encrypted, 'base64');
+      });
+
+      decipher.read((err, decrypted) => {
+        if (err) {
+          throw err;
+        }
+        decryptedData.write(decrypted, 'utf8');
+      });
+    }
+
+    return { decryptedData, encryptedData };
+  }
+
+  /**
+   * Gets the cipher for a socket.
+   * @param {TLSSocket} socket - The TLS socket.
+   * @returns {String} The cipher name.
+   */
+  getCipher(socket) {
+    const cipherName = socket.getCipher();
+    if (!cipherName) {
+      throw new Error('No cipher found for socket');
+    }
+
+    if (!this.cipherCache.has(socket)) {
+      this.cipherCache.set(socket, cipherName);
+    }
+
+    return cipherName;
+  }
+
+  /**
+   * Gets the target socket for a socket.
+   * @param {TLSSocket} socket - The TLS socket.
+   * @returns {Socket} The target socket.
+   */
+  getTargetSocket(socket) {
+    // Implement logic to get the target socket
+    // For demonstration purposes, we'll just return a dummy socket
+    return new Socket();
   }
 
   /**
