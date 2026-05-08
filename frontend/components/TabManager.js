@@ -131,6 +131,10 @@ export class TabManager {
             <form id="search-form">
               <input type="text" id="search-input" placeholder="Search or enter a URL...">
               <button id="search-button">Go</button>
+              <div id="engine-toggle">
+                <button class="engine-button" id="google-button">Google</button>
+                <button class="engine-button" id="bing-button">Bing</button>
+              </div>
             </form>
           </div>
         `;
@@ -143,21 +147,23 @@ export class TabManager {
   switchTab(tabId) {
     if (this.activeTabId === tabId) return;
 
-    const oldTab = this.tabs.find((tab) => tab.id === this.activeTabId);
+    const oldTabId = this.activeTabId;
+    this.activeTabId = tabId;
+
+    const oldTab = this.tabs.find((tab) => tab.id === oldTabId);
     if (oldTab) {
       oldTab.iframeEl.style.opacity = 0;
       oldTab.iframeEl.style.zIndex = -1;
-      const oldTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
+      const oldTabElement = this.tabBarElement.children[oldTabId];
       oldTabElement.classList.remove('active');
     }
 
     const newTab = this.tabs.find((tab) => tab.id === tabId);
     newTab.iframeEl.style.opacity = 1;
     newTab.iframeEl.style.zIndex = 1;
-    const newTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === tabId)];
+    const newTabElement = this.tabBarElement.children[tabId];
     newTabElement.classList.add('active');
 
-    this.activeTabId = tabId;
     this.onTabChange(tabId);
   }
 
@@ -181,6 +187,15 @@ export class TabManager {
   }
 
   renderTabBar() {
-    // Update tab bar UI
+    // Update tab bar styles and classes
+    const tabElements = this.tabBarElement.children;
+    for (let i = 0; i < tabElements.length; i++) {
+      const tabElement = tabElements[i];
+      if (i === this.activeTabId) {
+        tabElement.classList.add('active');
+      } else {
+        tabElement.classList.remove('active');
+      }
+    }
   }
 }
