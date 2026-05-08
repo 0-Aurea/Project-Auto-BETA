@@ -81,9 +81,10 @@ const proxyEngine = async (req, res) => {
       return rewrittenResponse;
     };
 
-    res.writeHead(response.status, rewriteHeaders(response.headers));
+    const rewrittenResponse = rewriteResponse(response);
+    res.writeHead(rewrittenResponse.status, rewriteHeaders(rewrittenResponse.headers));
 
-    response.data.pipe(res);
+    rewrittenResponse.data.pipe(res);
 
   } catch (error) {
     logger.error(`Proxy error: ${error.message}`);
@@ -113,16 +114,25 @@ const handleWebSocketProxy = (req, res, targetUrl) => {
     };
 
     res.writeHead(webSocketResponse.status, webSocketResponse.headers);
-    wsProxy.pipe(res).pipe(wsProxy);
-  });
-
-  wsProxy.on('error', (error) => {
-    logger.error(`WebSocket proxy error: ${error.message}`);
-    res.status(500).send({ error: 'Internal Server Error' });
-  });
-
-  req.on('close', () => {
-    wsProxy.close();
+    wsProxy.on('message', (message) => {
+      res.write(message);
+    });
+    wsProxy.on('data', (data) => {
+      res.write(data);
+    });
+    wsProxy.on('close', () => {
+      res.end();
+    });
+    wsProxy.on('error', (error) => {
+      logger.error(`WebSocket proxy error: ${error.message}`);
+      res.status(500).send({ error: 'Internal Server Error' });
+    });
+    req.on('close', () => {
+      wsProxy.close();
+    });
+    req.on('data', (data) => {
+      wsProxy.send(data);
+    });
   });
 };
 
