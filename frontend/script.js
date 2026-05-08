@@ -33,6 +33,7 @@ const tabManager = new TabManager({
     searchBar.setSearchQuery(tab.url);
   }
 });
+
 const searchBar = new SearchBar({ 
   onSearchQuery: (query) => {
     const encodedUrl = encode(query);
@@ -124,5 +125,16 @@ document.addEventListener('keydown', (event) => {
 
 tabManager.onTabChange = (tab) => {
   searchBar.setSearchQuery(tab.url);
-  historyManager.addHistoryEntry(tab.url);
 };
+tabManager.onTabChange = (tab) => {
+  if (tab) {
+    searchBar.setSearchQuery(tab.url);
+  }
+};
+
+searchBarElement.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const searchQuery = searchBar.getSearchQuery();
+  const encodedUrl = encode(searchQuery);
+  tabManager.navigate(encodedUrl);
+});
