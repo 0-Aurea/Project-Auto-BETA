@@ -25,6 +25,10 @@ const wss = new WebSocket.Server({ noServer: true });
 app.get('/service/:encodedUrl', async (req, res) => {
   try {
     const encodedUrl = req.params.encodedUrl;
+    if (!encodedUrl) {
+      return res.status(400).send({ error: 'Bad Request' });
+    }
+
     const decodedUrl = Buffer.from(encodedUrl, 'base64').toString('utf8');
     const targetUrl = new url.URL(decodedUrl);
 
@@ -35,6 +39,10 @@ app.get('/service/:encodedUrl', async (req, res) => {
     };
 
     const proxyReq = await fetch(decodedUrl, options);
+
+    if (!proxyReq.ok) {
+      return res.status(proxyReq.status).send({ error: 'Proxy error' });
+    }
 
     const responseHeaders = {};
     for (const [key, value] of proxyReq.headers) {
@@ -49,9 +57,15 @@ app.get('/service/:encodedUrl', async (req, res) => {
 
     if (proxyReq.status === 301 || proxyReq.status === 302) {
       const locationHeader = proxyReq.headers['location'];
-      if (locationHeader.startsWith('http')) {
+      if (locationHeader && locationHeader.startsWith('http')) {
         const absoluteUrl = new url.URL(locationHeader);
         const relativeUrl = `${targetUrl.protocol}://${targetUrl.host}${absoluteUrl.pathname}`;
+        if (absoluteUrl.search) {
+          relativeUrl.search = absoluteUrl.search;
+        }
+        if (absoluteUrl.hash) {
+          relativeUrl.hash = absoluteUrl.hash;
+        }
         responseHeaders['location'] = relativeUrl;
       }
     }
@@ -74,6 +88,10 @@ app.get('/service/:encodedUrl', async (req, res) => {
 wss.on('connection', (ws, req) => {
   try {
     const { hostname: proxiedHost } = req.headers['x-nexus-proxied-host'];
+    if (!proxiedHost) {
+      return ws.close();
+    }
+
     const targetUrl = new url.URL(`ws://${proxiedHost}`);
 
     const options = {
@@ -84,19 +102,37 @@ wss.on('connection', (ws, req) => {
     const proxyWs = new WebSocket(targetUrl.href);
 
     ws.on('message', (message) => {
-      proxyWs.send(message);
+      try {
+        proxyWs.send(message);
+      } catch (error) {
+        logger.error('WebSocket proxy error:', error);
+        ws.close();
+      }
     });
 
     ws.on('close', () => {
-      proxyWs.close();
+      try {
+        proxyWs.close();
+      } catch (error) {
+        logger.error('WebSocket close error:', error);
+      }
     });
 
     proxyWs.on('message', (message) => {
-      ws.send(message);
+      try {
+        ws.send(message);
+      } catch (error) {
+        logger.error('WebSocket proxy error:', error);
+        ws.close();
+      }
     });
 
     proxyWs.on('close', () => {
-      ws.close();
+      try {
+        ws.close();
+      } catch (error) {
+        logger.error('WebSocket close error:', error);
+      }
     });
 
     proxyWs.on('error', (error) => {
@@ -115,31 +151,41 @@ const httpsServer = https.createServer({
 }, app);
 
 httpsServer.on('upgrade', (req, socket, head) => {
-  wss.handleUpgrade(req, socket, head, (ws) => {
-    wss.emit('connection', ws, req);
-  });
+  try {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit('connection', ws, req);
+    });
+  } catch (error) {
+    logger.error('WebSocket upgrade error:', error);
+  }
 });
 
-httpsServer.listen(config.server.port, () => {
+httpsServer.listen(config.server.port, config.server.host, () => {
   logger.info(`Server listening on ${config.server.host}:${config.server.port}`);
 });
 
 process.on('SIGINT', () => {
-  httpsServer.close();
-  process.exit(0);
+  httpsServer.close(() => {
+    process.exit(0);
+  });
 });
 
 process.on('SIGTERM', () => {
-  httpsServer.close();
-  process.exit(0);
+  httpsServer.close(() => {
+    process.exit(0);
+  });
 });
 
 process.on('uncaughtException', (error) => {
   logger.error('Uncaught exception:', error);
-  process.exit(1);
+  httpsServer.close(() => {
+    process.exit(1);
+  });
 });
 
 process.on('unhandledRejection', (reason) => {
   logger.error('Unhandled rejection:', reason);
-  process.exit(1);
+  httpsServer.close(() => {
+    process.exit(1);
+  });
 });
