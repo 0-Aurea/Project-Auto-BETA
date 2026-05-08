@@ -1,1 +1,208 @@
+:root {
+  --bg-base: #0a0a0f;
+  --bg-surface: #111118;
+  --bg-elevated: #1a1a24;
+  --bg-overlay: #22222e;
+  --border: #2a2a38;
+  --border-bright: #3d3d54;
+  --accent: #6c63ff;
+  --accent-glow: rgba(108,99,255,0.25);
+  --accent-hover: #7c74ff;
+  --text-primary: #e8e8f0;
+  --text-secondary: #8888a8;
+  --text-muted: #55556a;
+  --success: #4ade80;
+  --warning: #facc15;
+  --danger: #f87171;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
+  --glow: 0 0 20px var(--accent-glow), 0 0 40px rgba(108,99,255,0.1);
+}
 
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  overscroll-behavior: none;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+header {
+  background-color: var(--bg-surface);
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+}
+
+header nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+}
+
+header nav ul li {
+  margin-right: var(--space-2);
+}
+
+header nav a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+header nav a:hover {
+  color: var(--text-primary);
+}
+
+#tab-bar {
+  background-color: var(--bg-elevated);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+}
+
+#tab-bar .tab {
+  background-color: var(--bg-surface);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-right: var(--space-1);
+  transition: background-color 0.2s ease;
+}
+
+#tab-bar .tab:hover {
+  background-color: var(--bg-elevated);
+}
+
+#tab-bar .tab.active {
+  border-bottom: 2px solid var(--accent);
+  background-color: var(--bg-surface);
+}
+
+#tab-bar .tab-close {
+  font-size: 0.8rem;
+  margin-left: var(--space-1);
+  cursor: pointer;
+}
+
+#search-bar {
+  background-color: var(--bg-overlay);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  backdrop-filter: blur(20px);
+}
+
+#search-bar input[type="search"] {
+  background-color: transparent;
+  border: none;
+  padding: var(--space-1) var(--space-2);
+  font-size: 1rem;
+  color: var(--text-primary);
+  width: 100%;
+}
+
+#search-bar button[type="submit"] {
+  background-color: var(--accent);
+  color: var(--text-primary);
+  border: none;
+  padding: var(--space-1) var(--space-2);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+#viewport {
+  flex-grow: 1;
+  overflow-y: auto;
+}
+
+iframe {
+  border: none;
+  width: 100%;
+  height: 100%;
+}
+
+.settings-panel, .bookmarks-panel, .proxy-history-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  background-color: var(--bg-surface);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  transform: translateX(100%);
+  transition: transform 0.2s ease;
+}
+
+.settings-panel.show, .bookmarks-panel.show, .proxy-history-panel.show {
+  transform: translateX(0);
+}
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-track {
+  background-color: var(--bg-base);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
