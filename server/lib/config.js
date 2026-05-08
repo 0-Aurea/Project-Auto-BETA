@@ -1,11 +1,11 @@
 const config = {
   // Server configuration
   server: {
-    port: 8080,
-    host: 'localhost',
+    port: process.env.NEXUS_SERVER_PORT || 8080,
+    host: process.env.NEXUS_SERVER_HOST || 'localhost',
     https: {
-      key: 'server.key',
-      cert: 'server.crt',
+      key: process.env.NEXUS_HTTPS_KEY || 'server.key',
+      cert: process.env.NEXUS_HTTPS_CERT || 'server.crt',
       allowHTTP2: true,
       tlsVersions: ['TLSv1', 'TLSv1.1', 'TLSv1.2', 'TLSv1.3'],
     },
@@ -15,7 +15,7 @@ const config = {
     },
     cors: {
       enabled: true,
-      origin: '*',
+      origin: process.env.NEXUS_CORS_ORIGIN || '*',
       methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
       preflightContinue: false,
       optionsSuccessStatus: 200,
