@@ -104,7 +104,7 @@ export class SearchBar {
   }
 
   handleInputChange(event) {
-    this.searchInput.value = event.target.value;
+    this.state.searchQuery = event.target.value;
   }
 
   handleFocus() {
@@ -119,13 +119,12 @@ export class SearchBar {
 
   handleSearchEngineChange(engine) {
     this.state.searchEngine = engine;
-    localStorage.setItem('searchEngine', this.state.searchEngine);
-    const options = this.searchEngineSelect.children;
-    for (const option of options) {
-      option.classList.remove('active');
-    }
-    options[engine === 'google' ? 0 : 1].classList.add('active');
-    this.searchEngineSelect.children[2].classList.remove(`active-google`, `active-bing`);
-    this.searchEngineSelect.children[2].classList.add(`active-${engine}`);
+    localStorage.setItem('searchEngine', engine);
+    const googleOption = this.searchEngineSelect.children[0];
+    const bingOption = this.searchEngineSelect.children[1];
+    googleOption.classList.toggle('active', engine === 'google');
+    bingOption.classList.toggle('active', engine === 'bing');
+    this.searchEngineSelect.children[2].classList.toggle('active-google', engine === 'google');
+    this.searchEngineSelect.children[2].classList.toggle('active-bing', engine === 'bing');
   }
 }
