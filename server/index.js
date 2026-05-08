@@ -60,6 +60,10 @@ app.use(cookieScoping);
 
 app.use(async (req, res, next) => {
   try {
+    if (req.url.startsWith('/service/')) {
+      return next();
+    }
+
     const targetUrl = req.query.url;
     if (!targetUrl) {
       return res.status(400).send({ error: 'Bad Request' });
@@ -117,6 +121,18 @@ const startServer = async () => {
 
     server.listen(port, host, () => {
       logger.info(`Server listening on ${host}:${port}`);
+
+      if (config.server.https) {
+        const httpsOptions = {
+          key: fs.readFileSync(config.server.https.key),
+          cert: fs.readFileSync(config.server.https.cert),
+        };
+
+        const httpsServer = https.createServer(httpsOptions, app);
+        httpsServer.listen(config.server.https.port || 8443, () => {
+          logger.info(`HTTPS server listening on ${host}:8443`);
+        });
+      }
     });
   } catch (error) {
     logger.error('Error starting server:', error);
@@ -124,4 +140,5 @@ const startServer = async () => {
   }
 };
 
+const fs = require('fs');
 startServer();
