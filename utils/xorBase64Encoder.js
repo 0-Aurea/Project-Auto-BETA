@@ -9,6 +9,7 @@ class XorBase64EncoderUtils {
 
   /**
    * Generate a new random salt.
+   * @returns {string} The new salt.
    */
   static generateNewSalt() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -17,6 +18,7 @@ class XorBase64EncoderUtils {
       salt += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     XorBase64EncoderUtils.salt = salt;
+    return salt;
   }
 
   /**
@@ -70,7 +72,10 @@ class XorBase64EncoderUtils {
    * @returns {string} The base64 URL decoded string.
    */
   static base64UrlDecode(str) {
-    str = str.replace(/-/g, '+').replace(/_/g, '/').replace(/=/g, '');
+    str = str.replace(/-/g, '+').replace(/_/g, '/');
+    while (str.length % 4 !== 0) {
+      str += '=';
+    }
     return atob(str);
   }
 
@@ -88,9 +93,5 @@ class XorBase64EncoderUtils {
 // Generate a new salt initially
 XorBase64EncoderUtils.generateNewSalt();
 
-// Example usage
-const originalText = 'Hello, World!';
-const encodedText = XorBase64EncoderUtils.encode(originalText);
-console.log(`Encoded text: ${encodedText}`);
-const decodedText = XorBase64EncoderUtils.decode(encodedText);
-console.log(`Decoded text: ${decodedText}`);
+module.exports = XorBase64EncoderUtils;
+```
