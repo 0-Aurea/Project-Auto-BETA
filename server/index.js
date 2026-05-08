@@ -31,11 +31,27 @@ const handleProxyRequest = async (req, res) => {
       method: req.method,
       headers: req.headers,
       url: targetUrl,
+      https: {
+        rejectUnauthorized: false,
+      },
     };
 
     const proxyReq = http.request(options, (proxyRes) => {
-      res.writeHead(proxyRes.statusCode, proxyRes.headers);
-      proxyRes.pipe(res);
+      const headers = { ...proxyRes.headers };
+      delete headers['set-cookie'];
+      delete headers['content-security-policy'];
+      delete headers['strict-transport-security'];
+      delete headers['x-frame-options'];
+
+      res.writeHead(proxyRes.statusCode, headers);
+
+      proxyRes.on('data', (chunk) => {
+        res.write(chunk);
+      });
+
+      proxyRes.on('end', () => {
+        res.end();
+      });
     });
 
     req.pipe(proxyReq);
@@ -67,15 +83,19 @@ httpsServer.listen(443, () => {
 });
 
 process.on('SIGINT', () => {
-  httpServer.close();
-  httpsServer.close();
-  process.exit(0);
+  httpServer.close(() => {
+    httpsServer.close(() => {
+      process.exit(0);
+    });
+  });
 });
 
 process.on('SIGTERM', () => {
-  httpServer.close();
-  httpsServer.close();
-  process.exit(0);
+  httpServer.close(() => {
+    httpsServer.close(() => {
+      process.exit(0);
+    });
+  });
 });
 
 process.on('uncaughtException', (error) => {
