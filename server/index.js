@@ -20,9 +20,7 @@ app.use(cookieParser());
 app.use(authMiddleware);
 app.use(cookieScoping);
 
-const server = http.createServer(app);
-
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ noServer: true });
 
 app.get('/service/:encodedUrl', async (req, res) => {
   try {
@@ -116,22 +114,22 @@ const httpsServer = https.createServer({
   cert: fs.readFileSync(config.server.https.cert),
 }, app);
 
-server.listen(config.server.port, config.server.host, () => {
+httpsServer.on('upgrade', (req, socket, head) => {
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    wss.emit('connection', ws, req);
+  });
+});
+
+httpsServer.listen(config.server.port, () => {
   logger.info(`Server listening on ${config.server.host}:${config.server.port}`);
 });
 
-httpsServer.listen(config.server.https.port, () => {
-  logger.info(`HTTPS server listening on ${config.server.https.port}`);
-});
-
 process.on('SIGINT', () => {
-  server.close();
   httpsServer.close();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  server.close();
   httpsServer.close();
   process.exit(0);
 });
