@@ -114,22 +114,20 @@ export class SearchBar {
     this.state.focused = true;
     this.searchInput.classList.add('focused');
     this.searchForm.classList.add('focused');
-    this.searchInput.style.boxShadow = '0 0 0 2px var(--accent)';
   }
 
   handleBlur() {
     this.state.focused = false;
     this.searchInput.classList.remove('focused');
     this.searchForm.classList.remove('focused');
-    this.searchInput.style.boxShadow = '';
   }
 
   handleSearchEngineChange(engine) {
     this.state.searchEngine = engine;
     localStorage.setItem('searchEngine', engine);
-    this.searchEngineSelect.children[0].classList.toggle('active', engine === 'google');
-    this.searchEngineSelect.children[1].classList.toggle('active', engine === 'bing');
-    this.slider.classList.toggle('active-google', engine === 'google');
-    this.slider.classList.toggle('active-bing', engine === 'bing');
+    this.searchEngineSelect.children[0].classList.toggle('active');
+    this.searchEngineSelect.children[1].classList.toggle('active');
+    this.slider.classList.toggle('active-google');
+    this.slider.classList.toggle('active-bing');
   }
 }
