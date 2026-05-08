@@ -12,6 +12,12 @@ const config = {
     auth: {
       secret: process.env.NEXUS_AUTH_SECRET || 'nexus-auth-secret',
       tokenExpiration: 60 * 60 * 24 * 7, // 1 week
+      cookieName: 'nexus-auth-token',
+      cookieOptions: {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'strict',
+      },
     },
     cors: {
       enabled: true,
@@ -19,6 +25,7 @@ const config = {
       methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
       preflightContinue: false,
       optionsSuccessStatus: 200,
+      allowedHeaders: 'Content-Type, Authorization',
     },
   },
   // Service Worker configuration
@@ -96,6 +103,16 @@ const config = {
         'style-src': ["'self'"],
       },
     },
+    helmet: {
+      enabled: true,
+      contentSecurityPolicy: {
+        directives: {
+          'default-src': ["'self'"],
+          'script-src': ["'self'"],
+          'style-src': ["'self'"],
+        },
+      },
+    },
   },
   // Performance configuration
   performance: {
@@ -113,6 +130,20 @@ const config = {
     level: process.env.NODE_ENV === 'development' ? 'debug' : 'info',
     format: 'json',
     output: 'console',
+    transports: [
+      {
+        type: 'console',
+      },
+      {
+        type: 'file',
+        filename: 'logs/error.log',
+        level: 'error',
+      },
+      {
+        type: 'file',
+        filename: 'logs/combined.log',
+      },
+    ],
   },
 };
 
