@@ -5,60 +5,61 @@ const url = require('url');
 const config = require('./lib/config');
 const logger = require('./lib/logger');
 const cookieParser = require('cookie-parser');
-const { authenticate } = require('./middleware/auth');
+const cors = require('cors');
 
 const app = express();
 
 app.use(cookieParser());
-app.use(express.json());
+app.use(cors({
+  origin: config.server.cors.origin,
+  credentials: true,
+}));
 
-const server = http.createServer(app);
-const httpsServer = https.createServer({
-  key: fs.readFileSync(config.server.https.key),
-  cert: fs.readFileSync(config.server.https.cert),
-}, app);
-
-app.use(async (req, res, next) => {
+const handleProxyRequest = async (req, res) => {
   try {
-    await authenticate(req, res, next);
+    const targetUrl = req.query.url;
+    if (!targetUrl) {
+      return res.status(400).send({ error: 'Bad Request' });
+    }
+
+    const parsedTargetUrl = url.parse(targetUrl);
+    if (!parsedTargetUrl.protocol || !parsedTargetUrl.host) {
+      return res.status(400).send({ error: 'Invalid target URL' });
+    }
+
+    const options = {
+      method: req.method,
+      headers: req.headers,
+      url: targetUrl,
+    };
+
+    const proxyReq = http.request(options, (proxyRes) => {
+      res.writeHead(proxyRes.statusCode, proxyRes.headers);
+      proxyRes.pipe(res);
+    });
+
+    req.pipe(proxyReq);
+
+    proxyReq.on('error', (error) => {
+      logger.error('Proxy request error:', error);
+      res.status(500).send({ error: 'Internal Server Error' });
+    });
   } catch (error) {
-    logger.error('Authentication error:', error);
+    logger.error('Error handling proxy request:', error);
     res.status(500).send({ error: 'Internal Server Error' });
   }
-});
+};
 
-app.get('/service/:encodedUrl', async (req, res) => {
-  const { encodedUrl } = req.params;
-  const targetUrl = Buffer.from(encodedUrl, 'base64').toString('utf8');
-  const parsedUrl = url.parse(targetUrl);
+app.get('/service/*', handleProxyRequest);
 
-  const options = {
-    hostname: parsedUrl.hostname,
-    port: parsedUrl.port,
-    path: parsedUrl.path,
-    method: req.method,
-    headers: req.headers,
-  };
+const httpServer = http.createServer(app);
+const httpsServer = https.createServer({
+  key: config.server.https.key,
+  cert: config.server.https.cert,
+}, app);
 
-  const targetReq = http.request(options, (targetRes) => {
-    res.writeHead(targetRes.statusCode, targetRes.headers);
-    targetRes.pipe(res);
-  });
-
-  req.pipe(targetReq);
-
-  targetReq.on('error', (error) => {
-    logger.error('Target request error:', error);
-    res.status(500).send({ error: 'Internal Server Error' });
-  });
-});
-
-app.use((req, res) => {
-  res.status(404).send({ error: 'Not Found' });
-});
-
-server.listen(config.server.port, config.server.host, () => {
-  logger.info(`Server listening on ${config.server.host}:${config.server.port}`);
+httpServer.listen(config.server.port, () => {
+  logger.info(`HTTP server listening on port ${config.server.port}`);
 });
 
 httpsServer.listen(443, () => {
@@ -66,7 +67,13 @@ httpsServer.listen(443, () => {
 });
 
 process.on('SIGINT', () => {
-  server.close();
+  httpServer.close();
+  httpsServer.close();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  httpServer.close();
   httpsServer.close();
   process.exit(0);
 });
