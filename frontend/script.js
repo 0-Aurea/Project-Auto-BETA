@@ -129,29 +129,43 @@ document.addEventListener('keydown', (event) => {
   }
 });
  
-// Add event listener to handle search form submission
-searchBarElement.addEventListener('submit', (event) => {
-  event.preventDefault();
-  const searchQuery = searchBar.getSearchQuery();
-  const encodedUrl = encode(searchQuery);
-  tabManager.navigate(encodedUrl);
-});
-
-// Initialize UI components
-document.addEventListener('DOMContentLoaded', () => {
-  // Hide loading indicator
-  const loadingIndicator = document.getElementById('loading-indicator');
-  if (loadingIndicator) {
-    loadingIndicator.classList.add('hidden');
+// Add event listener to handle mousedown event on document
+document.addEventListener('mousedown', (event) => {
+  // If the click is outside the panels, close them
+  if (!settingsPanelElement.contains(event.target) && !bookmarksPanelElement.contains(event.target) && !historyPanelElement.contains(event.target)) {
+    settingsPanelElement.classList.remove('open');
+    bookmarksPanelElement.classList.remove('open');
+    historyPanelElement.classList.remove('open');
   }
 });
 
-// Error handling for Service Worker registration
-navigator.serviceWorker.addEventListener('registrationerror', (event) => {
-  console.error('Service Worker registration error:', event.error);
+// Load settings from local storage
+settingsManager.loadSettings();
+
+// Initialize tab manager with saved tabs
+tabManager.loadTabs();
+
+// Update UI based on settings
+settingsManager.updateUI();
+
+// Update search bar based on current tab
+tabManager.onTabChange(tabManager.getActiveTab());
+
+// Handle service worker messages
+navigator.serviceWorker.addEventListener('message', (event) => {
+  if (event.data.type === 'tabUpdate') {
+    tabManager.updateTab(event.data.tab);
+  } else if (event.data.type === 'tabClose') {
+    tabManager.closeTab(event.data.tabId);
+  }
 });
 
-// Cleanup on unload
-window.addEventListener('unload', () => {
-  // Cleanup resources
+// Handle tab updates from service worker
+tabManager.onTabUpdate((tab) => {
+  navigator.serviceWorker.controller.postMessage({ type: 'tabUpdate', tab });
+});
+
+// Handle tab close from service worker
+tabManager.onTabClose((tab) => {
+  navigator.serviceWorker.controller.postMessage({ type: 'tabClose', tabId: tab.id });
 });
