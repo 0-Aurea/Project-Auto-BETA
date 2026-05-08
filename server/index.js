@@ -1,62 +1,20 @@
 const express = require('express');
-const https = require('https');
-const WebSocket = require('ws');
 const http = require('http');
-const fs = require('fs');
+const https = require('https');
+const url = require('url');
+const querystring = require('querystring');
+const cookieParser = require('cookie-parser');
 const config = require('./lib/config');
 const logger = require('./lib/logger');
-const cookieParser = require('cookie-parser');
 const cookieScoping = require('./lib/cookieScoping');
-const { URL } = require('url');
-const BrotliDecompress = require('brotli-decompress');
-const zlib = require('zlib');
-const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
 
-const server = https.createServer({
-  key: fs.readFileSync(config.server.https.key),
-  cert: fs.readFileSync(config.server.https.cert),
-}, app);
-
-const wss = new WebSocket.Server({ server });
-
-let connections = {};
-
-const handleWebSocket = (ws, req) => {
-  try {
-    const { hostname: proxiedHost } = req.headers['x-nexus-proxied-host'];
-    if (!proxiedHost) {
-      ws.close(1000, 'Bad Request');
-      return;
-    }
-
-    connections[proxiedHost] = ws;
-
-    ws.on('message', (message) => {
-      logger.info(`Received message from ${proxiedHost}: ${message}`);
-    });
-
-    ws.on('close', () => {
-      delete connections[proxiedHost];
-    });
-
-    ws.on('error', (error) => {
-      logger.error(`Error occurred for ${proxiedHost}: ${error}`);
-    });
-  } catch (error) {
-    logger.error('Error occurred during WebSocket connection:', error);
-    ws.close(1000, 'Internal Server Error');
-  }
-};
-
-wss.on('connection', handleWebSocket);
-
-app.use(cookieScoping);
+const allowlist = ['http://localhost:8080', 'http://localhost:8081'];
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -66,86 +24,78 @@ app.use((req, res, next) => {
 
 const handleProxyRequest = async (req, res) => {
   try {
-    const { hostname: proxiedHost } = req.headers['x-nexus-proxied-host'];
-    if (!proxiedHost) {
+    const { encodedUrl } = req.params;
+    const decodedUrl = Buffer.from(encodedUrl, 'base64').toString('utf8');
+    const targetUrl = url.parse(decodedUrl);
+
+    if (!targetUrl.protocol || !targetUrl.host) {
       return res.status(400).send({ error: 'Bad Request' });
     }
 
-    const targetHost = req.headers['x-nexus-target-host'];
-    const targetPort = req.headers['x-nexus-target-port'];
+    const options = {
+      method: req.method,
+      headers: req.headers,
+      path: targetUrl.path,
+      host: targetUrl.host,
+    };
 
-    if (!targetHost || !targetPort) {
-      return res.status(400).send({ error: 'Bad Request' });
-    }
+    const targetReq = http.request(options, (targetRes) => {
+      res.writeHead(targetRes.statusCode, targetRes.headers);
 
-    const targetUrl = `http://${targetHost}:${targetPort}${req.url}`;
-
-    const targetReq = http.request(targetUrl, (targetRes) => {
-      const encoding = targetRes.headers['content-encoding'];
-      let decompressedResponse;
-
-      if (encoding === 'br') {
-        decompressedResponse = new BrotliDecompress();
-      } else if (encoding === 'gzip') {
-        decompressedResponse = zlib.createGunzip();
-      }
-
-      const responseHeaders = { ...targetRes.headers };
-
-      // Remove hop-by-hop headers
-      ['connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailers', 'transfer-encoding', 'upgrade'].forEach((header) => {
-        delete responseHeaders[header];
+      targetRes.on('data', (chunk) => {
+        res.write(chunk);
       });
 
-      // Strip CSP, HSTS, X-Frame-Options
-      delete responseHeaders['content-security-policy'];
-      delete responseHeaders['strict-transport-security'];
-      delete responseHeaders['x-frame-options'];
-
-      // Rewrite response headers
-      Object.keys(responseHeaders).forEach((header) => {
-        res.set(header, responseHeaders[header]);
+      targetRes.on('end', () => {
+        res.end();
       });
-
-      res.status(targetRes.statusCode);
-
-      if (decompressedResponse) {
-        targetRes.pipe(decompressedResponse).pipe(res);
-      } else {
-        targetRes.pipe(res);
-      }
     });
 
     targetReq.on('error', (error) => {
-      logger.error('Error occurred during proxy request:', error);
+      logger.error('Proxy error:', error);
       res.status(500).send({ error: 'Internal Server Error' });
     });
 
-    req.pipe(targetReq);
+    req.on('data', (chunk) => {
+      targetReq.write(chunk);
+    });
+
+    req.on('end', () => {
+      targetReq.end();
+    });
   } catch (error) {
-    logger.error('Error occurred during proxy request:', error);
+    logger.error('Proxy error:', error);
     res.status(500).send({ error: 'Internal Server Error' });
   }
 };
 
-app.all('*', handleProxyRequest);
+app.get('/service/:encodedUrl', handleProxyRequest);
+app.post('/service/:encodedUrl', handleProxyRequest);
 
-server.listen(config.server.port, config.server.host, () => {
-  logger.info(`Server listening on ${config.server.host}:${config.server.port}`);
+const httpServer = http.createServer(app);
+const httpsServer = https.createServer({
+  key: fs.readFileSync(config.server.https.key),
+  cert: fs.readFileSync(config.server.https.cert),
+}, app);
+
+httpServer.listen(config.server.port, () => {
+  logger.info(`HTTP server listening on port ${config.server.port}`);
+});
+
+httpsServer.listen(config.server.https.port, () => {
+  logger.info(`HTTPS server listening on port ${config.server.https.port}`);
 });
 
 process.on('SIGINT', () => {
-  logger.info('Received SIGINT, shutting down...');
-  server.close(() => {
-    process.exit(0);
-  });
+  httpServer.close();
+  httpsServer.close();
+  process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  logger.info('Received SIGTERM, shutting down...');
-  server.close(() => {
-    process.exit(0);
-  });
+  httpServer.close();
+  httpsServer.close();
+  process.exit(0);
 });
 
 process.on('uncaughtException', (error) => {
