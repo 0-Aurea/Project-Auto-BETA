@@ -8,10 +8,16 @@ services:
       - "8080:8080"
     environment:
       - NODE_ENV=production
+      - LOG_LEVEL=info
+      - PROXY_TIMEOUT=30000
     volumes:
-      - ./nexus:/app
+      - ./frontend:/app/frontend
+      - ./server:/app/server
+      - ./package.json:/app/package.json
     depends_on:
       - nginx
+    networks:
+      - nexus-net
 
   nginx:
     image: nginx:latest
@@ -20,10 +26,12 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx:/etc/nginx/conf.d
+      - ./nginx.conf:/etc/nginx/conf.d/nginx.conf
       - ./logs:/var/log/nginx
       - ./certs:/etc/nginx/certs
     command: /bin/bash -c "nginx -t && nginx -g 'daemon off;'"
+    networks:
+      - nexus-net
 
 volumes:
   logs: {}
@@ -32,12 +40,3 @@ volumes:
 networks:
   nexus-net:
     driver: bridge
-
-services:
-  nexus:
-    networks:
-      - nexus-net
-
-  nginx:
-    networks:
-      - nexus-net
