@@ -104,10 +104,19 @@ export class TabManager {
     const oldTab = this.tabs.find((tab) => tab.id === this.activeTabId);
     if (oldTab) {
       oldTab.iframeEl.style.display = 'none';
+      oldTab.iframeEl.style.opacity = 0;
+      setTimeout(() => {
+        oldTab.iframeEl.style.zIndex = -1;
+      }, 150);
     }
 
     const newTab = this.tabs.find((tab) => tab.id === tabId);
+    newTab.iframeEl.style.zIndex = 1;
     newTab.iframeEl.style.display = 'block';
+    newTab.iframeEl.style.opacity = 0;
+    setTimeout(() => {
+      newTab.iframeEl.style.opacity = 1;
+    }, 50);
     if (!newTab.iframeEl.src) {
       newTab.iframeEl.src = encode(newTab.url);
     }
@@ -135,27 +144,16 @@ export class TabManager {
       tabElement.classList.remove('active');
     });
 
-    const activeTabElement = Array.from(this.tabBarElement.children).find((tabElement, index) => {
-      return this.tabs[index] && this.tabs[index].id === this.activeTabId;
-    });
-
-    if (activeTabElement) {
+    const activeTabIndex = this.tabs.findIndex((tab) => tab.id === this.activeTabId);
+    if (activeTabIndex !== -1) {
+      const activeTabElement = this.tabBarElement.children[activeTabIndex];
       activeTabElement.classList.add('active');
-      activeTabElement.style.transform = 'translateY(-2px)';
-      activeTabElement.style.zIndex = '1';
-      activeTabElement.style.boxShadow = '0 2px 0 var(--accent)';
+      activeTabElement.scrollIntoView({ behavior: 'smooth' });
     }
 
     const newTabButton = document.createElement('button');
     newTabButton.classList.add('new-tab-button');
     newTabButton.textContent = '+';
-    newTabButton.style.position = 'relative';
-    newTabButton.style.left = '8px';
-
     this.tabBarElement.appendChild(newTabButton);
-  }
-
-  init() {
-    this.addTab({ url: 'https://example.com' });
   }
 }
