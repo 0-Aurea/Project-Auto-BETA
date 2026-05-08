@@ -17,6 +17,12 @@ export class TabManager {
     this.addTab = this.addTab.bind(this);
     this.removeTab = this.removeTab.bind(this);
     this.switchTab = this.switchTab.bind(this);
+
+    this.tabBarElement.addEventListener('click', (e) => {
+      if (e.target.classList.contains('new-tab-button')) {
+        this.handleNewTab();
+      }
+    });
   }
 
   addTab({ url = '', title = '', favicon = '' }) {
@@ -39,17 +45,23 @@ export class TabManager {
       <button class="tab-close" aria-label="Close tab">×</button>
     `;
 
-    tabElement.addEventListener('click', () => this.handleTabClick(tabId));
+    tabElement.addEventListener('click', (e) => {
+      if (!e.target.classList.contains('tab-close')) {
+        this.handleTabClick(tabId);
+      }
+    });
+
     tabElement.querySelector('.tab-close').addEventListener('click', (e) => {
       e.stopPropagation();
       this.handleTabClose(tabId);
     });
 
     this.tabBarElement.appendChild(tabElement);
+
     tab.iframeEl = document.createElement('iframe');
     tab.iframeEl.src = url;
-    this.viewportElement.appendChild(tab.iframeEl);
     tab.iframeEl.style.display = 'none';
+    this.viewportElement.appendChild(tab.iframeEl);
 
     if (this.tabs.length === 1) {
       this.switchTab(tabId);
@@ -96,16 +108,12 @@ export class TabManager {
 
     const newTab = this.tabs.find((tab) => tab.id === tabId);
     newTab.iframeEl.style.display = 'block';
-    newTab.iframeEl.src = newTab.url;
+    if (!newTab.iframeEl.src) {
+      newTab.iframeEl.src = newTab.url;
+    }
 
     this.activeTabId = tabId;
     this.onTabChange(tabId);
-
-    const tabElements = this.tabBarElement.children;
-    for (let i = 0; i < tabElements.length; i++) {
-      tabElements[i].classList.remove('active');
-    }
-    tabElements[tabId].classList.add('active');
 
     this.renderTabBar();
   }
@@ -126,7 +134,7 @@ export class TabManager {
     const tabElements = this.tabBarElement.children;
     for (let i = 0; i < tabElements.length; i++) {
       tabElements[i].classList.remove('active');
-      if (i === this.tabs.findIndex((tab) => tab.id === this.activeTabId)) {
+      if (this.tabs.length > i && this.tabs[i].id === this.activeTabId) {
         tabElements[i].classList.add('active');
       }
     }
@@ -140,9 +148,9 @@ export class TabManager {
 
   navigate(tabId, url) {
     const tab = this.tabs.find((tab) => tab.id === tabId);
-    if (!tab) return;
-
-    tab.url = url;
-    tab.iframeEl.src = encode(url);
+    if (tab) {
+      tab.url = url;
+      tab.iframeEl.src = encode(url);
+    }
   }
 }
