@@ -152,11 +152,11 @@ const httpsServer = https.createServer({
 }, app);
 
 httpServer.listen(8080, () => {
-  logger.info('HTTP server listening on port 8080');
+  logger.info(`HTTP server listening on port 8080`);
 });
 
 httpsServer.listen(8443, () => {
-  logger.info('HTTPS server listening on port 8443');
+  logger.info(`HTTPS server listening on port 8443`);
 });
 
 httpServer.on('upgrade', (req, socket, head) => {
