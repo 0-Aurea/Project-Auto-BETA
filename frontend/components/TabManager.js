@@ -109,7 +109,7 @@ export class TabManager {
     const newTab = this.tabs.find((tab) => tab.id === tabId);
     newTab.iframeEl.style.display = 'block';
     if (!newTab.iframeEl.src) {
-      newTab.iframeEl.src = newTab.url;
+      newTab.iframeEl.src = encode(newTab.url);
     }
 
     this.activeTabId = tabId;
@@ -141,16 +141,9 @@ export class TabManager {
 
     const newTabButton = document.createElement('button');
     newTabButton.classList.add('new-tab-button');
-    newTabButton.textContent = '+ New Tab';
-    newTabButton.addEventListener('click', this.handleNewTab);
+    newTabButton.textContent = '+';
     this.tabBarElement.appendChild(newTabButton);
-  }
 
-  navigate(tabId, url) {
-    const tab = this.tabs.find((tab) => tab.id === tabId);
-    if (tab) {
-      tab.url = url;
-      tab.iframeEl.src = encode(url);
-    }
+    newTabButton.addEventListener('click', this.handleNewTab);
   }
 }
