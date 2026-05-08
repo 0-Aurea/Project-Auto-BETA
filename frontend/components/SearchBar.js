@@ -112,18 +112,24 @@ export class SearchBar {
   handleFocus() {
     this.state.focused = true;
     this.searchInput.classList.add('focused');
+    this.searchForm.classList.add('focused');
   }
 
   handleBlur() {
     this.state.focused = false;
     this.searchInput.classList.remove('focused');
+    this.searchForm.classList.remove('focused');
   }
 
   handleSearchEngineChange(engine) {
     this.state.searchEngine = engine;
-    this.searchEngineSelect.children[0].classList.toggle('active', engine === 'google');
-    this.searchEngineSelect.children[1].classList.toggle('active', engine === 'bing');
-    this.searchEngineSelect.classList.toggle('active-google', engine === 'google');
-    this.searchEngineSelect.classList.toggle('active-bing', engine === 'bing');
+    localStorage.setItem('searchEngine', engine);
+    const options = this.searchEngineSelect.children;
+    for (const option of options) {
+      option.classList.remove('active');
+    }
+    this.searchEngineSelect.children[engine === 'google' ? 0 : 1].classList.add('active');
+    this.searchEngineSelect.classList.remove(`active-google`, `active-bing`);
+    this.searchEngineSelect.classList.add(`active-${engine}`);
   }
 }
