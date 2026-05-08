@@ -38,11 +38,11 @@ class WebSocketProxyUtils {
         ws.on('message', async (message) => {
           PerformanceMonitor.startMetric('websocketMessageHandling');
           // Rewrite WebSocket message headers
-          const rewrittenMessage = await this.rewriteMessage(message, headers, origin);
+          const rewrittenMessage = await WebSocketProxyUtils.rewriteMessage(message, headers, origin);
 
           // Forward rewritten message to target WebSocket server
           const targetWs = new WebSocket(origin, {
-            headers: this.rewriteHeaders(headers, origin),
+            headers: WebSocketProxyUtils.rewriteHeaders(headers, origin),
           });
 
           targetWs.on('open', () => {
@@ -52,7 +52,7 @@ class WebSocketProxyUtils {
           targetWs.on('message', async (targetMessage) => {
             PerformanceMonitor.startMetric('websocketTargetMessageHandling');
             // Rewrite target WebSocket message headers
-            const rewrittenTargetMessage = await this.rewriteMessage(targetMessage, headers, origin);
+            const rewrittenTargetMessage = await WebSocketProxyUtils.rewriteMessage(targetMessage, headers, origin);
 
             // Forward rewritten target message to client WebSocket
             ws.send(rewrittenTargetMessage);
@@ -138,7 +138,7 @@ class WebSocketProxyUtils {
         'Origin': origin,
       };
 
-      // Handle subprotocols
+      // Handle WebSocket subprotocols
       if (headers['sec-websocket-protocol']) {
         rewrittenHeaders['sec-websocket-protocol'] = headers['sec-websocket-protocol'];
       }
@@ -148,6 +148,14 @@ class WebSocketProxyUtils {
       console.error('Error rewriting WebSocket headers:', error);
       return headers;
     }
+  }
+
+  /**
+   * Handle WebSocket errors.
+   * @param {Error} error - The WebSocket error.
+   */
+  static handleError(error) {
+    console.error('WebSocket error:', error);
   }
 }
 
