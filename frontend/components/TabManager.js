@@ -135,39 +135,40 @@ export class TabManager {
     this.renderTabBar();
   }
 
-  handleTabClose(tabId) {
-    this.removeTab(tabId);
+  switchTab(tabId) {
+    const tabIndex = this.tabs.findIndex((tab) => tab.id === tabId);
+    if (tabIndex === -1) return;
+
+    this.activeTabId = tabId;
+    this.tabs.forEach((tab, index) => {
+      tab.iframeEl.style.display = index === tabIndex ? 'block' : 'none';
+      tab.iframeEl.style.zIndex = index === tabIndex ? 1 : -1;
+      tab.iframeEl.style.opacity = index === tabIndex ? 1 : 0;
+    });
+
+    const tabElement = this.tabBarElement.children[tabIndex];
+    tabElement.classList.add('active');
+    this.tabs.forEach((tab, index) => {
+      if (index !== tabIndex) {
+        this.tabBarElement.children[index].classList.remove('active');
+      }
+    });
+
+    if (this.onTabChange) {
+      this.onTabChange(tabId);
+    }
   }
 
   handleTabClick(tabId) {
     this.switchTab(tabId);
   }
 
-  handleNewTab() {
-    this.addTab();
+  handleTabClose(tabId) {
+    this.removeTab(tabId);
   }
 
-  switchTab(tabId) {
-    if (this.activeTabId === tabId) return;
-
-    const oldTab = this.tabs.find((tab) => tab.id === this.activeTabId);
-    if (oldTab) {
-      oldTab.iframeEl.style.display = 'none';
-      oldTab.iframeEl.style.zIndex = -1;
-      oldTab.iframeEl.style.opacity = 0;
-      const oldTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
-      oldTabElement.classList.remove('active');
-    }
-
-    const newTab = this.tabs.find((tab) => tab.id === tabId);
-    newTab.iframeEl.style.display = 'block';
-    newTab.iframeEl.style.zIndex = 1;
-    newTab.iframeEl.style.opacity = 1;
-    const newTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === tabId)];
-    newTabElement.classList.add('active');
-
-    this.activeTabId = tabId;
-    this.onTabChange(tabId);
+  handleNewTab() {
+    this.addTab();
   }
 
   renderNewTabButton() {
@@ -179,24 +180,22 @@ export class TabManager {
 
   renderTabBar() {
     // Add active class to active tab
-    const activeTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
-    if (activeTabElement) {
-      activeTabElement.classList.add('active');
-    }
-
-    // Update tab titles and favicons
     this.tabs.forEach((tab, index) => {
       const tabElement = this.tabBarElement.children[index];
-      tabElement.querySelector('.tab-title').textContent = tab.title;
-      tabElement.querySelector('.tab-favicon').src = tab.favicon;
+      if (tab.id === this.activeTabId) {
+        tabElement.classList.add('active');
+      } else {
+        tabElement.classList.remove('active');
+      }
     });
   }
 
   navigateTab(tabId, url) {
-    const tab = this.tabs.find((tab) => tab.id === tabId);
-    if (tab) {
-      tab.url = url;
-      tab.iframeEl.src = url;
-    }
+    const tabIndex = this.tabs.findIndex((tab) => tab.id === tabId);
+    if (tabIndex === -1) return;
+
+    const tab = this.tabs[tabIndex];
+    tab.url = url;
+    tab.iframeEl.src = url;
   }
 }
