@@ -25,6 +25,7 @@ export class TabManager {
     });
 
     this.renderNewTabButton = this.renderNewTabButton.bind(this);
+    this.renderNewTabButton();
   }
 
   addTab({ url = '', title = '', favicon = '' }) {
@@ -73,7 +74,6 @@ export class TabManager {
     }
 
     this.renderTabBar();
-    this.renderNewTabButton();
   }
 
   removeTab(tabId) {
@@ -144,26 +144,29 @@ export class TabManager {
     this.addTab({ url: '', title: '', favicon: '' });
   }
 
+  renderTabBar() {
+    const tabElements = this.tabBarElement.children;
+    for (let i = 0; i < tabElements.length; i++) {
+      const tabElement = tabElements[i];
+      if (i < this.tabs.length) {
+        const tab = this.tabs[i];
+        tabElement.querySelector('.tab-favicon').src = tab.favicon;
+        tabElement.querySelector('.tab-title').textContent = tab.title;
+        if (tab.id === this.activeTabId) {
+          tabElement.classList.add('active');
+        } else {
+          tabElement.classList.remove('active');
+        }
+      } else {
+        tabElement.remove();
+      }
+    }
+  }
+
   renderNewTabButton() {
     const newTabButton = document.createElement('button');
     newTabButton.classList.add('new-tab-button');
     newTabButton.textContent = '+';
     this.tabBarElement.appendChild(newTabButton);
-  }
-
-  renderTabBar() {
-    const tabElements = this.tabBarElement.children;
-    for (let i = 0; i < tabElements.length; i++) {
-      const tabElement = tabElements[i];
-      if (tabElement.classList.contains('tab')) {
-        if (this.tabs.find((tab) => tab.id === this.activeTabId)) {
-          tabElement.classList.remove('active');
-        }
-        const tabId = this.tabs.findIndex((tab) => tab.id === this.activeTabId);
-        if (i === tabId) {
-          tabElement.classList.add('active');
-        }
-      }
-    }
   }
 }
