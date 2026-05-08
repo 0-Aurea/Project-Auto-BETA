@@ -141,17 +141,21 @@ export class TabManager {
 
     if (activeTabElement) {
       activeTabElement.classList.add('active');
+      activeTabElement.style.transform = 'translateY(-2px)';
+      activeTabElement.style.zIndex = '1';
+      activeTabElement.style.boxShadow = '0 2px 0 var(--accent)';
     }
 
     const newTabButton = document.createElement('button');
     newTabButton.classList.add('new-tab-button');
     newTabButton.textContent = '+';
-    this.tabBarElement.appendChild(newTabButton);
+    newTabButton.style.position = 'relative';
+    newTabButton.style.left = '8px';
 
-    newTabButton.addEventListener('click', this.handleNewTab);
+    this.tabBarElement.appendChild(newTabButton);
   }
 
   init() {
-    this.handleNewTab();
+    this.addTab({ url: 'https://example.com' });
   }
 }
