@@ -131,12 +131,16 @@ export class TabManager {
   }
 
   renderTabBar() {
-    const tabElements = this.tabBarElement.children;
-    for (let i = 0; i < tabElements.length; i++) {
-      tabElements[i].classList.remove('active');
-      if (this.tabs.length > i && this.tabs[i].id === this.activeTabId) {
-        tabElements[i].classList.add('active');
-      }
+    Array.from(this.tabBarElement.children).forEach((tabElement) => {
+      tabElement.classList.remove('active');
+    });
+
+    const activeTabElement = Array.from(this.tabBarElement.children).find((tabElement, index) => {
+      return this.tabs[index] && this.tabs[index].id === this.activeTabId;
+    });
+
+    if (activeTabElement) {
+      activeTabElement.classList.add('active');
     }
 
     const newTabButton = document.createElement('button');
@@ -145,5 +149,9 @@ export class TabManager {
     this.tabBarElement.appendChild(newTabButton);
 
     newTabButton.addEventListener('click', this.handleNewTab);
+  }
+
+  init() {
+    this.handleNewTab();
   }
 }
