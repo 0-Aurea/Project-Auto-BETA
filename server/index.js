@@ -4,6 +4,7 @@ const https = require('https');
 const WebSocket = require('ws');
 const axios = require('axios');
 const url = require('url');
+const fs = require('fs');
 const config = require('./lib/config');
 const logger = require('./lib/logger');
 const cookieScoping = require('./lib/cookieScoping');
@@ -33,10 +34,21 @@ const rewriteResponseHeaders = (headers, proxiedHost) => {
         return cookie.replace(/path=\//, `path=/; domain=${proxiedHost}`);
       });
       modifiedHeaders['set-cookie'] = scopedCookies;
+    } else if (header === 'location') {
+      const location = headers[header];
+      const parsedLocation = url.parse(location);
+      if (parsedLocation.host) {
+        modifiedHeaders[header] = location.replace(parsedLocation.host, proxiedHost);
+      } else {
+        modifiedHeaders[header] = location;
+      }
     } else {
       modifiedHeaders[header] = headers[header];
     }
   });
+
+  modifiedHeaders['access-control-allow-origin'] = '*';
+  modifiedHeaders['access-control-allow-headers'] = 'Origin, X-Requested-With, Content-Type, Accept';
 
   return modifiedHeaders;
 };
@@ -50,7 +62,12 @@ const rewriteResponseBody = (body, proxiedHost) => {
     return body.replace(htmlMatch[0], rewrittenHtml);
   }
 
-  return body;
+  return body.replace(/url\(([^)]+)\)/g, (match, urlMatch) => {
+    if (urlMatch.startsWith('http')) {
+      return match;
+    }
+    return `url(http://${proxiedHost}/${urlMatch})`;
+  });
 };
 
 app.use('/service', async (req, res) => {
@@ -158,42 +175,19 @@ https.createServer({
   logger.info('HTTPS server listening on port 443');
 });
 
-const handleHttpsConnect = (req, res) => {
-  const targetHost = req.headers['host'];
-  const targetOptions = {
-    hostname: targetHost,
-    port: 443,
-    method: 'CONNECT',
-  };
-
-  const targetSocket = https.connect(targetOptions, () => {
-    res.writeHead(200, { 'Connection' : 'keep-alive' });
-    res.end();
-  });
-
-  req.on('data', (chunk) => {
-    targetSocket.write(chunk);
-  });
-
-  targetSocket.on('data', (chunk) => {
-    res.write(chunk);
-  });
-
-  targetSocket.on('end', () => {
-    res.end();
-  });
-
-  targetSocket.on('error', (error) => {
-    logger.error('HTTPS CONNECT error:', error);
-    res.end();
-  });
-};
-
-server.on('connection', (socket) => {
-  socket.on('data', (chunk) => {
-    if (chunk.toString().startsWith('CONNECT')) {
-      handleHttpsConnect(socket, socket);
-    }
-  });
+app.use((req, res) => {
+  if (req.protocol === 'https') {
+    res.redirect(`http://${req.headers.host}${req.url}`);
+  } else {
+    res.status(400).send({ error: 'Bad Request' });
+  }
 });
-const fs = require('fs');
+
+const httpsRedirectServer = http.createServer((req, res) => {
+  res.redirect(`https://${req.headers.host}${req.url}`);
+});
+
+httpsRedirectServer.listen(80, () => {
+  logger.info('HTTP redirect server listening on port 80');
+});
+```
