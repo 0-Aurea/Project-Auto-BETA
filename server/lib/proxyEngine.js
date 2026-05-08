@@ -44,7 +44,7 @@ const proxyEngine = async (req, res) => {
 
     const response = await axios(options);
 
-    const rewriteHeaders = (headers) => {
+    const rewriteHeaders = (headers, targetHost) => {
       const rewrittenHeaders = { ...headers };
       delete rewrittenHeaders['content-security-policy'];
       delete rewrittenHeaders['strict-transport-security'];
@@ -52,7 +52,7 @@ const proxyEngine = async (req, res) => {
 
       if (rewrittenHeaders['set-cookie']) {
         rewrittenHeaders['set-cookie'] = rewrittenHeaders['set-cookie'].map((cookie) => {
-          return cookie.replace(/Domain=[^;]*/, `Domain=${parsedTargetUrl.host}`);
+          return cookie.replace(/Domain=[^;]*/, `Domain=${targetHost}`);
         });
       }
 
@@ -64,7 +64,7 @@ const proxyEngine = async (req, res) => {
       return rewrittenHeaders;
     };
 
-    const rewriteResponse = (response) => {
+    const rewriteResponse = (response, targetHost) => {
       const rewrittenResponse = { ...response };
       if (rewrittenResponse.data) {
         rewrittenResponse.data = rewrittenResponse.data.pipe(
@@ -81,8 +81,8 @@ const proxyEngine = async (req, res) => {
       return rewrittenResponse;
     };
 
-    const rewrittenResponse = rewriteResponse(response);
-    res.writeHead(rewrittenResponse.status, rewriteHeaders(rewrittenResponse.headers));
+    const rewrittenResponse = rewriteResponse(response, parsedTargetUrl.host);
+    res.writeHead(rewrittenResponse.status, rewriteHeaders(rewrittenResponse.headers, parsedTargetUrl.host));
 
     rewrittenResponse.data.pipe(res);
 
@@ -114,25 +114,31 @@ const handleWebSocketProxy = (req, res, targetUrl) => {
     };
 
     res.writeHead(webSocketResponse.status, webSocketResponse.headers);
-    wsProxy.on('message', (message) => {
-      res.write(message);
-    });
-    wsProxy.on('data', (data) => {
-      res.write(data);
-    });
-    wsProxy.on('close', () => {
-      res.end();
-    });
-    wsProxy.on('error', (error) => {
-      logger.error(`WebSocket proxy error: ${error.message}`);
-      res.status(500).send({ error: 'Internal Server Error' });
-    });
-    req.on('close', () => {
-      wsProxy.close();
-    });
-    req.on('data', (data) => {
-      wsProxy.send(data);
-    });
+  });
+
+  wsProxy.on('message', (message) => {
+    res.write(message);
+  });
+
+  wsProxy.on('data', (data) => {
+    res.write(data);
+  });
+
+  wsProxy.on('close', () => {
+    res.end();
+  });
+
+  wsProxy.on('error', (error) => {
+    logger.error(`WebSocket proxy error: ${error.message}`);
+    res.status(500).send({ error: 'Internal Server Error' });
+  });
+
+  req.on('close', () => {
+    wsProxy.close();
+  });
+
+  req.on('data', (data) => {
+    wsProxy.send(data);
   });
 };
 
