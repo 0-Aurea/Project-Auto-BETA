@@ -40,7 +40,8 @@ const searchBar = new SearchBar({
     tabManager.navigate(encodedUrl);
   }, 
   tabManager, 
-  swConfig: { encode, decode } 
+  swConfig: { encode, decode },
+  searchBarElement
 });
 
 settingsToggle.addEventListener('click', () => {
