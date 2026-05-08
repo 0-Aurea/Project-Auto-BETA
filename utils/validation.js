@@ -5,6 +5,26 @@
  */
 class ValidationUtils {
   /**
+   * Regular expression to validate URLs.
+   */
+  static URL_REGEX = /^https?:\/\/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?$/;
+
+  /**
+   * Regular expression to validate hostnames.
+   */
+  static HOSTNAME_REGEX = /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
+  /**
+   * Regular expression to validate search queries.
+   */
+  static SEARCH_QUERY_REGEX = /^[a-zA-Z0-9\s]{1,255}$/;
+
+  /**
+   * Regular expression to validate email addresses.
+   */
+  static EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
+  /**
    * Validates and sanitizes a URL to prevent security vulnerabilities.
    * @param {string} url - The URL to validate and sanitize.
    * @returns {string} The validated and sanitized URL.
@@ -15,6 +35,13 @@ class ValidationUtils {
       if (!parsedUrl.protocol || !parsedUrl.host) {
         throw new Error('Invalid URL');
       }
+      // Check for SSRF and other security vulnerabilities
+      if (parsedUrl.hostname === 'localhost' || parsedUrl.hostname === '127.0.0.1') {
+        throw new Error('SSRF vulnerability detected');
+      }
+      if (parsedUrl.protocol === 'file:') {
+        throw new Error('File protocol not allowed');
+      }
       // Remove any URL fragments
       if (parsedUrl.hash) {
         parsedUrl.hash = '';
@@ -22,6 +49,10 @@ class ValidationUtils {
       // Remove any URL search parameters
       if (parsedUrl.search) {
         parsedUrl.search = '';
+      }
+      // Validate URL against regex
+      if (!ValidationUtils.URL_REGEX.test(parsedUrl.href)) {
+        throw new Error('Invalid URL');
       }
       return parsedUrl.href;
     } catch (error) {
@@ -40,9 +71,12 @@ class ValidationUtils {
       throw new Error('Invalid hostname');
     }
     // Remove any invalid characters
-    const sanitizedHostnameRegex = /^[a-z0-9.-]+$/;
-    if (!sanitizedHostnameRegex.test(sanitizedHostname)) {
+    if (!ValidationUtils.HOSTNAME_REGEX.test(sanitizedHostname)) {
       throw new Error('Invalid hostname');
+    }
+    // Check for SSRF and other security vulnerabilities
+    if (sanitizedHostname === 'localhost' || sanitizedHostname === '127.0.0.1') {
+      throw new Error('SSRF vulnerability detected');
     }
     return sanitizedHostname;
   }
@@ -67,12 +101,8 @@ class ValidationUtils {
    */
   static validateSearchQuery(query) {
     const sanitizedQuery = query.trim().replace(/[^a-zA-Z0-9\s]/g, '');
-    if (!sanitizedQuery) {
+    if (!ValidationUtils.SEARCH_QUERY_REGEX.test(sanitizedQuery)) {
       throw new Error('Invalid search query');
-    }
-    // Limit search query length
-    if (sanitizedQuery.length > 255) {
-      throw new Error('Search query too long');
     }
     return sanitizedQuery;
   }
@@ -96,6 +126,10 @@ class ValidationUtils {
       if (parsedUrl.search) {
         parsedUrl.search = '';
       }
+      // Validate URL against regex
+      if (!ValidationUtils.URL_REGEX.test(parsedUrl.href)) {
+        throw new Error('Invalid referer URL');
+      }
       return parsedUrl.href;
     } catch (error) {
       throw new Error(`Invalid referer URL: ${error.message}`);
@@ -118,24 +152,10 @@ class ValidationUtils {
    * @returns {string} The validated and sanitized email address.
    */
   static validateAndSanitizeEmail(email) {
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!emailRegex.test(email)) {
+    if (!ValidationUtils.EMAIL_REGEX.test(email)) {
       throw new Error('Invalid email address');
     }
-    return email.toLowerCase();
-  }
-
-  /**
-   * Validates and sanitizes an IP address to prevent security vulnerabilities.
-   * @param {string} ip - The IP address to validate and sanitize.
-   * @returns {string} The validated and sanitized IP address.
-   */
-  static validateAndSanitizeIp(ip) {
-    const ipRegex = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-    if (!ipRegex.test(ip)) {
-      throw new Error('Invalid IP address');
-    }
-    return ip;
+    return email.trim().toLowerCase();
   }
 }
 
