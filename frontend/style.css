@@ -113,6 +113,12 @@ header nav a:hover {
   cursor: pointer;
 }
 
+#tab-bar .new-tab {
+  font-size: 0.8rem;
+  margin-left: var(--space-1);
+  cursor: pointer;
+}
+
 #search-bar {
   background-color: var(--bg-overlay);
   padding: var(--space-2);
@@ -122,6 +128,8 @@ header nav a:hover {
   align-items: center;
   backdrop-filter: blur(20px);
   transition: all 0.2s cubic-bezier(0.16,1,0.3,1);
+  width: 50%;
+  margin: 0 auto;
 }
 
 #search-bar input[type="search"] {
@@ -130,7 +138,7 @@ header nav a:hover {
   padding: var(--space-1) var(--space-2);
   font-size: 1rem;
   color: var(--text-primary);
-  width: 100%;
+  width: 80%;
 }
 
 #search-bar button[type="submit"] {
@@ -193,133 +201,148 @@ iframe {
   box-shadow: var(--shadow-md);
   transform: translateX(100%);
   transition: transform 0.2s ease;
+  width: 300px;
 }
 
 .settings-panel.show, .bookmarks-panel.show, .proxy-history-panel.show {
   transform: translateX(0);
 }
 
-.settings-panel-overlay, .bookmarks-panel-overlay, .proxy-history-panel-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-}
-
-.settings-panel-overlay.show, .bookmarks-panel-overlay.show, .proxy-history-panel-overlay.show {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.settings-panel {
-  width: 300px;
-}
-
-.settings-panel .settings-header {
-  border-bottom: 1px solid var(--border);
-  padding-bottom: var(--space-1);
+.settings-header, .bookmarks-header, .proxy-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: var(--space-2);
 }
 
-.settings-panel .settings-header h2 {
-  font-size: 1.2rem;
+.settings-header h2, .bookmarks-header h2, .proxy-history-header h2 {
+  font-size: 1.25rem;
   margin: 0;
 }
 
-.settings-panel .settings-group {
-  margin-bottom: var(--space-4);
-}
-
-.settings-panel .settings-group h3 {
-  font-size: 1rem;
-  margin: 0 0 var(--space-1) 0;
-}
-
-.settings-panel .settings-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+.settings-toggle, .bookmarks-toggle, .proxy-history-toggle {
   background-color: var(--bg-surface);
+  border: none;
+  padding: var(--space-1) var(--space-2);
+  font-size: 1rem;
   cursor: pointer;
 }
 
-.settings-panel .settings-toggle input[type="checkbox"] {
-  display: none;
+.settings-toggle:hover, .bookmarks-toggle:hover, .proxy-history-toggle:hover {
+  background-color: var(--bg-elevated);
 }
 
-.settings-panel .settings-toggle .toggle-switch {
+.settings-section {
+  margin-bottom: var(--space-4);
+}
+
+.settings-section h3 {
+  font-size: 1rem;
+  margin-bottom: var(--space-1);
+}
+
+.settings-switch {
   position: relative;
   display: inline-block;
   width: 44px;
   height: 24px;
+}
+
+.settings-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.settings-switch .slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background-color: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-full);
-  transition: background-color 0.2s ease;
+  border-radius: 24px;
+  transition: 0.2s;
 }
 
-.settings-panel .settings-toggle .toggle-switch::before {
-  content: '';
+.settings-switch .slider:before {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 20px;
+  content: "";
   height: 20px;
-  background-color: var(--bg-base);
-  border-radius: var(--radius-full);
-  transition: transform 0.2s ease;
+  width: 20px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--bg-surface);
+  border-radius: 50%;
+  transition: 0.2s;
 }
 
-.settings-panel .settings-toggle input[type="checkbox"]:checked + .toggle-switch {
+.settings-switch input:checked + .slider {
   background-color: var(--accent);
 }
 
-.settings-panel .settings-toggle input[type="checkbox"]:checked + .toggle-switch::before {
+.settings-switch input:checked + .slider:before {
   transform: translateX(20px);
 }
 
-.bookmarks-panel {
-  width: 300px;
+.bookmarks-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
 }
 
-.bookmarks-panel .bookmark {
+.bookmark-card {
   background-color: var(--bg-surface);
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.bookmark-card img {
+  width: 20px;
+  height: 20px;
   margin-bottom: var(--space-1);
 }
 
-.bookmarks-panel .bookmark .favicon {
-  width: 16px;
-  height: 16px;
-  margin-right: var(--space-1);
+.bookmark-card span {
+  font-size: 0.8rem;
 }
 
-.proxy-history-panel {
-  width: 300px;
+.proxy-history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
-.proxy-history-panel .history-entry {
-  background-color: var(--bg-surface);
+.proxy-history-item {
   padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  margin-bottom: var(--space-1);
+  border-bottom: 1px solid var(--border);
 }
 
-.proxy-history-panel .history-entry .favicon {
-  width: 16px;
-  height: 16px;
+.proxy-history-item:last-child {
+  border-bottom: none;
+}
+
+.proxy-history-item img {
+  width: 20px;
+  height: 20px;
   margin-right: var(--space-1);
+}
+
+.proxy-history-item span {
+  font-size: 0.8rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }
 
 ::-webkit-scrollbar {
@@ -329,16 +352,9 @@ iframe {
 
 ::-webkit-scrollbar-thumb {
   background-color: var(--border);
-  border-radius: var(--radius-full);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-track {
   background-color: transparent;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  * {
-    transition: none !important;
-    animation: none !important;
-  }
 }
