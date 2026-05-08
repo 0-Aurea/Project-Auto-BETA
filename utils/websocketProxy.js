@@ -29,53 +29,57 @@ class WebSocketProxyUtils {
     PerformanceMonitor.startMetric('websocketProxyInit');
     this.wss = new WebSocket.Server({ server, ...this.options });
 
-    this.wss.on('connection', (ws, req) => {
-      const { headers, url } = req;
-      const { origin, pathname } = new URL(url, 'http://example.com');
+    this.wss.on('connection', async (ws, req) => {
+      try {
+        const { headers, url } = req;
+        const { origin, pathname } = new URL(url, 'http://example.com');
 
-      // Handle WebSocket handshake
-      ws.on('message', (message) => {
-        PerformanceMonitor.startMetric('websocketMessageHandling');
-        // Rewrite WebSocket message headers
-        const rewrittenMessage = this.rewriteMessage(message, headers, origin);
+        // Handle WebSocket handshake
+        ws.on('message', async (message) => {
+          PerformanceMonitor.startMetric('websocketMessageHandling');
+          // Rewrite WebSocket message headers
+          const rewrittenMessage = await this.rewriteMessage(message, headers, origin);
 
-        // Forward rewritten message to target WebSocket server
-        const targetWs = new WebSocket(origin, {
-          headers: this.rewriteHeaders(headers, origin),
+          // Forward rewritten message to target WebSocket server
+          const targetWs = new WebSocket(origin, {
+            headers: this.rewriteHeaders(headers, origin),
+          });
+
+          targetWs.on('open', () => {
+            targetWs.send(rewrittenMessage);
+          });
+
+          targetWs.on('message', async (targetMessage) => {
+            PerformanceMonitor.startMetric('websocketTargetMessageHandling');
+            // Rewrite target WebSocket message headers
+            const rewrittenTargetMessage = await this.rewriteMessage(targetMessage, headers, origin);
+
+            // Forward rewritten target message to client WebSocket
+            ws.send(rewrittenTargetMessage);
+            PerformanceMonitor.endMetric('websocketTargetMessageHandling');
+          });
+
+          targetWs.on('error', (error) => {
+            console.error('Target WebSocket error:', error);
+            ws.close();
+          });
+
+          targetWs.on('close', () => {
+            ws.close();
+          });
         });
 
-        targetWs.on('open', () => {
-          targetWs.send(rewrittenMessage);
-        });
-
-        targetWs.on('message', (targetMessage) => {
-          PerformanceMonitor.startMetric('websocketTargetMessageHandling');
-          // Rewrite target WebSocket message headers
-          const rewrittenTargetMessage = this.rewriteMessage(targetMessage, headers, origin);
-
-          // Forward rewritten target message to client WebSocket
-          ws.send(rewrittenTargetMessage);
-          PerformanceMonitor.endMetric('websocketTargetMessageHandling');
-        });
-
-        targetWs.on('error', (error) => {
-          console.error('Target WebSocket error:', error);
+        ws.on('error', (error) => {
+          console.error('Client WebSocket error:', error);
           ws.close();
         });
 
-        targetWs.on('close', () => {
-          ws.close();
+        ws.on('close', () => {
+          // Handle client WebSocket closure
         });
-      });
-
-      ws.on('error', (error) => {
-        console.error('Client WebSocket error:', error);
-        ws.close();
-      });
-
-      ws.on('close', () => {
-        // Handle client WebSocket closure
-      });
+      } catch (error) {
+        console.error('WebSocket proxy error:', error);
+      }
     });
     PerformanceMonitor.endMetric('websocketProxyInit');
   }
@@ -87,24 +91,29 @@ class WebSocketProxyUtils {
    * @param {string} origin - The origin of the WebSocket request.
    * @returns {string} The rewritten WebSocket message.
    */
-  static rewriteMessage(message, headers, origin) {
-    // Isolate cookies per proxied origin
-    const cookieHeader = headers['cookie'];
-    const isolatedCookieHeader = CookieScopingUtils.isolateCookies(cookieHeader, origin);
+  static async rewriteMessage(message, headers, origin) {
+    try {
+      // Isolate cookies per proxied origin
+      const cookieHeader = headers['cookie'];
+      const isolatedCookieHeader = CookieScopingUtils.isolateCookies(cookieHeader, origin);
 
-    // Remove sensitive headers
-    const filteredHeaders = EncodingUtils.filterHeaders(headers, REQUEST_HEADER_REWRITE_LIST);
+      // Remove sensitive headers
+      const filteredHeaders = EncodingUtils.filterHeaders(headers, REQUEST_HEADER_REWRITE_LIST);
 
-    // Rewrite headers
-    const rewrittenHeaders = {
-      ...filteredHeaders,
-      'Cookie': isolatedCookieHeader,
-    };
+      // Rewrite headers
+      const rewrittenHeaders = {
+        ...filteredHeaders,
+        'Cookie': isolatedCookieHeader,
+      };
 
-    // Inject rewritten headers into WebSocket message
-    const rewrittenMessage = EncodingUtils.injectHeaders(message, rewrittenHeaders);
+      // Inject rewritten headers into WebSocket message
+      const rewrittenMessage = EncodingUtils.injectHeaders(message, rewrittenHeaders);
 
-    return rewrittenMessage;
+      return rewrittenMessage;
+    } catch (error) {
+      console.error('Error rewriting WebSocket message:', error);
+      return message;
+    }
   }
 
   /**
@@ -114,33 +123,31 @@ class WebSocketProxyUtils {
    * @returns {object} The rewritten WebSocket request headers.
    */
   static rewriteHeaders(headers, origin) {
-    // Remove sensitive headers
-    const filteredHeaders = EncodingUtils.filterHeaders(headers, REQUEST_HEADER_REWRITE_LIST);
+    try {
+      // Remove sensitive headers
+      const filteredHeaders = EncodingUtils.filterHeaders(headers, REQUEST_HEADER_REWRITE_LIST);
 
-    // Isolate cookies per proxied origin
-    const cookieHeader = headers['cookie'];
-    const isolatedCookieHeader = CookieScopingUtils.isolateCookies(cookieHeader, origin);
+      // Isolate cookies per proxied origin
+      const cookieHeader = headers['cookie'];
+      const isolatedCookieHeader = CookieScopingUtils.isolateCookies(cookieHeader, origin);
 
-    // Add proxied headers
-    const rewrittenHeaders = {
-      ...filteredHeaders,
-      'Cookie': isolatedCookieHeader,
-      'Origin': origin,
-    };
+      // Rewrite headers
+      const rewrittenHeaders = {
+        ...filteredHeaders,
+        'Cookie': isolatedCookieHeader,
+        'Origin': origin,
+      };
 
-    return rewrittenHeaders;
-  }
+      // Handle subprotocols
+      if (headers['sec-websocket-protocol']) {
+        rewrittenHeaders['sec-websocket-protocol'] = headers['sec-websocket-protocol'];
+      }
 
-  /**
-   * Handle WebSocket upgrade proxying.
-   * @param {object} req - The WebSocket upgrade request.
-   * @param {object} res - The WebSocket upgrade response.
-   */
-  static handleUpgrade(req, res) {
-    // Perform WebSocket upgrade
-    this.wss.handleUpgrade(req, res, (ws) => {
-      this.wss.emit('connection', ws, req);
-    });
+      return rewrittenHeaders;
+    } catch (error) {
+      console.error('Error rewriting WebSocket headers:', error);
+      return headers;
+    }
   }
 }
 
