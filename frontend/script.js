@@ -128,42 +128,12 @@ document.addEventListener('keydown', (event) => {
   }
 });
  
-// Add event listener to handle search form submission
-searchBarElement.addEventListener('submit', (event) => {
-  event.preventDefault();
-  const searchQuery = searchBar.getSearchQuery();
-  if (searchQuery) {
-    const encodedUrl = encode(searchQuery);
-    tabManager.navigate(encodedUrl);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    tabManager.saveTabs();
   }
 });
 
-// Initialize Service Worker configuration
-navigator.serviceWorker.addEventListener('message', (event) => {
-  if (event.data.action === 'config') {
-    const config = event.data.config;
-    // Update Service Worker configuration
-  }
-});
-
-// Load existing tabs from storage
-tabManager.loadTabs().then((tabs) => {
-  if (tabs.length === 0) {
-    tabManager.addTab();
-  } else {
-    tabs.forEach((tab) => {
-      tabManager.addTab(tab);
-    });
-  }
-});
-
-// Update UI on tab change
-tabManager.onTabChange = (tab) => {
-  searchBar.setSearchQuery(tab.url);
-  // Update UI components
-};
-
-// Update Service Worker on settings change
-settingsManager.onSettingsChange = (settings) => {
-  navigator.serviceWorker.controller.postMessage({ action: 'update', settings });
-};
+settingsManager.loadSettings();
+bookmarksManager.loadBookmarks();
+historyManager.loadHistory();
