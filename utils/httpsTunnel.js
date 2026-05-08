@@ -4,6 +4,7 @@ const { ServerResponse, IncomingMessage } = require('http');
 const { URL } = require('url');
 const fs = require('fs');
 const WebSocket = require('ws');
+const path = require('path');
 
 /**
  * HTTPS tunnel utility class for managing the integrated HTTPS tunnel.
@@ -23,8 +24,8 @@ class HTTSTunnelUtils {
    * Options for the HTTPS tunnel.
    */
   static options = {
-    key: fs.readFileSync('path/to/privkey.pem'),
-    cert: fs.readFileSync('path/to/cert.pem'),
+    key: fs.readFileSync(path.join(__dirname, 'privkey.pem')),
+    cert: fs.readFileSync(path.join(__dirname, 'cert.pem')),
   };
 
   /**
@@ -92,6 +93,8 @@ class HTTSTunnelUtils {
         res.headers['content-security-policy'] = '';
         res.headers['strict-transport-security'] = '';
         res.headers['x-frame-options'] = '';
+        res.headers['access-control-allow-origin'] = '*';
+        res.headers['access-control-allow-headers'] = 'Origin, X-Requested-With, Content-Type, Accept';
       },
     });
   }
@@ -110,6 +113,20 @@ class HTTSTunnelUtils {
       // Handle root URL
       res.writeHead(200);
       res.end('NEXUS HTTPS Tunnel');
+    } else if (pathname.startsWith('/service/')) {
+      // Handle proxied requests
+      const targetUrl = decodeURIComponent(pathname.substring(9));
+      const proxyMiddleware = HTTSTunnelUtils.createProxyMiddleware(targetUrl, {
+        onProxyRes: (proxyRes, req, res) => {
+          // Implement header rewriting
+          res.headers['content-security-policy'] = '';
+          res.headers['strict-transport-security'] = '';
+          res.headers['x-frame-options'] = '';
+          res.headers['access-control-allow-origin'] = '*';
+          res.headers['access-control-allow-headers'] = 'Origin, X-Requested-With, Content-Type, Accept';
+        },
+      });
+      proxyMiddleware(req, res);
     } else if (pathname === '/websocket') {
       // Handle WebSocket connection
       const ws = new WebSocket(req, req.headers['sec-websocket-protocol']);
@@ -127,8 +144,8 @@ class HTTSTunnelUtils {
       });
     } else {
       // Handle other URLs
-      const proxyMiddleware = HTTSTunnelUtils.createProxyMiddleware('https://example.com', {});
-      proxyMiddleware(req, res);
+      res.writeHead(404);
+      res.end('Not Found');
     }
   }
 }
