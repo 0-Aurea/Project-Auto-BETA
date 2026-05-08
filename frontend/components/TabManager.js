@@ -131,10 +131,6 @@ export class TabManager {
             <form id="search-form">
               <input type="text" id="search-input" placeholder="Search or enter a URL...">
               <button id="search-button">Go</button>
-              <div class="search-engines">
-                <button class="search-engine" data-engine="google">Google</button>
-                <button class="search-engine" data-engine="bing">Bing</button>
-              </div>
             </form>
           </div>
         `;
@@ -142,18 +138,6 @@ export class TabManager {
     }
 
     this.renderTabBar();
-  }
-
-  handleTabClose(tabId) {
-    this.removeTab(tabId);
-  }
-
-  handleTabClick(tabId) {
-    this.switchTab(tabId);
-  }
-
-  handleNewTab() {
-    this.addTab();
   }
 
   switchTab(tabId) {
@@ -177,6 +161,18 @@ export class TabManager {
     this.onTabChange(tabId);
   }
 
+  handleTabClick(tabId) {
+    this.switchTab(tabId);
+  }
+
+  handleTabClose(tabId) {
+    this.removeTab(tabId);
+  }
+
+  handleNewTab() {
+    this.addTab();
+  }
+
   renderNewTabButton() {
     const newTabButton = document.createElement('button');
     newTabButton.classList.add('new-tab-button');
@@ -185,15 +181,6 @@ export class TabManager {
   }
 
   renderTabBar() {
-    // Update tab bar styles and classes
-    const tabElements = this.tabBarElement.children;
-    for (let i = 0; i < tabElements.length; i++) {
-      const tabElement = tabElements[i];
-      if (i === this.tabs.findIndex((tab) => tab.id === this.activeTabId)) {
-        tabElement.classList.add('active');
-      } else {
-        tabElement.classList.remove('active');
-      }
-    }
+    // Update tab bar UI
   }
 }
