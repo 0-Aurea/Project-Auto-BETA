@@ -198,99 +198,75 @@ iframe {
   padding: var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  --shadow: 0 4px 16px rgba(0,0,0,0.5);
+  box-shadow: var(--shadow);
   transform: translateX(100%);
-  transition: transform 0.2s ease;
-  width: 300px;
+  transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
 }
 
 .settings-panel.show, .bookmarks-panel.show, .proxy-history-panel.show {
   transform: translateX(0);
 }
 
-.settings-header, .bookmarks-header, .proxy-history-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.settings-panel::before, .bookmarks-panel::before, .proxy-history-panel::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.5);
+  opacity: 0;
+  transition: opacity 0.3s cubic-bezier(0.16,1,0.3,1);
+  pointer-events: none;
+}
+
+.settings-panel.show::before, .bookmarks-panel.show::before, .proxy-history-panel.show::before {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.settings-panel {
+  width: 300px;
+}
+
+.bookmarks-panel {
+  width: 250px;
+}
+
+.proxy-history-panel {
+  width: 350px;
+}
+
+.settings-panel label {
+  display: block;
   margin-bottom: var(--space-2);
 }
 
-.settings-header h2, .bookmarks-header h2, .proxy-history-header h2 {
-  font-size: 1.25rem;
-  margin: 0;
+.settings-panel input[type="checkbox"] {
+  margin-right: var(--space-1);
 }
 
-.settings-toggle, .bookmarks-toggle, .proxy-history-toggle {
-  background-color: var(--bg-surface);
-  border: none;
+.settings-panel select {
+  width: 100%;
   padding: var(--space-1) var(--space-2);
-  font-size: 1rem;
-  cursor: pointer;
-}
-
-.settings-toggle:hover, .bookmarks-toggle:hover, .proxy-history-toggle:hover {
-  background-color: var(--bg-elevated);
-}
-
-.settings-section {
-  margin-bottom: var(--space-4);
-}
-
-.settings-section h3 {
-  font-size: 1rem;
-  margin-bottom: var(--space-1);
-}
-
-.settings-switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
-}
-
-.settings-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.settings-switch .slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: 24px;
-  transition: 0.2s;
+  border-radius: var(--radius-sm);
 }
 
-.settings-switch .slider:before {
-  position: absolute;
-  content: "";
-  height: 20px;
-  width: 20px;
-  left: 2px;
-  bottom: 2px;
-  background-color: var(--bg-surface);
-  border-radius: 50%;
-  transition: 0.2s;
+.history-item {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
 }
 
-.settings-switch input:checked + .slider {
-  background-color: var(--accent);
+.history-item:last-child {
+  border-bottom: none;
 }
 
-.settings-switch input:checked + .slider:before {
-  transform: translateX(20px);
-}
-
-.bookmarks-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-2);
+.history-item .favicon {
+  width: 16px;
+  height: 16px;
+  margin-right: var(--space-1);
 }
 
 .bookmark-card {
@@ -298,44 +274,14 @@ iframe {
   padding: var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  margin-bottom: var(--space-2);
+  width: calc(33.33% - var(--space-2));
 }
 
-.bookmark-card img {
-  width: 20px;
-  height: 20px;
-  margin-bottom: var(--space-1);
-}
-
-.bookmark-card span {
-  font-size: 0.8rem;
-}
-
-.proxy-history-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.proxy-history-item {
-  padding: var(--space-1) var(--space-2);
-  border-bottom: 1px solid var(--border);
-}
-
-.proxy-history-item:last-child {
-  border-bottom: none;
-}
-
-.proxy-history-item img {
-  width: 20px;
-  height: 20px;
+.bookmark-card .favicon {
+  width: 24px;
+  height: 24px;
   margin-right: var(--space-1);
-}
-
-.proxy-history-item span {
-  font-size: 0.8rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -352,7 +298,7 @@ iframe {
 
 ::-webkit-scrollbar-thumb {
   background-color: var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
 }
 
 ::-webkit-scrollbar-track {
