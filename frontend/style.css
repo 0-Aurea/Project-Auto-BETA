@@ -202,25 +202,6 @@ header nav a:hover {
   margin-right: var(--space-1);
 }
 
-.search-engine-slider {
-  position: relative;
-  width: 100%;
-  height: 2px;
-  background-color: var(--border);
-  transition: all 0.2s ease;
-}
-
-.search-engine-slider::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 50%;
-  height: 2px;
-  background-color: var(--accent);
-  transition: all 0.2s ease;
-}
-
 #viewport {
   flex-grow: 1;
   overflow-y: auto;
@@ -238,15 +219,13 @@ iframe {
   position: fixed;
   top: 0;
   right: 0;
-  width: 300px;
-  height: 100vh;
   background-color: var(--bg-elevated);
   padding: var(--space-2);
-  border-left: 1px solid var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
   transform: translateX(100%);
   transition: transform 0.2s cubic-bezier(0.16,1,0.3,1);
-  box-shadow: var(--shadow-md);
-  z-index: 1;
 }
 
 .settings-panel.show,
@@ -255,69 +234,120 @@ iframe {
   transform: translateX(0);
 }
 
-.settings-panel-overlay,
-.history-panel-overlay,
-.bookmarks-panel-overlay {
+.settings-panel::before,
+.history-panel::before,
+.bookmarks-panel::before {
+  content: '';
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
-  height: 100vh;
+  height: 100%;
   background-color: rgba(0,0,0,0.5);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
+  backdrop-filter: blur(10px);
+  z-index: -1;
 }
 
-.settings-panel-overlay.show,
-.history-panel-overlay.show,
-.bookmarks-panel-overlay.show {
-  opacity: 1;
-  pointer-events: auto;
+.settings-header,
+.history-header,
+.bookmarks-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2);
 }
 
-.settings-switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
+.settings-header h2,
+.history-header h2,
+.bookmarks-header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
 }
 
-.settings-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.settings-switch .slider {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--border);
-  transition: all 0.2s ease;
-  border-radius: 24px;
-}
-
-.settings-switch .slider::before {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 20px;
-  height: 20px;
+.settings-toggle,
+.history-toggle,
+.bookmarks-toggle {
   background-color: var(--bg-surface);
-  transition: all 0.2s ease;
-  border-radius: 50%;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
 }
 
-.settings-switch input:checked + .slider {
-  background-color: var(--accent);
+.settings-toggle:hover,
+.history-toggle:hover,
+.bookmarks-toggle:hover {
+  background-color: var(--bg-elevated);
 }
 
-.settings-switch input:checked + .slider::before {
-  transform: translateX(20px);
+.ad-block-toggle,
+.dark-mode-toggle {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.ad-block-toggle label,
+.dark-mode-toggle label {
+  margin-left: var(--space-1);
+  cursor: pointer;
+}
+
+.search-engine-select {
+  background-color: var(--bg-surface);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.history-list li {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.history-list li:last-child {
+  border-bottom: none;
+}
+
+.bookmarks-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.bookmark-card {
+  background-color: var(--bg-surface);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.bookmark-card img {
+  width: 100%;
+  height: 100px;
+  object-fit: cover;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.bookmark-card .bookmark-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: var(--space-1);
+}
+
+.bookmark-card .bookmark-url {
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 .loading-bar {
@@ -330,6 +360,10 @@ iframe {
   transform: scaleX(0);
   transform-origin: left;
   transition: transform 0.2s ease;
+}
+
+.loading-bar.show {
+  transform: scaleX(1);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -346,7 +380,7 @@ iframe {
 
 ::-webkit-scrollbar-thumb {
   background-color: var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
 }
 
 ::-webkit-scrollbar-track {
