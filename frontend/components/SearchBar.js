@@ -98,7 +98,7 @@ export class SearchBar {
         url = searchEngines[this.state.searchEngine] + encodeURIComponent(searchValue);
       }
       const encodedUrl = this.swConfig.encode(url);
-      this.tabManager.navigate(encodedUrl);
+      this.tabManager.addTab({ url: encodedUrl, title: searchValue, favicon: '' });
       this.searchInput.value = '';
     }
   }
