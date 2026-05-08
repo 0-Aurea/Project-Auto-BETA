@@ -4,6 +4,7 @@ const https = require('https');
 const WebSocket = require('ws');
 const url = require('url');
 const querystring = require('querystring');
+const fs = require('fs');
 const config = require('./lib/config');
 const logger = require('./lib/logger');
 const cookieParser = require('cookie-parser');
@@ -57,6 +58,11 @@ app.get('/service/:encodedUrl', async (req, res) => {
       }
     }
 
+    // Remove security headers
+    delete responseHeaders['content-security-policy'];
+    delete responseHeaders['strict-transport-security'];
+    delete responseHeaders['x-frame-options'];
+
     res.writeHead(proxyReq.status, responseHeaders);
 
     const proxyRes = await proxyReq.arrayBuffer();
@@ -105,24 +111,28 @@ wss.on('connection', (ws, req) => {
   }
 });
 
+const httpsServer = https.createServer({
+  key: fs.readFileSync(config.server.https.key),
+  cert: fs.readFileSync(config.server.https.cert),
+}, app);
+
 server.listen(config.server.port, config.server.host, () => {
   logger.info(`Server listening on ${config.server.host}:${config.server.port}`);
 });
 
-https.createServer({
-  key: fs.readFileSync(config.server.https.key),
-  cert: fs.readFileSync(config.server.https.cert),
-}, app).listen(config.server.https.port, () => {
+httpsServer.listen(config.server.https.port, () => {
   logger.info(`HTTPS server listening on ${config.server.https.port}`);
 });
 
 process.on('SIGINT', () => {
   server.close();
+  httpsServer.close();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
   server.close();
+  httpsServer.close();
   process.exit(0);
 });
 
