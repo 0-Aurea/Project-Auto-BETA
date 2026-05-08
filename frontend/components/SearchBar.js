@@ -13,6 +13,7 @@ export class SearchBar {
     this.searchInput = null;
     this.searchForm = null;
     this.searchEngineSelect = null;
+    this.slider = null;
 
     this.handleSearch = this.handleSearch.bind(this);
     this.handleInputChange = this.handleInputChange.bind(this);
@@ -58,9 +59,9 @@ export class SearchBar {
     bingOption.onclick = () => this.handleSearchEngineChange('bing');
     this.searchEngineSelect.appendChild(bingOption);
 
-    const slider = document.createElement('div');
-    slider.classList.add('search-engine-slider', `active-${this.state.searchEngine}`);
-    this.searchEngineSelect.appendChild(slider);
+    this.slider = document.createElement('div');
+    this.slider.classList.add('search-engine-slider', `active-${this.state.searchEngine}`);
+    this.searchEngineSelect.appendChild(this.slider);
 
     const searchButton = document.createElement('button');
     searchButton.type = 'submit';
@@ -124,12 +125,11 @@ export class SearchBar {
   handleSearchEngineChange(engine) {
     this.state.searchEngine = engine;
     localStorage.setItem('searchEngine', engine);
-    const options = this.searchEngineSelect.children;
-    for (const option of options) {
+    this.searchEngineSelect.querySelectorAll('.search-engine-option').forEach((option) => {
       option.classList.remove('active');
-    }
-    this.searchEngineSelect.children[engine === 'google' ? 0 : 1].classList.add('active');
-    this.searchEngineSelect.classList.remove(`active-google`, `active-bing`);
-    this.searchEngineSelect.classList.add(`active-${engine}`);
+    });
+    this.searchEngineSelect.querySelector(`.search-engine-option.${engine}`).classList.add('active');
+    this.slider.classList.remove('active-google', 'active-bing');
+    this.slider.classList.add(`active-${engine}`);
   }
 }
