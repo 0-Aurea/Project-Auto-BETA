@@ -3,35 +3,26 @@ class ProxyEngine {
    * WebRTC ICE candidate scrubbing to prevent IP leaks.
    */
   async scrubWebRTCIceCandidates(request, response) {
-    // Check if the request is a WebRTC ICE candidate
     if (request.headers['content-type'] === 'application/candidate') {
-      // Parse the ICE candidate
-      const candidate = await this.parseICECandidate(request);
-
-      // Scrub the ICE candidate to remove IP information
-      const scrubbedCandidate = this.scrubICECandidate(candidate);
-
-      // Rewrite the ICE candidate
+      const candidateBuffer = await this.streamToBuffer(request);
+      const candidate = candidateBuffer.toString();
+      const candidateObject = this.parseICECandidate(candidate);
+      const scrubbedCandidate = this.scrubICECandidate(candidateObject);
       response.writeHead(200, {
         'Content-Type': 'application/candidate',
       });
       response.end(scrubbedCandidate);
     } else {
-      // If not a WebRTC ICE candidate, proceed with normal proxying
       await this.proxyRequest(request, response);
     }
   }
 
   /**
    * Parse the WebRTC ICE candidate.
-   * @param {object} request - The request object.
+   * @param {string} candidate - The ICE candidate string.
    * @returns {object} The parsed ICE candidate.
    */
-  async parseICECandidate(request) {
-    const candidateBuffer = await this.streamToBuffer(request);
-    const candidate = candidateBuffer.toString();
-
-    // Parse the candidate string into an object
+  parseICECandidate(candidate) {
     const candidateObject = {};
     const candidateLines = candidate.split('\r\n');
     for (const line of candidateLines) {
@@ -46,7 +37,6 @@ class ProxyEngine {
         candidateObject.port = port;
       }
     }
-
     return candidateObject;
   }
 
@@ -56,14 +46,10 @@ class ProxyEngine {
    * @returns {string} The scrubbed ICE candidate string.
    */
   scrubICECandidate(candidate) {
-    // Remove IP information
     candidate.ip = '';
-
-    // Reconstruct the candidate string
     const scrubbedCandidateLines = [];
     scrubbedCandidateLines.push(`candidate:${candidate.foundation} ${candidate.component} ${candidate.protocol} ${candidate.priority} 0 0 typ host`);
     scrubbedCandidateLines.push(`end-line`);
-
     return scrubbedCandidateLines.join('\r\n');
   }
 
@@ -87,30 +73,23 @@ class ProxyEngine {
    */
   async proxyRequest(request, response) {
     const { EncodingUtils } = await import('../utils/encodingUtils.js');
-    const { URL_PREFIX, DEFAULT_ENCODING } = await import('../config/constants.js');
+    const { URL_PREFIX, DEFAULT_ENCODING, API_SERVICE_URL } = await import('../config/constants.js');
+    const { http } = await import('http');
+    const { URL } = await import('url');
 
-    // Get the current salt
-    const salt = EncodingUtils.getSalt();
-
-    // XOR and base64 encode the URL
-    const encodedUrl = EncodingUtils.encodeUrl(request.url, salt);
-
-    // Rewrite the request URL
-    const rewrittenUrl = `${URL_PREFIX}/${encodedUrl}`;
-
-    // Proxy the request
+    const targetUrl = new URL(request.url);
+    const encodedUrl = EncodingUtils.encodeUrl(targetUrl.href, EncodingUtils.getSalt());
     const proxiedRequest = {
-      ...request,
-      url: rewrittenUrl,
+      method: request.method,
+      headers: request.headers,
+      url: `${API_SERVICE_URL}${encodedUrl}`,
     };
 
-    // Forward the request to the target server
     const targetResponse = await this.forwardRequest(proxiedRequest);
+    const rewrittenHeaders = this.rewriteResponseHeaders(targetResponse.headers);
 
-    // Rewrite the response headers
-    response.writeHead(targetResponse.statusCode, targetResponse.headers);
+    response.writeHead(targetResponse.statusCode, rewrittenHeaders);
 
-    // Pipe the response body
     targetResponse.pipe(response);
   }
 
@@ -120,53 +99,81 @@ class ProxyEngine {
    * @returns {object} The response object.
    */
   async forwardRequest(request) {
-    const { URL } = await import('url');
-    const { http } = await import('http');
-
-    // Parse the target URL
-    const targetUrl = new URL(request.url);
-
-    // Create a new request to the target server
-    const targetRequest = http.request({
-      hostname: targetUrl.hostname,
-      port: targetUrl.port,
-      path: targetUrl.pathname,
-      method: request.method,
-      headers: request.headers,
-    });
-
-    // Pipe the request body
-    request.pipe(targetRequest);
-
-    // Handle the response
     return new Promise((resolve, reject) => {
-      targetRequest.on('response', (response) => {
-        resolve(response);
+      const { http } = require('http');
+      const options = {
+        method: request.method,
+        headers: request.headers,
+        hostname: 'localhost',
+        port: 8080,
+        path: request.url,
+      };
+
+      const targetRequest = http.request(options, (targetResponse) => {
+        resolve(targetResponse);
       });
 
       targetRequest.on('error', (error) => {
         reject(error);
       });
+
+      targetRequest.end();
     });
   }
 
   /**
-   * XOR and base64 encode a URL.
-   * @param {string} url - The URL to encode.
-   * @param {Buffer} salt - The salt to use for encoding.
-   * @returns {string} The encoded URL.
+   * Rewrite the response headers.
+   * @param {object} headers - The response headers.
+   * @returns {object} The rewritten response headers.
    */
-  async xorBase64EncodeUrl(url, salt) {
-    const { EncodingUtils } = await import('../utils/encodingUtils.js');
+  rewriteResponseHeaders(headers) {
+    const rewrittenHeaders = { ...headers };
 
-    // XOR the URL with the salt
-    const xorBuffer = EncodingUtils.xorBuffer(Buffer.from(url), salt);
+    delete rewrittenHeaders['content-security-policy'];
+    delete rewrittenHeaders['strict-transport-security'];
+    delete rewrittenHeaders['x-frame-options'];
 
-    // Base64 encode the XOR buffer
-    const encodedBuffer = Buffer.from(xorBuffer.toString('base64'));
+    if (rewrittenHeaders['set-cookie']) {
+      rewrittenHeaders['set-cookie'] = rewrittenHeaders['set-cookie'].map((cookie) => {
+        return cookie.replace(/Domain=[^;]*/, '');
+      });
+    }
 
-    return encodedBuffer.toString();
+    if (rewrittenHeaders['location']) {
+      rewrittenHeaders['location'] = rewrittenHeaders['location'].replace(/^https?:\/\//, '');
+    }
+
+    return rewrittenHeaders;
+  }
+
+  /**
+   * Handle WebSocket requests.
+   * @param {object} request - The request object.
+   * @param {object} response - The response object.
+   */
+  async handleWebSocketRequest(request, response) {
+    const { WebSocket } = await import('ws');
+    const { URL } = await import('url');
+
+    const targetUrl = new URL(request.url);
+    const webSocketUrl = `ws://${targetUrl.host}${targetUrl.pathname}`;
+
+    const webSocket = new WebSocket(webSocketUrl);
+
+    request.on('data', (data) => {
+      webSocket.send(data);
+    });
+
+    webSocket.on('message', (message) => {
+      response.write(message);
+    });
+
+    webSocket.on('error', (error) => {
+      console.error(error);
+    });
+
+    webSocket.on('close', () => {
+      response.end();
+    });
   }
 }
-
-export default ProxyEngine;
