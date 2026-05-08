@@ -6,7 +6,7 @@ import { BookmarkManager } from './components/BookmarkManager.js';
 import { encode, decode } from './sw-config.js';
 
 const settingsToggle = document.getElementById('settings-toggle');
-const bookmarksToggle = document.getElementById('bookmarks-toggle');
+const bookmarksToggle = document.getElementById('bookmark-toggle');
 const historyToggle = document.getElementById('history-toggle');
 const tabBarElement = document.getElementById('tab-bar');
 const viewportElement = document.getElementById('viewport');
@@ -124,17 +124,15 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
   }
 });
+
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(registrations => {
-    for (const registration of registrations) {
-      registration.unregister();
+  navigator.serviceWorker.getRegistration().then(registration => {
+    if (registration) {
+      registration.update().then(() => {
+        console.log('Service Worker updated');
+      }).catch(error => {
+        console.error('Service Worker update failed:', error);
+      });
     }
   });
 }
-navigator.serviceWorker.register('./sw.js')
-  .then((registration) => {
-    console.log('Service Worker registered:', registration);
-  })
-  .catch((error) => {
-    console.error('Service Worker registration failed:', error);
-  });
