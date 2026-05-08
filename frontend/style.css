@@ -199,21 +199,115 @@ iframe {
   transform: translateX(0);
 }
 
-.overlay {
+.settings-panel-overlay, .bookmarks-panel-overlay, .proxy-history-panel-overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0,0,0,0.5);
+  background-color: rgba(0, 0, 0, 0.5);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
 }
 
-.overlay.show {
+.settings-panel-overlay.show, .bookmarks-panel-overlay.show, .proxy-history-panel-overlay.show {
   opacity: 1;
-  pointer-events: auto;
+  pointer-events: all;
+}
+
+.settings-panel {
+  width: 300px;
+}
+
+.bookmarks-panel {
+  width: 300px;
+}
+
+.proxy-history-panel {
+  width: 300px;
+}
+
+.settings-panel-content, .bookmarks-panel-content, .proxy-history-panel-content {
+  padding: var(--space-2);
+}
+
+.settings-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.settings-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.settings-switch .slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg-surface);
+  transition: 0.2s;
+}
+
+.settings-switch .slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--bg-base);
+  transition: 0.2s;
+}
+
+.settings-switch input:checked + .slider {
+  background-color: var(--accent);
+}
+
+.settings-switch input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+.settings-switch .slider.round {
+  border-radius: 24px;
+}
+
+.settings-switch .slider.round:before {
+  border-radius: 50%;
+}
+
+button {
+  background-color: var(--accent);
+  color: var(--text-primary);
+  border: none;
+  padding: var(--space-1) var(--space-2);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+button:hover {
+  background-color: var(--accent-hover);
+}
+
+input[type="search"] {
+  font-family: 'Inter', sans-serif;
+}
+
+input[type="search"]:focus {
+  outline: none;
+}
+
+::selection {
+  background-color: var(--accent);
+  color: var(--text-primary);
 }
 
 ::-webkit-scrollbar {
@@ -228,90 +322,6 @@ iframe {
 
 ::-webkit-scrollbar-track {
   background-color: var(--bg-base);
-}
-
-button, input[type="search"], select {
-  font-family: 'Inter', sans-serif;
-}
-
-button {
-  cursor: pointer;
-}
-
-button:hover {
-  filter: brightness(1.05);
-}
-
-.settings-toggle, .bookmarks-toggle, .proxy-history-toggle {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
-}
-
-.settings-toggle input, .bookmarks-toggle input, .proxy-history-toggle input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.settings-toggle .slider, .bookmarks-toggle .slider, .proxy-history-toggle .slider {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 24px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.settings-toggle .slider:before, .bookmarks-toggle .slider:before, .proxy-history-toggle .slider:before {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 20px;
-  height: 20px;
-  background-color: var(--bg-elevated);
-  border-radius: 50%;
-  transition: all 0.2s ease;
-}
-
-.settings-toggle input:checked + .slider, .bookmarks-toggle input:checked + .slider, .proxy-history-toggle input:checked + .slider {
-  background-color: var(--accent);
-}
-
-.settings-toggle input:checked + .slider:before, .bookmarks-toggle input:checked + .slider:before, .proxy-history-toggle input:checked + .slider:before {
-  transform: translateX(20px);
-}
-
-.tab-favicon {
-  width: 16px;
-  height: 16px;
-  margin-right: var(--space-1);
-  border-radius: var(--radius-full);
-}
-
-.tab-title {
-  font-size: 0.9rem;
-}
-
-.loading-bar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background-color: var(--accent);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.2s ease;
-}
-
-.loading-bar.show {
-  transform: scaleX(1);
 }
 
 @media (prefers-reduced-motion: reduce) {
