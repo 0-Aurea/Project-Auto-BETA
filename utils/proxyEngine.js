@@ -7,7 +7,7 @@ const { promisify } = require('util');
 const { createServer } = require('http');
 const { createSecureServer } = require('https');
 const { TLSCertificateManager } = require('./tlsCertificateManager');
-const { EncodingUtils } = require('./encodingUtils');
+const { EncodingUtils } = require('./encoding');
 const { REQUEST_HEADER_REWRITE_LIST } = require('./constants');
 const { UrlUtils } = require('./urlUtils');
 const { CssRewriterUtils } = require('./cssRewriter');
@@ -125,17 +125,23 @@ class ProxyEngine {
     } else if (headers['content-type'] && headers['content-type'].includes('application/javascript')) {
       buffer = await JSRewriterUtils.rewrite(buffer.toString(), this.rewriteUrl.bind(this));
     }
-    res.writeHead(response.statusCode, headers);
+    Object.keys(headers).forEach((key) => res.setHeader(key, headers[key]));
+    res.writeHead(response.statusCode);
     res.end(buffer);
   }
 
   rewriteUrl(url) {
-    const { hostname, pathname, search, hash } = new URL(url);
-    return `/${EncodingUtils.encodeUrl(`http://${hostname}${pathname}${search}${hash}`)}`;
+    const { hostname, pathname } = new URL(url);
+    return `/service/${EncodingUtils.encodeUrl(`https://${hostname}${pathname}`)}`;
   }
 
   rewriteCookie(cookie) {
-    return cookie.replace(/domain=[^;]*/g, '');
+    const match = cookie.match(/domain=([^;]*)/);
+    if (match) {
+      const domain = match[1];
+      return cookie.replace(`domain=${domain}`, `domain=${UrlUtils.getTLD(hostname)}`);
+    }
+    return cookie;
   }
 
   async establishTlsTunnel(url) {
@@ -162,4 +168,4 @@ class ProxyEngine {
   }
 }
 
-module.exports = { ProxyEngine };
+module.exports = ProxyEngine;
