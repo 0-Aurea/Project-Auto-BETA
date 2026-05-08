@@ -196,6 +196,15 @@ iframe {
   width: 100%;
 }
 
+.nexus-logo {
+  font-size: 1.5rem;
+  font-weight: bold;
+  background: linear-gradient(135deg, var(--accent), #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
 .settings-panel, .bookmarks-panel, .proxy-history-panel {
   position: fixed;
   top: 0;
@@ -229,10 +238,10 @@ iframe {
 }
 
 .settings-toggle:hover, .bookmarks-toggle:hover, .proxy-history-toggle:hover {
-  color: var(--text-primary);
+  color: var(--accent);
 }
 
-.tab-loading-indicator {
+.loading-indicator {
   position: fixed;
   top: 0;
   left: 0;
@@ -244,7 +253,7 @@ iframe {
   transition: transform 0.2s ease;
 }
 
-.tab-loading-indicator.loaded {
+.loading-indicator.show {
   transform: scaleX(1);
 }
 
