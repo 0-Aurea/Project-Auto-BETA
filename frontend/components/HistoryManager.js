@@ -1,8 +1,8 @@
 import { openDB, deleteDB } from 'idb';
 
 export class HistoryManager {
-  constructor({ proxyHistoryPanelElement }) {
-    this.proxyHistoryPanelElement = proxyHistoryPanelElement;
+  constructor({ historyPanelElement }) {
+    this.historyPanelElement = historyPanelElement;
     this.dbName = 'historyDB';
     this.storeName = 'historyStore';
     this.dbVersion = 1;
@@ -60,6 +60,7 @@ export class HistoryManager {
       const store = tx.objectStore(this.storeName);
       const request = store.delete(id);
       await request.done;
+      this.renderHistoryPanel();
     } catch (error) {
       console.error('Error deleting history item:', error);
     }
@@ -67,35 +68,47 @@ export class HistoryManager {
 
   async renderHistoryPanel() {
     const historyItems = await this.getHistoryItems();
-    this.proxyHistoryPanelElement.innerHTML = '';
+    this.historyPanelElement.innerHTML = `
+      <div class="history-panel-header">
+        <h2>History</h2>
+      </div>
+      <ul class="history-list"></ul>
+    `;
+
+    const historyListElement = this.historyPanelElement.querySelector('.history-list');
 
     historyItems.forEach((item) => {
-      const historyItemElement = document.createElement('div');
+      const historyItemElement = document.createElement('li');
       historyItemElement.classList.add('history-item');
 
       const faviconElement = document.createElement('img');
       faviconElement.src = item.favicon;
       faviconElement.alt = 'Favicon';
+      faviconElement.classList.add('favicon');
       historyItemElement.appendChild(faviconElement);
 
       const titleElement = document.createElement('span');
       titleElement.textContent = item.title;
+      titleElement.classList.add('title');
       historyItemElement.appendChild(titleElement);
 
       const urlElement = document.createElement('span');
       urlElement.textContent = item.url;
+      urlElement.classList.add('url');
       historyItemElement.appendChild(urlElement);
 
       const timestampElement = document.createElement('span');
       timestampElement.textContent = this.formatRelativeTime(item.timestamp);
+      timestampElement.classList.add('timestamp');
       historyItemElement.appendChild(timestampElement);
 
       const deleteButton = document.createElement('button');
       deleteButton.textContent = 'Delete';
+      deleteButton.classList.add('delete-button');
       deleteButton.addEventListener('click', () => this.deleteHistoryItem(item.id));
       historyItemElement.appendChild(deleteButton);
 
-      this.proxyHistoryPanelElement.appendChild(historyItemElement);
+      historyListElement.appendChild(historyItemElement);
     });
   }
 
