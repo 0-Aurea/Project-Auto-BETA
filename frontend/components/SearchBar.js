@@ -1,5 +1,3 @@
-import { useState, useEffect } from 'react';
-
 export class SearchBar {
   constructor({ onSearchQuery, tabManager, swConfig }) {
     this.onSearchQuery = onSearchQuery;
@@ -9,7 +7,6 @@ export class SearchBar {
       searchQuery: '',
       focused: false,
       searchEngine: localStorage.getItem('searchEngine') || 'google',
-      showSearchHero: true,
     };
 
     this.searchInput = null;
