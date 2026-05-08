@@ -61,6 +61,9 @@ export class TabManager {
     tab.iframeEl = document.createElement('iframe');
     tab.iframeEl.src = url;
     tab.iframeEl.style.display = 'none';
+    tab.iframeEl.style.zIndex = -1;
+    tab.iframeEl.style.opacity = 0;
+    tab.iframeEl.style.transition = 'opacity 0.2s ease-in-out';
     this.viewportElement.appendChild(tab.iframeEl);
 
     if (this.tabs.length === 1) {
@@ -105,9 +108,7 @@ export class TabManager {
     if (oldTab) {
       oldTab.iframeEl.style.display = 'none';
       oldTab.iframeEl.style.opacity = 0;
-      setTimeout(() => {
-        oldTab.iframeEl.style.zIndex = -1;
-      }, 150);
+      oldTab.iframeEl.style.zIndex = -1;
     }
 
     const newTab = this.tabs.find((tab) => tab.id === tabId);
@@ -117,7 +118,7 @@ export class TabManager {
     setTimeout(() => {
       newTab.iframeEl.style.opacity = 1;
     }, 50);
-    if (!newTab.iframeEl.src) {
+    if (!newTab.iframeEl.src || newTab.iframeEl.src === 'about:blank') {
       newTab.iframeEl.src = encode(newTab.url);
     }
 
@@ -149,13 +150,45 @@ export class TabManager {
       activeTabElement.classList.add('active');
     }
 
+    if (this.tabs.length > 0) {
+      this.tabBarElement.querySelector('.new-tab-button').style.display = 'inline-block';
+    } else {
+      this.tabBarElement.querySelector('.new-tab-button').style.display = 'none';
+    }
+  }
+
+  updateTabBar() {
+    this.tabBarElement.innerHTML = '';
+
+    this.tabs.forEach((tab) => {
+      const tabElement = document.createElement('div');
+      tabElement.classList.add('tab');
+      tabElement.innerHTML = `
+        <img class="tab-favicon" src="${tab.favicon || 'https://example.com/globe-emoji.png'}">
+        <span class="tab-title">${tab.title || 'Untitled'}</span>
+        <button class="tab-close" aria-label="Close tab">×</button>
+      `;
+
+      tabElement.addEventListener('click', (e) => {
+        if (!e.target.classList.contains('tab-close')) {
+          this.handleTabClick(tab.id);
+        }
+      });
+
+      tabElement.querySelector('.tab-close').addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.handleTabClose(tab.id);
+      });
+
+      this.tabBarElement.appendChild(tabElement);
+    });
+
     const newTabButton = document.createElement('button');
     newTabButton.classList.add('new-tab-button');
     newTabButton.textContent = '+';
+    newTabButton.addEventListener('click', this.handleNewTab);
     this.tabBarElement.appendChild(newTabButton);
 
-    newTabButton.addEventListener('click', () => {
-      this.handleNewTab();
-    });
+    this.renderTabBar();
   }
 }
