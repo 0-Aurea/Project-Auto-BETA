@@ -1,8 +1,9 @@
 export class SearchBar {
-  constructor({ onSearchQuery, tabManager, swConfig }) {
+  constructor({ onSearchQuery, tabManager, swConfig, searchBarElement }) {
     this.onSearchQuery = onSearchQuery;
     this.tabManager = tabManager;
     this.swConfig = swConfig;
+    this.searchBarElement = searchBarElement;
     this.state = {
       searchQuery: '',
       focused: false,
@@ -70,7 +71,7 @@ export class SearchBar {
     this.searchForm.appendChild(this.searchEngineSelect);
     this.searchForm.appendChild(searchButton);
 
-    document.getElementById('search-bar-container').appendChild(this.searchForm);
+    this.searchBarElement.appendChild(this.searchForm);
 
     this.searchInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -100,6 +101,7 @@ export class SearchBar {
       const encodedUrl = this.swConfig.encode(url);
       this.tabManager.addTab({ url: encodedUrl, title: searchValue, favicon: '' });
       this.searchInput.value = '';
+      localStorage.setItem('searchEngine', this.state.searchEngine);
     }
   }
 
@@ -119,12 +121,9 @@ export class SearchBar {
 
   handleSearchEngineChange(engine) {
     this.state.searchEngine = engine;
-    localStorage.setItem('searchEngine', engine);
-    const googleOption = this.searchEngineSelect.children[0];
-    const bingOption = this.searchEngineSelect.children[1];
-    googleOption.classList.toggle('active', engine === 'google');
-    bingOption.classList.toggle('active', engine === 'bing');
-    this.searchEngineSelect.children[2].classList.toggle('active-google', engine === 'google');
-    this.searchEngineSelect.children[2].classList.toggle('active-bing', engine === 'bing');
+    this.searchEngineSelect.children[0].classList.toggle('active', engine === 'google');
+    this.searchEngineSelect.children[1].classList.toggle('active', engine === 'bing');
+    this.searchEngineSelect.classList.toggle('active-google', engine === 'google');
+    this.searchEngineSelect.classList.toggle('active-bing', engine === 'bing');
   }
 }
