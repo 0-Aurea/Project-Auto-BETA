@@ -84,7 +84,7 @@ export class TabManager {
       this.handleTabClose(tabId);
     });
 
-    tabElement.style.transition = 'transform 0.2s ease-in-out';
+    tabElement.style.transition = 'transform 0.2s ease-in-out, opacity 0.2s ease-in-out';
     tabElement.addEventListener('mouseover', () => {
       tabElement.style.transform = 'scale(1.02)';
     });
@@ -117,8 +117,9 @@ export class TabManager {
     const tab = this.tabs.splice(tabIndex, 1)[0];
     tab.iframeEl.remove();
     const tabElement = this.tabBarElement.children[tabIndex];
-    tabElement.style.transition = 'transform 0.2s ease-in-out';
+    tabElement.style.transition = 'transform 0.2s ease-in-out, opacity 0.2s ease-in-out';
     tabElement.style.transform = 'scale(0.5)';
+    tabElement.style.opacity = 0;
     tabElement.addEventListener('transitionend', () => {
       this.tabBarElement.removeChild(tabElement);
     });
@@ -130,28 +131,26 @@ export class TabManager {
         this.activeTabId = null;
         this.viewportElement.innerHTML = `
           <div class="search-hero">
-            <form id="search-form">
-              <input type="text" id="search-input" placeholder="Search or enter a URL...">
-              <button id="search-button">Go</button>
-              <div class="search-engines">
-                <button class="search-engine" data-engine="google">Google</button>
-                <button class="search-engine" data-engine="bing">Bing</button>
-              </div>
+            <form>
+              <input type="text" placeholder="Search or enter a URL...">
+              <button type="submit">Go</button>
             </form>
           </div>
         `;
-        this.searchBarElement = document.getElementById('search-form');
-        this.searchBarElement.addEventListener('submit', (e) => {
-          e.preventDefault();
-          const searchQuery = document.getElementById('search-input').value;
-          const searchEngine = document.querySelector('.search-engine.active').getAttribute('data-engine');
-          const url = `https://${searchEngine}.com/search?q=${searchQuery}`;
-          this.addTab({ url });
-        });
       }
     }
+  }
 
-    this.renderTabBar();
+  handleTabClose(tabId) {
+    this.removeTab(tabId);
+  }
+
+  handleTabClick(tabId) {
+    this.switchTab(tabId);
+  }
+
+  handleNewTab() {
+    this.addTab();
   }
 
   switchTab(tabId) {
@@ -175,18 +174,6 @@ export class TabManager {
     this.onTabChange(tabId);
   }
 
-  handleTabClose(tabId) {
-    this.removeTab(tabId);
-  }
-
-  handleTabClick(tabId) {
-    this.switchTab(tabId);
-  }
-
-  handleNewTab() {
-    this.addTab();
-  }
-
   renderNewTabButton() {
     const newTabButton = document.createElement('button');
     newTabButton.classList.add('new-tab-button');
@@ -195,10 +182,10 @@ export class TabManager {
   }
 
   renderTabBar() {
-    this.tabs.forEach((tab, index) => {
-      const tabElement = this.tabBarElement.children[index];
-      tabElement.querySelector('.tab-favicon').src = tab.favicon || 'https://example.com/globe-emoji.png';
-      tabElement.querySelector('.tab-title').textContent = tab.title || 'Untitled';
-    });
+    // Add active class to active tab
+    const activeTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
+    if (activeTabElement) {
+      activeTabElement.classList.add('active');
+    }
   }
 }
