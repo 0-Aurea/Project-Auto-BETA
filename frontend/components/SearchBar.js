@@ -100,7 +100,7 @@ export class SearchBar {
         url = searchEngines[this.state.searchEngine] + encodeURIComponent(searchValue);
       }
       const encodedUrl = this.swConfig.encode(url);
-      this.tabManager.addTab({ url: encodedUrl, title: searchValue, favicon: '' });
+      this.tabManager.navigate(encodedUrl, searchValue);
       this.searchInput.value = '';
       localStorage.setItem('searchEngine', this.state.searchEngine);
     }
@@ -124,12 +124,10 @@ export class SearchBar {
 
   handleSearchEngineChange(engine) {
     this.state.searchEngine = engine;
+    this.searchEngineSelect.children[0].classList.toggle('active');
+    this.searchEngineSelect.children[1].classList.toggle('active');
+    this.slider.classList.toggle('active-google');
+    this.slider.classList.toggle('active-bing');
     localStorage.setItem('searchEngine', engine);
-    this.searchEngineSelect.querySelectorAll('.search-engine-option').forEach((option) => {
-      option.classList.remove('active');
-    });
-    this.searchEngineSelect.querySelector(`.search-engine-option:not(.active-${engine})`).classList.add('active');
-    this.slider.classList.remove(`active-google`, `active-bing`);
-    this.slider.classList.add(`active-${engine}`);
   }
 }
