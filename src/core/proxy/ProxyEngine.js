@@ -101,6 +101,7 @@ class ProxyEngine {
       const { URL_PREFIX, DEFAULT_ENCODING, API_SERVICE_URL } = await import('../config/constants.js');
       const { http } = await import('http');
       const { URL } = await import('url');
+      const { WebSocket } = await import('ws');
 
       const targetUrl = new URL(request.url, 'http://example.com');
       if (!targetUrl.protocol) throw new Error('Invalid target URL');
@@ -111,6 +112,26 @@ class ProxyEngine {
         headers: request.headers,
         url: `${API_SERVICE_URL}${encodedUrl}`,
       };
+
+      if (request.upgrade) {
+        const webSocket = new WebSocket(targetUrl.href);
+        webSocket.on('open', () => {
+          request.socket.on('data', (data) => {
+            webSocket.send(data);
+          });
+          webSocket.on('message', (data) => {
+            request.socket.write(data);
+          });
+          webSocket.on('close', () => {
+            request.socket.destroy();
+          });
+          webSocket.on('error', (error) => {
+            console.error('WebSocket error:', error);
+            request.socket.destroy();
+          });
+        });
+        return;
+      }
 
       const targetResponse = await this.forwardRequest(proxiedRequest);
       const rewrittenHeaders = this.rewriteResponseHeaders(targetResponse.headers);
@@ -133,30 +154,23 @@ class ProxyEngine {
    * @returns {object} The response object.
    */
   async forwardRequest(request) {
-    return new Promise((resolve, reject) => {
-      const { http } = require('http');
-      const options = {
-        method: request.method,
-        headers: request.headers,
-        hostname: 'localhost',
-        port: 8080,
-        path: request.url,
-      };
+    const { http } = await import('http');
+    const { URL } = await import('url');
 
-      const targetRequest = http.request(options, (targetResponse) => {
+    return new Promise((resolve, reject) => {
+      const targetRequest = http.request(request.url, (targetResponse) => {
         resolve(targetResponse);
       });
-
       targetRequest.on('error', (error) => {
         reject(error);
       });
-
+      targetRequest.write('');
       targetRequest.end();
     });
   }
 
   /**
-   * Rewrite response headers to remove security headers.
+   * Rewrite the response headers.
    * @param {object} headers - The response headers.
    * @returns {object} The rewritten response headers.
    */
@@ -165,8 +179,38 @@ class ProxyEngine {
     delete rewrittenHeaders['content-security-policy'];
     delete rewrittenHeaders['strict-transport-security'];
     delete rewrittenHeaders['x-frame-options'];
+    rewrittenHeaders['access-control-allow-origin'] = '*';
+    rewrittenHeaders['access-control-allow-headers'] = 'Origin, X-Requested-With, Content-Type, Accept';
     return rewrittenHeaders;
   }
-}
 
-module.exports = ProxyEngine;
+  /**
+   * Handle WebSocket upgrade.
+   * @param {object} request - The request object.
+   * @param {object} socket - The socket object.
+   * @param {object} head - The head object.
+   */
+  handleWebSocketUpgrade(request, socket, head) {
+    const { WebSocket } = require('ws');
+    const { URL } = require('url');
+
+    const targetUrl = new URL(request.url, 'http://example.com');
+    const webSocket = new WebSocket(targetUrl.href);
+
+    webSocket.on('open', () => {
+      socket.on('data', (data) => {
+        webSocket.send(data);
+      });
+      webSocket.on('message', (data) => {
+        socket.write(data);
+      });
+      webSocket.on('close', () => {
+        socket.destroy();
+      });
+      webSocket.on('error', (error) => {
+        console.error('WebSocket error:', error);
+        socket.destroy();
+      });
+    });
+  }
+}
