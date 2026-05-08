@@ -24,6 +24,7 @@ export class SettingsManager {
   }
 
   renderSettingsPanel() {
+    this.settingsPanelElement.className = 'settings-panel';
     this.settingsPanelElement.innerHTML = `
       <div class="settings-header">Settings</div>
       <div class="settings-group">
@@ -58,6 +59,13 @@ export class SettingsManager {
     if (this.state.darkModeEnabled) {
       document.body.classList.add('dark-mode');
     }
+
+    this.settingsPanelElement.addEventListener('click', (event) => {
+      if (event.target === this.settingsPanelElement) {
+        this.settingsPanelElement.classList.remove('open');
+        document.body.classList.remove('settings-open');
+      }
+    });
   }
 
   handleAdBlockToggle(event) {
