@@ -128,11 +128,3 @@ document.addEventListener('keydown', (event) => {
     searchBar.focus();
   }
 });
-document.fonts.load('1em "Inter"').then(() => {
-  document.documentElement.style.fontFamily = '"Inter", sans-serif';
-  document.documentElement.style.fontFeatureSettings = '"cv02" 1, "cv03" 1, "cv04" 1, "cv11" 1';
-});
-
-document.fonts.load('1em "JetBrains Mono"').then(() => {
-  document.documentElement.style.setProperty('--monospace-font', '"JetBrains Mono", monospace');
-});
