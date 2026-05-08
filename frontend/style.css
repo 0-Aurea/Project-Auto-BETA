@@ -191,6 +191,7 @@ header nav a:hover {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   cursor: pointer;
+  transition: background-color 0.2s ease;
 }
 
 .search-engine-pill.active {
@@ -199,6 +200,25 @@ header nav a:hover {
 
 .search-engine-pill:not(:last-child) {
   margin-right: var(--space-1);
+}
+
+.search-engine-slider {
+  position: relative;
+  width: 100%;
+  height: 2px;
+  background-color: var(--border);
+  transition: all 0.2s ease;
+}
+
+.search-engine-slider::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 2px;
+  background-color: var(--accent);
+  transition: all 0.2s ease;
 }
 
 #viewport {
@@ -218,13 +238,15 @@ iframe {
   position: fixed;
   top: 0;
   right: 0;
+  width: 300px;
+  height: 100vh;
   background-color: var(--bg-elevated);
   padding: var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  border-left: 1px solid var(--border);
   transform: translateX(100%);
   transition: transform 0.2s cubic-bezier(0.16,1,0.3,1);
+  box-shadow: var(--shadow-md);
+  z-index: 1;
 }
 
 .settings-panel.show,
@@ -240,7 +262,7 @@ iframe {
   top: 0;
   left: 0;
   width: 100%;
-  height: 100%;
+  height: 100vh;
   background-color: rgba(0,0,0,0.5);
   opacity: 0;
   pointer-events: none;
@@ -269,72 +291,33 @@ iframe {
 
 .settings-switch .slider {
   position: absolute;
-  cursor: pointer;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: var(--bg-surface);
-  transition: 0.2s;
+  background-color: var(--border);
+  transition: all 0.2s ease;
+  border-radius: 24px;
 }
 
-.settings-switch .slider:before {
+.settings-switch .slider::before {
+  content: '';
   position: absolute;
-  content: "";
-  height: 20px;
-  width: 20px;
+  top: 2px;
   left: 2px;
-  bottom: 2px;
-  background-color: var(--bg-base);
-  transition: 0.2s;
+  width: 20px;
+  height: 20px;
+  background-color: var(--bg-surface);
+  transition: all 0.2s ease;
+  border-radius: 50%;
 }
 
 .settings-switch input:checked + .slider {
   background-color: var(--accent);
 }
 
-.settings-switch input:checked + .slider:before {
+.settings-switch input:checked + .slider::before {
   transform: translateX(20px);
-}
-
-.settings-select {
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-2);
-  font-size: 1rem;
-  color: var(--text-primary);
-}
-
-.history-entry {
-  padding: var(--space-1) var(--space-2);
-  border-bottom: 1px solid var(--border);
-}
-
-.history-entry:last-child {
-  border-bottom: none;
-}
-
-.history-entry .favicon {
-  width: 16px;
-  height: 16px;
-  margin-right: var(--space-1);
-}
-
-.bookmark-card {
-  background-color: var(--bg-surface);
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  margin: var(--space-1);
-  width: calc(33.33% - 2px);
-  display: inline-block;
-}
-
-.bookmark-card .favicon {
-  width: 16px;
-  height: 16px;
-  margin-right: var(--space-1);
 }
 
 .loading-bar {
@@ -349,8 +332,11 @@ iframe {
   transition: transform 0.2s ease;
 }
 
-.loading-bar.show {
-  transform: scaleX(1);
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }
 
 ::-webkit-scrollbar {
@@ -360,7 +346,7 @@ iframe {
 
 ::-webkit-scrollbar-thumb {
   background-color: var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-track {
