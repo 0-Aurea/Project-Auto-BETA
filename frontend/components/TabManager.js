@@ -44,11 +44,14 @@ export class TabManager {
         this.tabs.push(newTab);
         this.activeTabId = 0;
         this.tabIdCounter = 1;
+        this.switchTab(0);
       }
+    } else {
+      this.addTab();
     }
   }
 
-  addTab({ url = '', title = '', favicon = '' }) {
+  addTab({ url = '', title = '', favicon = '' } = {}) {
     const tabId = this.tabIdCounter++;
     const tab = {
       id: tabId,
@@ -80,7 +83,6 @@ export class TabManager {
     });
 
     tabElement.style.transition = 'transform 0.2s ease-in-out';
-    tabElement.style.transform = 'scale(1)';
     tabElement.addEventListener('mouseover', () => {
       tabElement.style.transform = 'scale(1.02)';
     });
@@ -103,6 +105,7 @@ export class TabManager {
     }
 
     this.renderTabBar();
+    return tabId;
   }
 
   removeTab(tabId) {
@@ -127,7 +130,7 @@ export class TabManager {
           <div class="search-hero">
             <form id="search-form">
               <input type="text" id="search-input" placeholder="Search or enter a URL...">
-              <button type="submit" id="search-button">Go</button>
+              <button id="search-button">Go</button>
             </form>
           </div>
         `;
@@ -135,29 +138,35 @@ export class TabManager {
     }
 
     this.renderTabBar();
-    this.renderNewTabButton();
   }
 
   switchTab(tabId) {
     if (this.activeTabId === tabId) return;
 
-    const oldTab = this.tabs.find((tab) => tab.id === this.activeTabId);
-    if (oldTab) {
-      oldTab.iframeEl.style.display = 'none';
-      oldTab.iframeEl.style.opacity = 0;
-      oldTab.iframeEl.style.zIndex = -1;
+    const oldTabIndex = this.tabs.findIndex((tab) => tab.id === this.activeTabId);
+    const newTabIndex = this.tabs.findIndex((tab) => tab.id === tabId);
+
+    if (oldTabIndex !== -1) {
+      this.tabs[oldTabIndex].iframeEl.style.opacity = 0;
+      this.tabs[oldTabIndex].iframeEl.style.zIndex = -1;
+      this.tabs[oldTabIndex].iframeEl.style.display = 'none';
     }
 
-    const newTab = this.tabs.find((tab) => tab.id === tabId);
-    if (newTab) {
-      newTab.iframeEl.style.display = 'block';
-      newTab.iframeEl.style.opacity = 1;
-      newTab.iframeEl.style.zIndex = 1;
-      this.activeTabId = tabId;
-      this.onTabChange(tabId);
-    }
+    this.activeTabId = tabId;
 
-    this.renderTabBar();
+    const newTab = this.tabs[newTabIndex];
+    newTab.iframeEl.style.opacity = 1;
+    newTab.iframeEl.style.zIndex = 1;
+    newTab.iframeEl.style.display = 'block';
+    newTab.iframeEl.src = newTab.url;
+
+    this.onTabChange(tabId);
+
+    const tabElements = this.tabBarElement.children;
+    for (let i = 0; i < tabElements.length; i++) {
+      tabElements[i].classList.remove('active');
+    }
+    tabElements[newTabIndex].classList.add('active');
   }
 
   handleTabClose(tabId) {
@@ -169,7 +178,7 @@ export class TabManager {
   }
 
   handleNewTab() {
-    this.addTab({ url: '' });
+    this.addTab();
   }
 
   renderNewTabButton() {
@@ -182,25 +191,10 @@ export class TabManager {
   renderTabBar() {
     const tabElements = this.tabBarElement.children;
     for (let i = 0; i < tabElements.length; i++) {
-      const tabElement = tabElements[i];
-      if (tabElement.classList.contains('tab')) {
-        if (this.tabs.find((tab) => tab.id === i)) {
-          tabElement.classList.remove('active');
-        } else {
-          tabElement.remove();
-          i--;
-        }
+      if (tabElements[i].classList.contains('new-tab-button')) {
+        continue;
       }
-    }
-
-    for (let i = 0; i < this.tabs.length; i++) {
-      const tab = this.tabs[i];
-      const tabElement = this.tabBarElement.children[i];
-      if (tab.id === this.activeTabId) {
-        tabElement.classList.add('active');
-      } else {
-        tabElement.classList.remove('active');
-      }
+      tabElements[i].style.transform = '';
     }
   }
 }
