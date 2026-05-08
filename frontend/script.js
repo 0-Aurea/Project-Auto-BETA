@@ -23,9 +23,9 @@ document.body.appendChild(settingsPanelElement);
 document.body.appendChild(bookmarksPanelElement);
 document.body.appendChild(proxyHistoryPanelElement);
 
-const settingsManager = new SettingsManager(settingsPanelElement);
-const bookmarksManager = new BookmarkManager(bookmarksPanelElement);
-const historyManager = new HistoryManager(proxyHistoryPanelElement);
+const settingsManager = new SettingsManager({ settingsPanelElement });
+const bookmarksManager = new BookmarkManager({ bookmarksPanelElement });
+const historyManager = new HistoryManager({ proxyHistoryPanelElement });
 const tabManager = new TabManager({ 
   tabBarElement, 
   viewportElement, 
@@ -121,19 +121,39 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
   }
 });
+
 tabManager.onTabChange = (tab) => {
   searchBar.setSearchQuery(tab.url);
 };
 
-historyManager.onHistoryChange = (history) => {
-  searchBar.setSearchQuery(history[history.length - 1].url);
-};
+tabManager.addEventListener('tab-change', (tab) => {
+  searchBar.setSearchQuery(tab.url);
+});
 
-bookmarksManager.onBookmarkClick = (bookmark) => {
-  tabManager.navigate(bookmark.url);
-};
+searchBar.addEventListener('search', (query) => {
+  const encodedUrl = encode(query);
+  tabManager.navigate(encodedUrl);
+});
 
-settingsManager.onSettingsChange = (settings) => {
-  tabManager.updateTabSettings(settings);
-  searchBar.updateSearchSettings(settings);
-};
+settingsManager.addEventListener('settings-change', (settings) => {
+  localStorage.setItem('adBlockEnabled', settings.adBlockEnabled);
+  localStorage.setItem('darkModeEnabled', settings.darkModeEnabled);
+  localStorage.setItem('searchEngine', settings.searchEngine);
+});
+
+bookmarksManager.addEventListener('bookmark-add', (bookmark) => {
+  historyManager.addHistoryEntry(bookmark.url);
+});
+
+bookmarksManager.addEventListener('bookmark-remove', (bookmark) => {
+  historyManager.removeHistoryEntry(bookmark.url);
+});
+
+historyManager.addEventListener('history-clear', () => {
+  tabManager.clearTabs();
+});
+
+settingsManager.addEventListener('cache-clear', () => {
+  historyManager.clearHistory();
+  tabManager.clearTabs();
+});
