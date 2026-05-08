@@ -14,10 +14,11 @@
   <div class="app-container">
     <header>
       <nav>
-        <ul>
-          <li><a href="#" id="settings-toggle">Settings</a></li>
+        <div class="nav-logo" id="nav-logo"></div>
+        <ul class="nav-links">
+          <li><a href="#" id="history-toggle">History</a></li>
           <li><a href="#" id="bookmarks-toggle">Bookmarks</a></li>
-          <li><a href="#" id="proxy-history-toggle">Proxy History</a></li>
+          <li><a href="#" id="settings-toggle">Settings</a></li>
         </ul>
       </nav>
     </header>
@@ -26,52 +27,52 @@
       <div class="search-bar-container">
         <div class="search-bar" id="search-bar">
           <input type="search" id="search-input" placeholder="Search...">
-          <select id="search-engine-select">
-            <option value="google">Google</option>
-            <option value="bing">Bing</option>
-          </select>
-          <button id="search-button">Search</button>
+          <div class="search-engine-toggle">
+            <button class="search-engine-button" id="google-button">Google</button>
+            <button class="search-engine-button" id="bing-button">Bing</button>
+          </div>
+          <button id="search-button">Go</button>
         </div>
       </div>
       <div class="tab-bar-container">
         <div class="tab-bar" id="tab-bar">
+          <button id="new-tab-button">+</button>
         </div>
-        <button id="new-tab-button">New Tab</button>
       </div>
       <div class="tab-manager-container">
         <div id="viewport"></div>
       </div>
-      <div class="settings-panel-container">
-        <div class="settings-panel" id="settings-panel">
-          <h2>Settings</h2>
-          <label>
-            <input type="checkbox" id="ad-block-enabled-checkbox">
-            Ad Block Enabled
-          </label>
-          <label>
-            <select id="search-engine-mode-select">
-              <option value="google">Google</option>
-              <option value="bing">Bing</option>
-            </select>
-            Search Engine
-          </label>
-        </div>
-      </div>
-      <div class="proxy-history-container">
-        <div class="proxy-history-panel" id="proxy-history-panel">
-          <h2>Proxy History</h2>
-          <ul id="proxy-history-list"></ul>
-          <button id="clear-history-button">Clear History</button>
-        </div>
-      </div>
-      <div class="bookmarks-manager-container">
-        <div class="bookmarks-panel" id="bookmarks-panel">
-          <h2>Bookmarks</h2>
-          <ul id="bookmarks-list"></ul>
-          <button id="add-bookmark-button">Add Bookmark</button>
-        </div>
-      </div>
     </main>
+    <div class="settings-panel-container">
+      <div class="settings-panel" id="settings-panel">
+        <h2>Settings</h2>
+        <label>
+          <input type="checkbox" id="ad-block-enabled-checkbox">
+          Ad Block Enabled
+        </label>
+        <label>
+          <select id="search-engine-mode-select">
+            <option value="google">Google</option>
+            <option value="bing">Bing</option>
+          </select>
+          Search Engine
+        </label>
+      </div>
+    </div>
+    <div class="history-panel-container">
+      <div class="history-panel" id="history-panel">
+        <h2>History</h2>
+        <ul id="history-list"></ul>
+        <button id="clear-history-button">Clear History</button>
+      </div>
+    </div>
+    <div class="bookmarks-panel-container">
+      <div class="bookmarks-panel" id="bookmarks-panel">
+        <h2>Bookmarks</h2>
+        <ul id="bookmarks-list"></ul>
+        <button id="add-bookmark-button">Add Bookmark</button>
+      </div>
+    </div>
   </div>
   <script type="module" src="script.js"></script>
 </body>
