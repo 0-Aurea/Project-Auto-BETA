@@ -151,12 +151,14 @@ wss.on('connection', (ws, req) => {
     ws.send(message);
   });
 
-  targetWs.on('error', (error) => {
-    logger.error('Target WebSocket error:', error);
+  ws.on('error', (error) => {
+    logger.error('WebSocket error:', error);
+    targetWs.close();
   });
 
-  ws.on('error', (error) => {
-    logger.error('Client WebSocket error:', error);
+  targetWs.on('error', (error) => {
+    logger.error('Target WebSocket error:', error);
+    ws.close();
   });
 
   ws.on('close', () => {
@@ -167,27 +169,3 @@ wss.on('connection', (ws, req) => {
     ws.close();
   });
 });
-
-https.createServer({
-  key: fs.readFileSync(config.server.https.key),
-  cert: fs.readFileSync(config.server.https.cert),
-}, app).listen(443, () => {
-  logger.info('HTTPS server listening on port 443');
-});
-
-app.use((req, res) => {
-  if (req.protocol === 'https') {
-    res.redirect(`http://${req.headers.host}${req.url}`);
-  } else {
-    res.status(400).send({ error: 'Bad Request' });
-  }
-});
-
-const httpsRedirectServer = http.createServer((req, res) => {
-  res.redirect(`https://${req.headers.host}${req.url}`);
-});
-
-httpsRedirectServer.listen(80, () => {
-  logger.info('HTTP redirect server listening on port 80');
-});
-```
