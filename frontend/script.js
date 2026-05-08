@@ -91,6 +91,7 @@ settingsManager.onCacheClear = () => {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+  tabManager.addTab();
   tabManager.init();
   searchBar.init();
   bookmarksManager.init();
@@ -125,16 +126,9 @@ document.addEventListener('keydown', (event) => {
 
 tabManager.onTabChange = (tab) => {
   searchBar.setSearchQuery(tab.url);
-};
-tabManager.onTabChange = (tab) => {
-  if (tab) {
-    searchBar.setSearchQuery(tab.url);
+  if (tab.url) {
+    tabManager.updateTab(tab);
   }
 };
-
-searchBarElement.addEventListener('submit', (event) => {
-  event.preventDefault();
-  const searchQuery = searchBar.getSearchQuery();
-  const encodedUrl = encode(searchQuery);
-  tabManager.navigate(encodedUrl);
-});
+tabManager.renderTabBar();
+tabManager.handleNewTab();
