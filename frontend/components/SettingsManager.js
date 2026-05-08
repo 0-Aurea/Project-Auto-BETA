@@ -19,6 +19,7 @@ export class SettingsManager {
     this.renderSettingsPanel();
     document.getElementById('settings-toggle').addEventListener('click', () => {
       this.settingsPanelElement.classList.toggle('open');
+      document.body.classList.toggle('settings-open', this.settingsPanelElement.classList.contains('open'));
     });
   }
 
@@ -53,6 +54,10 @@ export class SettingsManager {
     document.getElementById('ad-block-toggle').addEventListener('change', this.handleAdBlockToggle);
     document.getElementById('dark-mode-toggle').addEventListener('change', this.handleDarkModeToggle);
     document.getElementById('search-engine-select').addEventListener('change', this.handleSearchEngineChange);
+
+    if (this.state.darkModeEnabled) {
+      document.body.classList.add('dark-mode');
+    }
   }
 
   handleAdBlockToggle(event) {
