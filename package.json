@@ -33,14 +33,7 @@
     "brotli": "^0.1.2",
     "gzip-js": "^1.0.2",
     "jsdom": "^20.0.3",
-    "uuid": "^8.3.2",
-    "crypto": "^1.0.1",
-    "events": "^3.3.0",
-    "http": "^0.0.1-security",
-    "https": "^0.0.1-security",
-    "stream": "^0.0.2-security",
-    "url": "^0.11.0",
-    "zlib": "^0.0.1-security"
+    "uuid": "^8.3.2"
   },
   "devDependencies": {
     "@babel/core": "^7.12.10",
