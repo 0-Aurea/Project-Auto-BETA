@@ -144,16 +144,18 @@ export class TabManager {
       tabElement.classList.remove('active');
     });
 
-    const activeTabIndex = this.tabs.findIndex((tab) => tab.id === this.activeTabId);
-    if (activeTabIndex !== -1) {
-      const activeTabElement = this.tabBarElement.children[activeTabIndex];
+    const activeTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
+    if (activeTabElement) {
       activeTabElement.classList.add('active');
-      activeTabElement.scrollIntoView({ behavior: 'smooth' });
     }
 
     const newTabButton = document.createElement('button');
     newTabButton.classList.add('new-tab-button');
     newTabButton.textContent = '+';
     this.tabBarElement.appendChild(newTabButton);
+
+    newTabButton.addEventListener('click', () => {
+      this.handleNewTab();
+    });
   }
 }
