@@ -3,6 +3,7 @@ import { SearchBar } from './components/SearchBar.js';
 import { SettingsManager } from './components/SettingsManager.js';
 import { HistoryManager } from './components/HistoryManager.js';
 import { BookmarkManager } from './components/BookmarkManager.js';
+import { NexusLogo } from './components/NexusLogo.js';
 import { encode, decode } from './sw-config.js';
 
 const settingsToggle = document.getElementById('settings-toggle');
@@ -11,6 +12,7 @@ const historyToggle = document.getElementById('history-toggle');
 const tabBarElement = document.getElementById('tab-bar');
 const viewportElement = document.getElementById('viewport');
 const searchBarElement = document.getElementById('search-bar');
+const navLogoElement = document.getElementById('nav-logo');
 const settingsPanelElement = document.createElement('div');
 const bookmarksPanelElement = document.createElement('div');
 const historyPanelElement = document.createElement('div');
@@ -23,6 +25,7 @@ document.body.appendChild(settingsPanelElement);
 document.body.appendChild(bookmarksPanelElement);
 document.body.appendChild(historyPanelElement);
 
+const nexusLogo = new NexusLogo({ logoContainerElement: navLogoElement });
 const settingsManager = new SettingsManager({ settingsPanelElement });
 const bookmarksManager = new BookmarkManager({ bookmarksPanelElement });
 const historyManager = new HistoryManager({ historyPanelElement });
