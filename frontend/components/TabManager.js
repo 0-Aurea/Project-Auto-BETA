@@ -23,6 +23,8 @@ export class TabManager {
         this.handleNewTab();
       }
     });
+
+    this.renderNewTabButton = this.renderNewTabButton.bind(this);
   }
 
   addTab({ url = '', title = '', favicon = '' }) {
@@ -71,6 +73,7 @@ export class TabManager {
     }
 
     this.renderTabBar();
+    this.renderNewTabButton();
   }
 
   removeTab(tabId) {
@@ -99,6 +102,7 @@ export class TabManager {
     }
 
     this.renderTabBar();
+    this.renderNewTabButton();
   }
 
   switchTab(tabId) {
@@ -137,58 +141,29 @@ export class TabManager {
   }
 
   handleNewTab() {
-    this.addTab({});
+    this.addTab({ url: '', title: '', favicon: '' });
   }
 
-  renderTabBar() {
-    Array.from(this.tabBarElement.children).forEach((tabElement) => {
-      tabElement.classList.remove('active');
-    });
-
-    const activeTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
-    if (activeTabElement) {
-      activeTabElement.classList.add('active');
-    }
-
-    if (this.tabs.length > 0) {
-      this.tabBarElement.querySelector('.new-tab-button').style.display = 'inline-block';
-    } else {
-      this.tabBarElement.querySelector('.new-tab-button').style.display = 'none';
-    }
-  }
-
-  updateTabBar() {
-    this.tabBarElement.innerHTML = '';
-
-    this.tabs.forEach((tab) => {
-      const tabElement = document.createElement('div');
-      tabElement.classList.add('tab');
-      tabElement.innerHTML = `
-        <img class="tab-favicon" src="${tab.favicon || 'https://example.com/globe-emoji.png'}">
-        <span class="tab-title">${tab.title || 'Untitled'}</span>
-        <button class="tab-close" aria-label="Close tab">×</button>
-      `;
-
-      tabElement.addEventListener('click', (e) => {
-        if (!e.target.classList.contains('tab-close')) {
-          this.handleTabClick(tab.id);
-        }
-      });
-
-      tabElement.querySelector('.tab-close').addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.handleTabClose(tab.id);
-      });
-
-      this.tabBarElement.appendChild(tabElement);
-    });
-
+  renderNewTabButton() {
     const newTabButton = document.createElement('button');
     newTabButton.classList.add('new-tab-button');
     newTabButton.textContent = '+';
-    newTabButton.addEventListener('click', this.handleNewTab);
     this.tabBarElement.appendChild(newTabButton);
+  }
 
-    this.renderTabBar();
+  renderTabBar() {
+    const tabElements = this.tabBarElement.children;
+    for (let i = 0; i < tabElements.length; i++) {
+      const tabElement = tabElements[i];
+      if (tabElement.classList.contains('tab')) {
+        if (this.tabs.find((tab) => tab.id === this.activeTabId)) {
+          tabElement.classList.remove('active');
+        }
+        const tabId = this.tabs.findIndex((tab) => tab.id === this.activeTabId);
+        if (i === tabId) {
+          tabElement.classList.add('active');
+        }
+      }
+    }
   }
 }
