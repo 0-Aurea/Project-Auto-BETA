@@ -3,7 +3,6 @@ import { SearchBar } from './components/SearchBar.js';
 import { SettingsManager } from './components/SettingsManager.js';
 import { HistoryManager } from './components/HistoryManager.js';
 import { BookmarkManager } from './components/BookmarkManager.js';
-import { NexusLogo } from './components/NexusLogo.js';
 import { encode, decode } from './sw-config.js';
 
 const settingsToggle = document.getElementById('settings-toggle');
@@ -25,10 +24,6 @@ document.body.appendChild(settingsPanelElement);
 document.body.appendChild(bookmarksPanelElement);
 document.body.appendChild(historyPanelElement);
 
-const nexusLogo = new NexusLogo({ logoContainerElement: navLogoElement });
-const settingsManager = new SettingsManager({ settingsPanelElement });
-const bookmarksManager = new BookmarkManager({ bookmarksPanelElement });
-const historyManager = new HistoryManager({ historyPanelElement });
 const tabManager = new TabManager({ 
   tabBarElement, 
   viewportElement, 
@@ -46,6 +41,10 @@ const searchBar = new SearchBar({
   swConfig: { encode, decode },
   searchBarElement
 });
+
+const settingsManager = new SettingsManager({ settingsPanelElement });
+const bookmarksManager = new BookmarkManager({ bookmarksPanelElement });
+const historyManager = new HistoryManager({ historyPanelElement });
 
 settingsToggle.addEventListener('click', () => {
   settingsPanelElement.classList.toggle('open');
@@ -128,12 +127,9 @@ document.addEventListener('keydown', (event) => {
   }
 });
  
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') {
-    tabManager.saveTabs();
-  }
+searchBarElement.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const searchQuery = searchBar.getSearchQuery();
+  const encodedUrl = encode(searchQuery);
+  tabManager.navigate(encodedUrl);
 });
-
-settingsManager.loadSettings();
-bookmarksManager.loadBookmarks();
-historyManager.loadHistory();
