@@ -6,6 +6,8 @@ const config = require('./lib/config');
 const logger = require('./lib/logger');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
+const axios = require('axios');
+const cookieScoping = require('./lib/cookieScoping');
 
 const app = express();
 
@@ -27,46 +29,109 @@ const handleProxyRequest = async (req, res) => {
       return res.status(400).send({ error: 'Invalid target URL' });
     }
 
-    const options = {
+    const headers = { ...req.headers };
+    delete headers['set-cookie'];
+    delete headers['content-security-policy'];
+    delete headers['strict-transport-security'];
+    delete headers['x-frame-options'];
+
+    const axiosConfig = {
       method: req.method,
-      headers: req.headers,
       url: targetUrl,
-      https: {
+      headers,
+      httpsAgent: new https.Agent({
         rejectUnauthorized: false,
-      },
+      }),
     };
 
-    const proxyReq = http.request(options, (proxyRes) => {
-      const headers = { ...proxyRes.headers };
-      delete headers['set-cookie'];
-      delete headers['content-security-policy'];
-      delete headers['strict-transport-security'];
-      delete headers['x-frame-options'];
+    if (req.body) {
+      axiosConfig.data = req.body;
+    }
 
-      res.writeHead(proxyRes.statusCode, headers);
+    const response = await axios(axiosConfig);
 
-      proxyRes.on('data', (chunk) => {
-        res.write(chunk);
-      });
+    const responseHeaders = { ...response.headers };
+    delete responseHeaders['set-cookie'];
 
-      proxyRes.on('end', () => {
-        res.end();
-      });
-    });
+    if (responseHeaders['location']) {
+      const absoluteUrl = url.parse(responseHeaders['location']);
+      if (absoluteUrl.host) {
+        responseHeaders['location'] = url.format({
+          protocol: req.protocol,
+          host: req.get('host'),
+          pathname: absoluteUrl.pathname,
+          search: absoluteUrl.search,
+        });
+      }
+    }
 
-    req.pipe(proxyReq);
+    res.writeHead(response.status, responseHeaders);
 
-    proxyReq.on('error', (error) => {
-      logger.error('Proxy request error:', error);
-      res.status(500).send({ error: 'Internal Server Error' });
-    });
+    res.end(response.data);
+
+    cookieScoping(req, res);
   } catch (error) {
     logger.error('Error handling proxy request:', error);
     res.status(500).send({ error: 'Internal Server Error' });
   }
 };
 
+const handleWebSocketProxyRequest = async (req, socket, head) => {
+  try {
+    const targetUrl = req.url;
+    if (!targetUrl) {
+      return socket.destroy();
+    }
+
+    const parsedTargetUrl = url.parse(targetUrl);
+    if (!parsedTargetUrl.protocol || !parsedTargetUrl.host) {
+      return socket.destroy();
+    }
+
+    const targetSocket = await new Promise((resolve, reject) => {
+      const options = {
+        method: 'CONNECT',
+        hostname: parsedTargetUrl.hostname,
+        port: parsedTargetUrl.port,
+        path: '',
+      };
+
+      const targetSocket = https.connect(options, (targetSocket) => {
+        resolve(targetSocket);
+      });
+
+      targetSocket.on('error', (error) => {
+        reject(error);
+      });
+    });
+
+    socket.on('data', (data) => {
+      targetSocket.write(data);
+    });
+
+    targetSocket.on('data', (data) => {
+      socket.write(data);
+    });
+
+    socket.on('end', () => {
+      targetSocket.end();
+    });
+
+    targetSocket.on('end', () => {
+      socket.end();
+    });
+  } catch (error) {
+    logger.error('Error handling WebSocket proxy request:', error);
+    socket.destroy();
+  }
+};
+
 app.get('/service/*', handleProxyRequest);
+app.post('/service/*', handleProxyRequest);
+app.put('/service/*', handleProxyRequest);
+app.delete('/service/*', handleProxyRequest);
+
+app.ws('/service/*', handleWebSocketProxyRequest);
 
 const httpServer = http.createServer(app);
 const httpsServer = https.createServer({
