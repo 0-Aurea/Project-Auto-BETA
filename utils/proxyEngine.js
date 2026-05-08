@@ -11,6 +11,8 @@ const { EncodingUtils } = require('./encodingUtils');
 const { REQUEST_HEADER_REWRITE_LIST } = require('./constants');
 const { UrlUtils } = require('./urlUtils');
 const { CssRewriterUtils } = require('./cssRewriter');
+const { HTMLRewriter } = require('./htmlRewriter');
+const { JSRewriterUtils } = require('./jsRewriter');
 
 class ProxyEngine {
   constructor() {
@@ -35,8 +37,8 @@ class ProxyEngine {
       const encodedUrl = req.url.substring(9);
       const url = EncodingUtils.decodeUrl(encodedUrl);
       try {
-        const response = await this.fetchUrl(url);
-        this.rewriteResponse(response, res);
+        const { response, buffer } = await this.fetchUrl(url);
+        this.rewriteResponse({ response, buffer }, res);
       } catch (error) {
         console.error(error);
         res.writeHead(500);
@@ -53,8 +55,8 @@ class ProxyEngine {
       const encodedUrl = req.url.substring(9);
       const url = EncodingUtils.decodeUrl(encodedUrl);
       try {
-        const response = await this.fetchUrl(url);
-        this.rewriteResponse(response, socket);
+        const { response, buffer } = await this.fetchUrl(url);
+        this.rewriteResponse({ response, buffer }, socket);
       } catch (error) {
         console.error(error);
         socket.destroy();
@@ -117,30 +119,29 @@ class ProxyEngine {
       headers['set-cookie'] = headers['set-cookie'].map((cookie) => this.rewriteCookie(cookie));
     }
     if (headers['content-type'] && headers['content-type'].includes('text/html')) {
-      buffer = await this.rewriteHtml(buffer);
+      buffer = await HTMLRewriter.rewrite(buffer.toString(), this.rewriteUrl.bind(this));
     } else if (headers['content-type'] && headers['content-type'].includes('text/css')) {
-      buffer = await this.rewriteCss(buffer);
+      buffer = await CssRewriterUtils.rewrite(buffer.toString(), this.rewriteUrl.bind(this));
+    } else if (headers['content-type'] && headers['content-type'].includes('application/javascript')) {
+      buffer = await JSRewriterUtils.rewrite(buffer.toString(), this.rewriteUrl.bind(this));
     }
     res.writeHead(response.statusCode, headers);
     res.end(buffer);
   }
 
   rewriteUrl(url) {
-    const { hostname, pathname } = new URL(url);
-    return `http://${hostname}${pathname}`;
+    const { hostname, pathname, search, hash } = new URL(url);
+    return `/${EncodingUtils.encodeUrl(`http://${hostname}${pathname}${search}${hash}`)}`;
   }
 
   rewriteCookie(cookie) {
-    return cookie.replace(/Secure;/, '');
+    return cookie.replace(/domain=[^;]*/g, '');
   }
 
   async establishTlsTunnel(url) {
-    const tlsOptions = {
-      rejectUnauthorized: false,
-    };
     return new Promise((resolve, reject) => {
-      const tlsSocket = tls.connect(url, tlsOptions, (stream) => {
-        resolve(stream);
+      const tlsSocket = tls.connect(url, (socket) => {
+        resolve(socket);
       });
       tlsSocket.on('error', (error) => {
         reject(error);
@@ -149,11 +150,8 @@ class ProxyEngine {
   }
 
   async establishWebSocketTunnel(url) {
-    const webSocketOptions = {
-      rejectUnauthorized: false,
-    };
     return new Promise((resolve, reject) => {
-      const webSocket = new WebSocket(url, webSocketOptions);
+      const webSocket = new WebSocket(url);
       webSocket.on('open', () => {
         resolve(webSocket);
       });
@@ -161,21 +159,6 @@ class ProxyEngine {
         reject(error);
       });
     });
-  }
-
-  async rewriteHtml(buffer) {
-    const html = buffer.toString();
-    const rewrittenHtml = html.replace(/https?:\/\/[^'"]+/g, (match) => {
-      const url = UrlUtils.rewriteUrl(match);
-      return url;
-    });
-    return Buffer.from(rewrittenHtml);
-  }
-
-  async rewriteCss(buffer) {
-    const css = buffer.toString();
-    const rewrittenCss = CssRewriterUtils.rewriteCss(css);
-    return Buffer.from(rewrittenCss);
   }
 }
 
