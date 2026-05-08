@@ -153,16 +153,16 @@ export class TabManager {
     const oldTab = this.tabs.find((tab) => tab.id === this.activeTabId);
     if (oldTab) {
       oldTab.iframeEl.style.display = 'none';
-      oldTab.iframeEl.style.opacity = 0;
       oldTab.iframeEl.style.zIndex = -1;
+      oldTab.iframeEl.style.opacity = 0;
       const oldTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
       oldTabElement.classList.remove('active');
     }
 
     const newTab = this.tabs.find((tab) => tab.id === tabId);
     newTab.iframeEl.style.display = 'block';
-    newTab.iframeEl.style.opacity = 1;
     newTab.iframeEl.style.zIndex = 1;
+    newTab.iframeEl.style.opacity = 1;
     const newTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === tabId)];
     newTabElement.classList.add('active');
 
@@ -171,17 +171,32 @@ export class TabManager {
   }
 
   renderNewTabButton() {
-    const newTabButton = document.createElement('div');
+    const newTabButton = document.createElement('button');
     newTabButton.classList.add('new-tab-button');
     newTabButton.textContent = '+';
     this.tabBarElement.appendChild(newTabButton);
   }
 
   renderTabBar() {
-    // Update tab bar styles and active tab indicator
+    // Add active class to active tab
     const activeTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
     if (activeTabElement) {
       activeTabElement.classList.add('active');
+    }
+
+    // Update tab titles and favicons
+    this.tabs.forEach((tab, index) => {
+      const tabElement = this.tabBarElement.children[index];
+      tabElement.querySelector('.tab-title').textContent = tab.title;
+      tabElement.querySelector('.tab-favicon').src = tab.favicon;
+    });
+  }
+
+  navigateTab(tabId, url) {
+    const tab = this.tabs.find((tab) => tab.id === tabId);
+    if (tab) {
+      tab.url = url;
+      tab.iframeEl.src = url;
     }
   }
 }
