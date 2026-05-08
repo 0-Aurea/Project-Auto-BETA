@@ -125,10 +125,23 @@ document.addEventListener('keydown', (event) => {
 });
 
 tabManager.onTabChange = (tab) => {
-  searchBar.setSearchQuery(tab.url);
-  if (tab.url) {
-    tabManager.updateTab(tab);
+  if (tab) {
+    settingsManager.updateSettings(tab);
   }
 };
-tabManager.renderTabBar();
-tabManager.handleNewTab();
+
+settingsManager.onSettingsChange = (settings) => {
+  tabManager.updateTabs(settings);
+};
+
+searchBar.onSearchQuery = (query) => {
+  tabManager.navigate(query);
+};
+
+bookmarksManager.onBookmarkClick = (bookmark) => {
+  tabManager.navigate(bookmark.url);
+};
+
+historyManager.onHistoryItemClick = (item) => {
+  tabManager.navigate(item.url);
+};
