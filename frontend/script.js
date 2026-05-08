@@ -125,26 +125,43 @@ document.addEventListener('keydown', (event) => {
 });
 
 tabManager.onTabChange = (tab) => {
-  if (tab) {
-    settingsManager.updateSettings(tab);
-  }
-};
-
-settingsManager.onSettingsChange = (settings) => {
-  tabManager.updateTabs(settings);
+  searchBar.setSearchQuery(tab.url);
+  historyManager.addHistoryEntry(tab.url);
 };
 
 searchBar.onSearchQuery = (query) => {
   tabManager.navigate(query);
 };
 
-bookmarksManager.onBookmarkClick = (bookmark) => {
-  tabManager.navigate(bookmark.url);
+settingsManager.onSettingsChange = (settings) => {
+  localStorage.setItem('settings', JSON.stringify(settings));
 };
 
-historyManager.onHistoryItemClick = (item) => {
-  tabManager.navigate(item.url);
+bookmarksManager.onBookmarkAdd = (bookmark) => {
+  localStorage.setItem('bookmarks', JSON.stringify(bookmarksManager.getBookmarks()));
 };
-tabManager.onTabReorder = (oldIndex, newIndex) => {
-  bookmarksManager.reorderBookmarks(oldIndex, newIndex);
+
+bookmarksManager.onBookmarkRemove = (bookmark) => {
+  localStorage.setItem('bookmarks', JSON.stringify(bookmarksManager.getBookmarks()));
 };
+
+historyManager.onHistoryUpdate = () => {
+  localStorage.setItem('history', JSON.stringify(historyManager.getHistory()));
+};
+
+window.addEventListener('storage', (event) => {
+  if (event.key === 'settings') {
+    settingsManager.loadSettings(JSON.parse(event.newValue));
+  } else if (event.key === 'bookmarks') {
+    bookmarksManager.loadBookmarks(JSON.parse(event.newValue));
+  } else if (event.key === 'history') {
+    historyManager.loadHistory(JSON.parse(event.newValue));
+  }
+});
+
+tabManager.onTabChange((tab) => {
+  document.title = tab.title || 'Nexus Proxy';
+});
+tabManager.onTabUpdate((tab) => {
+  document.title = tab.title || 'Nexus Proxy';
+});
