@@ -26,6 +26,26 @@ export class TabManager {
 
     this.renderNewTabButton = this.renderNewTabButton.bind(this);
     this.renderNewTabButton();
+
+    this.init();
+  }
+
+  init() {
+    if (this.viewportElement.children.length > 0) {
+      const existingIframe = this.viewportElement.children[0];
+      if (existingIframe.tagName === 'IFRAME') {
+        const newTab = {
+          id: 0,
+          url: existingIframe.src,
+          title: '',
+          favicon: '',
+          iframeEl: existingIframe,
+        };
+        this.tabs.push(newTab);
+        this.activeTabId = 0;
+        this.tabIdCounter = 1;
+      }
+    }
   }
 
   addTab({ url = '', title = '', favicon = '' }) {
@@ -126,29 +146,16 @@ export class TabManager {
       oldTab.iframeEl.style.display = 'none';
       oldTab.iframeEl.style.opacity = 0;
       oldTab.iframeEl.style.zIndex = -1;
-      const oldTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
-      oldTabElement.classList.remove('active');
-      oldTabElement.style.borderBottom = 'none';
     }
 
     const newTab = this.tabs.find((tab) => tab.id === tabId);
-    newTab.iframeEl.style.zIndex = 1;
-    newTab.iframeEl.style.display = 'block';
-    newTab.iframeEl.style.opacity = 0;
-    setTimeout(() => {
+    if (newTab) {
+      newTab.iframeEl.style.display = 'block';
       newTab.iframeEl.style.opacity = 1;
-    }, 50);
-    if (!newTab.iframeEl.src || newTab.iframeEl.src === 'about:blank') {
-      newTab.iframeEl.src = encode(newTab.url);
+      newTab.iframeEl.style.zIndex = 1;
+      this.activeTabId = tabId;
+      this.onTabChange(tabId);
     }
-
-    const newTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === tabId)];
-    newTabElement.classList.add('active');
-    newTabElement.style.borderBottom = '2px solid var(--accent)';
-    newTabElement.style.transition = 'border-bottom 0.2s ease-in-out';
-
-    this.activeTabId = tabId;
-    this.onTabChange(tabId);
 
     this.renderTabBar();
   }
@@ -162,35 +169,38 @@ export class TabManager {
   }
 
   handleNewTab() {
-    this.addTab({ url: '', title: '', favicon: '' });
+    this.addTab({ url: '' });
   }
 
   renderNewTabButton() {
     const newTabButton = document.createElement('button');
     newTabButton.classList.add('new-tab-button');
     newTabButton.textContent = '+';
-    newTabButton.style.transition = 'transform 0.2s ease-in-out';
-    newTabButton.addEventListener('mouseover', () => {
-      newTabButton.style.transform = 'scale(1.02)';
-    });
-    newTabButton.addEventListener('mouseout', () => {
-      newTabButton.style.transform = 'scale(1)';
-    });
     this.tabBarElement.appendChild(newTabButton);
   }
 
   renderTabBar() {
     const tabElements = this.tabBarElement.children;
-    Array.from(tabElements).forEach((tabElement, index) => {
-      if (index < this.tabs.length) {
-        const tab = this.tabs[index];
-        tabElement.querySelector('.tab-favicon').src = tab.favicon || 'https://example.com/globe-emoji.png';
-        tabElement.querySelector('.tab-title').textContent = tab.title || 'Untitled';
-      } else if (tabElement.classList.contains('new-tab-button')) {
-        // do nothing
-      } else {
-        tabElement.remove();
+    for (let i = 0; i < tabElements.length; i++) {
+      const tabElement = tabElements[i];
+      if (tabElement.classList.contains('tab')) {
+        if (this.tabs.find((tab) => tab.id === i)) {
+          tabElement.classList.remove('active');
+        } else {
+          tabElement.remove();
+          i--;
+        }
       }
-    });
+    }
+
+    for (let i = 0; i < this.tabs.length; i++) {
+      const tab = this.tabs[i];
+      const tabElement = this.tabBarElement.children[i];
+      if (tab.id === this.activeTabId) {
+        tabElement.classList.add('active');
+      } else {
+        tabElement.classList.remove('active');
+      }
+    }
   }
 }
