@@ -204,9 +204,7 @@ header nav a:hover {
 
 #viewport {
   flex-grow: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  overflow-y: auto;
 }
 
 iframe {
@@ -256,36 +254,86 @@ iframe {
   margin: 0;
 }
 
-.settings-header button, .history-header button, .bookmarks-header button {
+.settings-toggle, .history-toggle, .bookmarks-toggle {
   background-color: var(--bg-surface);
-  border: none;
   padding: var(--space-1) var(--space-2);
-  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
-.settings-toggle, .history-toggle, .bookmarks-toggle {
+.settings-toggle:hover, .history-toggle:hover, .bookmarks-toggle:hover {
+  background-color: var(--bg-elevated);
+}
+
+.ad-block-toggle, .dark-mode-toggle {
   display: flex;
   align-items: center;
-  cursor: pointer;
+  margin-bottom: var(--space-2);
 }
 
-.settings-toggle span, .history-toggle span, .bookmarks-toggle span {
+.ad-block-toggle label, .dark-mode-toggle label {
   margin-left: var(--space-1);
 }
 
-.loading-indicator {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background-color: var(--accent);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.2s ease;
+.search-engine-select {
+  background-color: var(--bg-surface);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
 }
 
-.loading-indicator.show {
-  transform: scaleX(1);
+.history-item {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-item .favicon {
+  width: 16px;
+  height: 16px;
+  margin-right: var(--space-1);
+}
+
+.bookmarks-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.bookmark-card {
+  background-color: var(--bg-surface);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.bookmark-card .favicon {
+  width: 24px;
+  height: 24px;
+  margin-bottom: var(--space-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: var(--radius-lg);
+}
+
+::-webkit-scrollbar-track {
+  background-color: transparent;
 }
