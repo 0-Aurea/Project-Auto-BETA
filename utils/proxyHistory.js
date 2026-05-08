@@ -23,10 +23,18 @@ class ProxyHistory {
    * Initialize the proxy history utility.
    */
   static async init() {
-    ProxyHistory.db = await openDB(ProxyHistory.DB_NAME, ProxyHistory.OBJECT_STORE_NAME, {
-      keyPath: 'url',
-      autoIncrement: false,
-    });
+    if (ProxyHistory.db) {
+      return;
+    }
+    try {
+      ProxyHistory.db = await openDB(ProxyHistory.DB_NAME, ProxyHistory.OBJECT_STORE_NAME, {
+        keyPath: 'url',
+        autoIncrement: false,
+      });
+    } catch (error) {
+      console.error('Error initializing proxy history:', error);
+      throw error;
+    }
   }
 
   /**
@@ -39,9 +47,18 @@ class ProxyHistory {
     if (!title || !url || !icon) {
       throw new Error('Title, URL, and icon are required');
     }
+    if (!ProxyHistory.db) {
+      await ProxyHistory.init();
+    }
     const tx = ProxyHistory.db.transaction(ProxyHistory.OBJECT_STORE_NAME, 'readwrite');
     const store = tx.objectStore(ProxyHistory.OBJECT_STORE_NAME);
-    await store.add({ title, url, icon, timestamp: Date.now() });
+    try {
+      await store.add({ title, url, icon, timestamp: Date.now() });
+      await tx.done;
+    } catch (error) {
+      console.error('Error adding entry to proxy history:', error);
+      throw error;
+    }
   }
 
   /**
@@ -49,13 +66,23 @@ class ProxyHistory {
    * @returns {Promise<Array>} An array of proxy history entries.
    */
   static async getAllEntries() {
+    if (!ProxyHistory.db) {
+      return [];
+    }
     const tx = ProxyHistory.db.transaction(ProxyHistory.OBJECT_STORE_NAME, 'readonly');
     const store = tx.objectStore(ProxyHistory.OBJECT_STORE_NAME);
-    const request = store.getAll();
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+    try {
+      const request = store.getAll();
+      const result = await new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      await tx.done;
+      return result;
+    } catch (error) {
+      console.error('Error retrieving all entries from proxy history:', error);
+      throw error;
+    }
   }
 
   /**
@@ -67,13 +94,23 @@ class ProxyHistory {
     if (!url) {
       throw new Error('URL is required');
     }
+    if (!ProxyHistory.db) {
+      return null;
+    }
     const tx = ProxyHistory.db.transaction(ProxyHistory.OBJECT_STORE_NAME, 'readonly');
     const store = tx.objectStore(ProxyHistory.OBJECT_STORE_NAME);
-    const request = store.get(url);
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+    try {
+      const request = store.get(url);
+      const result = await new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      await tx.done;
+      return result;
+    } catch (error) {
+      console.error('Error retrieving entry from proxy history:', error);
+      throw error;
+    }
   }
 
   /**
@@ -85,22 +122,28 @@ class ProxyHistory {
     if (!url || !data) {
       throw new Error('URL and data are required');
     }
+    if (!ProxyHistory.db) {
+      return;
+    }
     const tx = ProxyHistory.db.transaction(ProxyHistory.OBJECT_STORE_NAME, 'readwrite');
     const store = tx.objectStore(ProxyHistory.OBJECT_STORE_NAME);
-    const request = store.get(url);
-    return new Promise((resolve, reject) => {
-      request.onsuccess = async () => {
-        const entry = request.result;
-        if (entry) {
-          Object.assign(entry, data);
-          await store.put(entry);
-          resolve();
-        } else {
-          reject(new Error(`Entry not found for URL: ${url}`));
-        }
-      };
-      request.onerror = () => reject(request.error);
-    });
+    try {
+      const request = store.get(url);
+      const result = await new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      if (result) {
+        Object.assign(result, data);
+        await store.put(result);
+        await tx.done;
+      } else {
+        throw new Error(`Entry not found for URL: ${url}`);
+      }
+    } catch (error) {
+      console.error('Error updating entry in proxy history:', error);
+      throw error;
+    }
   }
 
   /**
@@ -111,24 +154,52 @@ class ProxyHistory {
     if (!url) {
       throw new Error('URL is required');
     }
+    if (!ProxyHistory.db) {
+      return;
+    }
     const tx = ProxyHistory.db.transaction(ProxyHistory.OBJECT_STORE_NAME, 'readwrite');
     const store = tx.objectStore(ProxyHistory.OBJECT_STORE_NAME);
-    await store.delete(url);
+    try {
+      await store.delete(url);
+      await tx.done;
+    } catch (error) {
+      console.error('Error removing entry from proxy history:', error);
+      throw error;
+    }
   }
 
   /**
    * Clears all entries from the proxy history.
    */
   static async clearHistory() {
+    if (!ProxyHistory.db) {
+      return;
+    }
     const tx = ProxyHistory.db.transaction(ProxyHistory.OBJECT_STORE_NAME, 'readwrite');
     const store = tx.objectStore(ProxyHistory.OBJECT_STORE_NAME);
-    await store.clear();
+    try {
+      await store.clear();
+      await tx.done;
+    } catch (error) {
+      console.error('Error clearing proxy history:', error);
+      throw error;
+    }
   }
 
   /**
    * Closes the IndexedDB database instance.
    */
   static async closeDB() {
+    if (ProxyHistory.db) {
+      ProxyHistory.db.close();
+      ProxyHistory.db = null;
+    }
+  }
+
+  /**
+   * Deletes the IndexedDB database instance.
+   */
+  static async deleteDBInstance() {
     await deleteDB(ProxyHistory.DB_NAME);
   }
 }
