@@ -125,23 +125,17 @@ document.addEventListener('keydown', (event) => {
 });
 
 tabManager.onTabChange = (tab) => {
-  if (tab) {
-    settingsManager.updateSettings(tab);
-  }
+  searchBar.setSearchQuery(tab.url);
+  historyManager.addHistoryEntry(tab.url);
 };
-
-settingsManager.onSettingsChange = (settings) => {
-  tabManager.updateTabs(settings);
-};
-
 searchBar.onSearchQuery = (query) => {
   tabManager.navigate(query);
 };
-
-bookmarksManager.onBookmarkClick = (bookmark) => {
-  tabManager.navigate(bookmark.url);
+settingsManager.onSettingsChange = (settings) => {
+  localStorage.setItem('adBlockEnabled', settings.adBlockEnabled);
+  localStorage.setItem('darkModeEnabled', settings.darkModeEnabled);
+  localStorage.setItem('searchEngine', settings.searchEngine);
 };
-
-historyManager.onHistoryItemClick = (item) => {
-  tabManager.navigate(item.url);
+searchBar.onSearchEngineChange = (engine) => {
+  settingsManager.updateSettings({ searchEngine: engine });
 };
