@@ -7,25 +7,25 @@ import { encode, decode } from './sw-config.js';
 
 const settingsToggle = document.getElementById('settings-toggle');
 const bookmarksToggle = document.getElementById('bookmarks-toggle');
-const proxyHistoryToggle = document.getElementById('proxy-history-toggle');
+const historyToggle = document.getElementById('history-toggle');
 const tabBarElement = document.getElementById('tab-bar');
 const viewportElement = document.getElementById('viewport');
 const searchBarElement = document.getElementById('search-bar');
 const settingsPanelElement = document.createElement('div');
 const bookmarksPanelElement = document.createElement('div');
-const proxyHistoryPanelElement = document.createElement('div');
+const historyPanelElement = document.createElement('div');
 
 settingsPanelElement.classList.add('settings-panel');
 bookmarksPanelElement.classList.add('bookmarks-panel');
-proxyHistoryPanelElement.classList.add('proxy-history-panel');
+historyPanelElement.classList.add('history-panel');
 
 document.body.appendChild(settingsPanelElement);
 document.body.appendChild(bookmarksPanelElement);
-document.body.appendChild(proxyHistoryPanelElement);
+document.body.appendChild(historyPanelElement);
 
 const settingsManager = new SettingsManager({ settingsPanelElement });
 const bookmarksManager = new BookmarkManager({ bookmarksPanelElement });
-const historyManager = new HistoryManager({ proxyHistoryPanelElement });
+const historyManager = new HistoryManager({ historyPanelElement });
 const tabManager = new TabManager({ 
   tabBarElement, 
   viewportElement, 
@@ -46,17 +46,17 @@ const searchBar = new SearchBar({
 settingsToggle.addEventListener('click', () => {
   settingsPanelElement.classList.toggle('open');
   bookmarksPanelElement.classList.remove('open');
-  proxyHistoryPanelElement.classList.remove('open');
+  historyPanelElement.classList.remove('open');
 });
 
 bookmarksToggle.addEventListener('click', () => {
   bookmarksPanelElement.classList.toggle('open');
   settingsPanelElement.classList.remove('open');
-  proxyHistoryPanelElement.classList.remove('open');
+  historyPanelElement.classList.remove('open');
 });
 
-proxyHistoryToggle.addEventListener('click', () => {
-  proxyHistoryPanelElement.classList.toggle('open');
+historyToggle.addEventListener('click', () => {
+  historyPanelElement.classList.toggle('open');
   settingsPanelElement.classList.remove('open');
   bookmarksPanelElement.classList.remove('open');
 });
@@ -122,33 +122,4 @@ document.addEventListener('keydown', (event) => {
     searchBar.focus();
     event.preventDefault();
   }
-});
-
-tabManager.onTabChange = (tab) => {
-  searchBar.setSearchQuery(tab.url);
-  historyManager.addHistoryEntry(tab.url);
-};
-
-searchBar.onSearchSubmit = (query) => {
-  tabManager.navigate(query);
-};
-
-tabManager.addEventListener('tab-update', (tab) => {
-  bookmarksManager.updateBookmark(tab.url, tab.title);
-});
-
-bookmarksManager.addEventListener('bookmark-add', (bookmark) => {
-  tabManager.addBookmark(bookmark);
-});
-
-tabManager.addEventListener('tab-close', (tab) => {
-  bookmarksManager.removeBookmark(tab.url);
-});
-
-settingsManager.addEventListener('settings-update', (settings) => {
-  tabManager.updateSettings(settings);
-});
-
-searchBar.addEventListener('search-error', (error) => {
-  console.error('Search error:', error);
 });
