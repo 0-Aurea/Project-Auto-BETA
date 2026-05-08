@@ -128,17 +128,11 @@ export class TabManager {
       if (this.tabs.length > 0) {
         this.switchTab(this.tabs[tabIndex < this.tabs.length ? tabIndex : tabIndex - 1].id);
       } else {
-        this.activeTabId = null;
-        this.viewportElement.innerHTML = `
-          <div class="search-hero">
-            <form>
-              <input type="text" placeholder="Search or enter a URL...">
-              <button type="submit">Go</button>
-            </form>
-          </div>
-        `;
+        this.addTab();
       }
     }
+
+    this.renderTabBar();
   }
 
   handleTabClose(tabId) {
@@ -158,6 +152,7 @@ export class TabManager {
 
     const oldTab = this.tabs.find((tab) => tab.id === this.activeTabId);
     if (oldTab) {
+      oldTab.iframeEl.style.display = 'none';
       oldTab.iframeEl.style.opacity = 0;
       oldTab.iframeEl.style.zIndex = -1;
       const oldTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
@@ -165,6 +160,7 @@ export class TabManager {
     }
 
     const newTab = this.tabs.find((tab) => tab.id === tabId);
+    newTab.iframeEl.style.display = 'block';
     newTab.iframeEl.style.opacity = 1;
     newTab.iframeEl.style.zIndex = 1;
     const newTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === tabId)];
@@ -175,14 +171,14 @@ export class TabManager {
   }
 
   renderNewTabButton() {
-    const newTabButton = document.createElement('button');
+    const newTabButton = document.createElement('div');
     newTabButton.classList.add('new-tab-button');
     newTabButton.textContent = '+';
     this.tabBarElement.appendChild(newTabButton);
   }
 
   renderTabBar() {
-    // Add active class to active tab
+    // Update tab bar styles and active tab indicator
     const activeTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
     if (activeTabElement) {
       activeTabElement.classList.add('active');
