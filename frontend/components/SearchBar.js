@@ -71,6 +71,12 @@ export class SearchBar {
     this.searchForm.appendChild(searchButton);
 
     document.getElementById('search-bar-container').appendChild(this.searchForm);
+
+    this.searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        this.handleSearch(e);
+      }
+    });
   }
 
   unrender() {
@@ -81,7 +87,17 @@ export class SearchBar {
     event.preventDefault();
     const searchValue = this.searchInput.value.trim();
     if (searchValue) {
-      const encodedUrl = this.swConfig.encode(searchValue);
+      let url;
+      if (searchValue.startsWith('http')) {
+        url = searchValue;
+      } else {
+        const searchEngines = {
+          google: 'https://www.google.com/search?q=',
+          bing: 'https://www.bing.com/search?q=',
+        };
+        url = searchEngines[this.state.searchEngine] + encodeURIComponent(searchValue);
+      }
+      const encodedUrl = this.swConfig.encode(url);
       this.tabManager.navigate(encodedUrl);
       this.searchInput.value = '';
     }
