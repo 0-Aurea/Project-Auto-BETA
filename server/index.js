@@ -1,5 +1,6 @@
 const express = require('express');
 const http = require('http');
+const https = require('https');
 const WebSocket = require('ws');
 const axios = require('axios');
 const url = require('url');
@@ -15,6 +16,42 @@ const wss = new WebSocket.Server({ server });
 
 app.use(cookieParser());
 app.use(express.json());
+
+const rewriteResponseHeaders = (headers, proxiedHost) => {
+  const modifiedHeaders = {};
+
+  Object.keys(headers).forEach((header) => {
+    if (header === 'content-security-policy' ||
+        header === 'strict-transport-security' ||
+        header === 'x-frame-options') {
+      return;
+    }
+
+    if (header === 'set-cookie') {
+      const cookies = headers['set-cookie'];
+      const scopedCookies = cookies.map((cookie) => {
+        return cookie.replace(/path=\//, `path=/; domain=${proxiedHost}`);
+      });
+      modifiedHeaders['set-cookie'] = scopedCookies;
+    } else {
+      modifiedHeaders[header] = headers[header];
+    }
+  });
+
+  return modifiedHeaders;
+};
+
+const rewriteResponseBody = (body, proxiedHost) => {
+  const htmlRegex = /<html>.*<\/html>/gs;
+  const htmlMatch = body.match(htmlRegex);
+
+  if (htmlMatch) {
+    const rewrittenHtml = htmlMatch[0].replace(/href="\//g, `href="http://${proxiedHost}/`);
+    return body.replace(htmlMatch[0], rewrittenHtml);
+  }
+
+  return body;
+};
 
 app.use('/service', async (req, res) => {
   try {
@@ -37,39 +74,15 @@ app.use('/service', async (req, res) => {
       data: targetOptions.data,
     });
 
-    const modifiedResponse = { ...response };
-    modifiedResponse.headers = {};
-
-    Object.keys(response.headers).forEach((header) => {
-      if (header === 'content-security-policy' ||
-          header === 'strict-transport-security' ||
-          header === 'x-frame-options') {
-        return;
-      }
-
-      if (header === 'set-cookie') {
-        const cookies = response.headers['set-cookie'];
-        const scopedCookies = cookies.map((cookie) => {
-          return cookie.replace(/path=\//, `path=/; domain=${req.headers['x-nexus-proxied-host']}`);
-        });
-        modifiedResponse.headers['set-cookie'] = scopedCookies;
-      } else {
-        modifiedResponse.headers[header] = response.headers[header];
-      }
-    });
+    const proxiedHost = req.headers['x-nexus-proxied-host'];
+    const modifiedResponseHeaders = rewriteResponseHeaders(response.headers, proxiedHost);
+    let modifiedResponseBody = response.data;
 
     if (response.data) {
-      const htmlRegex = /<html>.*<\/html>/gs;
-      const htmlMatch = response.data.match(htmlRegex);
-
-      if (htmlMatch) {
-        const proxiedHost = req.headers['x-nexus-proxied-host'];
-        const rewrittenHtml = htmlMatch[0].replace(/href="\//g, `href="http://${proxiedHost}/`);
-        modifiedResponse.data = response.data.replace(htmlMatch[0], rewrittenHtml);
-      }
+      modifiedResponseBody = rewriteResponseBody(response.data, proxiedHost);
     }
 
-    res.status(response.status).headers(modifiedResponse.headers).send(modifiedResponse.data);
+    res.status(response.status).headers(modifiedResponseHeaders).send(modifiedResponseBody);
   } catch (error) {
     logger.error('Proxy error:', error);
     res.status(500).send({ error: 'Internal Server Error' });
@@ -137,3 +150,50 @@ wss.on('connection', (ws, req) => {
     ws.close();
   });
 });
+
+https.createServer({
+  key: fs.readFileSync(config.server.https.key),
+  cert: fs.readFileSync(config.server.https.cert),
+}, app).listen(443, () => {
+  logger.info('HTTPS server listening on port 443');
+});
+
+const handleHttpsConnect = (req, res) => {
+  const targetHost = req.headers['host'];
+  const targetOptions = {
+    hostname: targetHost,
+    port: 443,
+    method: 'CONNECT',
+  };
+
+  const targetSocket = https.connect(targetOptions, () => {
+    res.writeHead(200, { 'Connection' : 'keep-alive' });
+    res.end();
+  });
+
+  req.on('data', (chunk) => {
+    targetSocket.write(chunk);
+  });
+
+  targetSocket.on('data', (chunk) => {
+    res.write(chunk);
+  });
+
+  targetSocket.on('end', () => {
+    res.end();
+  });
+
+  targetSocket.on('error', (error) => {
+    logger.error('HTTPS CONNECT error:', error);
+    res.end();
+  });
+};
+
+server.on('connection', (socket) => {
+  socket.on('data', (chunk) => {
+    if (chunk.toString().startsWith('CONNECT')) {
+      handleHttpsConnect(socket, socket);
+    }
+  });
+});
+const fs = require('fs');
