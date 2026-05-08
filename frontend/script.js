@@ -128,10 +128,30 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
   }
 });
-document.getElementById('nav-logo').addEventListener('click', () => {
-  tabManager.addTab();
+ 
+// Add event listener to handle search form submission
+searchBarElement.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const searchQuery = searchBar.getSearchQuery();
+  const encodedUrl = encode(searchQuery);
+  tabManager.navigate(encodedUrl);
 });
-tabManager.onTabChange = (tab) => {
-  searchBar.setSearchQuery(tab.url);
-  document.title = tab.title || 'Nexus Proxy';
-};
+
+// Initialize UI components
+document.addEventListener('DOMContentLoaded', () => {
+  // Hide loading indicator
+  const loadingIndicator = document.getElementById('loading-indicator');
+  if (loadingIndicator) {
+    loadingIndicator.classList.add('hidden');
+  }
+});
+
+// Error handling for Service Worker registration
+navigator.serviceWorker.addEventListener('registrationerror', (event) => {
+  console.error('Service Worker registration error:', event.error);
+});
+
+// Cleanup on unload
+window.addEventListener('unload', () => {
+  // Cleanup resources
+});
