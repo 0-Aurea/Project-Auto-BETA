@@ -7,13 +7,10 @@ const config = {
       key: 'server.key',
       cert: 'server.crt',
       allowHTTP2: true,
-      tlsv1: true,
-      tlsv1_1: true,
-      tlsv1_2: true,
-      tlsv1_3: true,
+      tlsVersions: ['TLSv1', 'TLSv1.1', 'TLSv1.2', 'TLSv1.3'],
     },
     auth: {
-      secret: 'nexus-auth-secret',
+      secret: process.env.NEXUS_AUTH_SECRET || 'nexus-auth-secret',
       tokenExpiration: 60 * 60 * 24 * 7, // 1 week
     },
     cors: {
@@ -42,7 +39,7 @@ const config = {
   },
   // Encoding configuration
   encoding: {
-    salt: 'nexus-salt',
+    salt: process.env.NEXUS_ENCODING_SALT || 'nexus-salt',
     algorithm: 'xor',
     base64: true,
     rotationInterval: 60 * 60 * 24, // 1 day
@@ -113,7 +110,7 @@ const config = {
   },
   // Logging configuration
   logging: {
-    level: 'info',
+    level: process.env.NODE_ENV === 'development' ? 'debug' : 'info',
     format: 'json',
     output: 'console',
   },
