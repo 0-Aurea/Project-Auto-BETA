@@ -129,39 +129,26 @@ tabManager.onTabChange = (tab) => {
   historyManager.addHistoryEntry(tab.url);
 };
 
-searchBar.onSearchQuery = (query) => {
+searchBar.onSearchSubmit = (query) => {
   tabManager.navigate(query);
 };
 
-settingsManager.onSettingsChange = (settings) => {
-  localStorage.setItem('settings', JSON.stringify(settings));
-};
-
-bookmarksManager.onBookmarkAdd = (bookmark) => {
-  localStorage.setItem('bookmarks', JSON.stringify(bookmarksManager.getBookmarks()));
-};
-
-bookmarksManager.onBookmarkRemove = (bookmark) => {
-  localStorage.setItem('bookmarks', JSON.stringify(bookmarksManager.getBookmarks()));
-};
-
-historyManager.onHistoryUpdate = () => {
-  localStorage.setItem('history', JSON.stringify(historyManager.getHistory()));
-};
-
-window.addEventListener('storage', (event) => {
-  if (event.key === 'settings') {
-    settingsManager.loadSettings(JSON.parse(event.newValue));
-  } else if (event.key === 'bookmarks') {
-    bookmarksManager.loadBookmarks(JSON.parse(event.newValue));
-  } else if (event.key === 'history') {
-    historyManager.loadHistory(JSON.parse(event.newValue));
-  }
+tabManager.addEventListener('tab-update', (tab) => {
+  bookmarksManager.updateBookmark(tab.url, tab.title);
 });
 
-tabManager.onTabChange((tab) => {
-  document.title = tab.title || 'Nexus Proxy';
+bookmarksManager.addEventListener('bookmark-add', (bookmark) => {
+  tabManager.addBookmark(bookmark);
 });
-tabManager.onTabUpdate((tab) => {
-  document.title = tab.title || 'Nexus Proxy';
+
+tabManager.addEventListener('tab-close', (tab) => {
+  bookmarksManager.removeBookmark(tab.url);
+});
+
+settingsManager.addEventListener('settings-update', (settings) => {
+  tabManager.updateSettings(settings);
+});
+
+searchBar.addEventListener('search-error', (error) => {
+  console.error('Search error:', error);
 });
