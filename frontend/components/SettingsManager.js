@@ -24,28 +24,28 @@ export class SettingsManager {
   }
 
   renderSettingsPanel() {
-    this.settingsPanelElement.className = 'settings-panel';
+    this.settingsPanelElement.className = 'settings-panel glass-card';
     this.settingsPanelElement.innerHTML = `
       <div class="settings-header">Settings</div>
       <div class="settings-group">
         <div class="settings-toggle">
-          <label class="switch">
+          <label class="switch-pill">
             <input type="checkbox" id="ad-block-toggle" ${this.state.adBlockEnabled ? 'checked' : ''}>
-            <span class="slider round"></span>
+            <span class="slider-pill round"></span>
           </label>
           <span>Ad Block</span>
         </div>
         <div class="settings-toggle">
-          <label class="switch">
+          <label class="switch-pill">
             <input type="checkbox" id="dark-mode-toggle" ${this.state.darkModeEnabled ? 'checked' : ''}>
-            <span class="slider round"></span>
+            <span class="slider-pill round"></span>
           </label>
           <span>Dark Mode</span>
         </div>
       </div>
       <div class="settings-group">
         <label for="search-engine-select">Search Engine:</label>
-        <select id="search-engine-select">
+        <select id="search-engine-select" class="select-input">
           <option value="google" ${this.state.searchEngine === 'google' ? 'selected' : ''}>Google</option>
           <option value="bing" ${this.state.searchEngine === 'bing' ? 'selected' : ''}>Bing</option>
         </select>
