@@ -97,11 +97,11 @@ class ProxyEngine {
    */
   async proxyRequest(request, response) {
     try {
-      const { EncodingUtils } = await import('../utils/encodingUtils.js');
-      const { URL_PREFIX, DEFAULT_ENCODING, API_SERVICE_URL } = await import('../config/constants.js');
-      const { http } = await import('http');
-      const { URL } = await import('url');
-      const { WebSocket } = await import('ws');
+      const { EncodingUtils } = require('../utils/encodingUtils');
+      const { URL_PREFIX, DEFAULT_ENCODING, API_SERVICE_URL } = require('../config/constants');
+      const { http, https } = require('http');
+      const { URL } = require('url');
+      const { WebSocket } = require('ws');
 
       const targetUrl = new URL(request.url, 'http://example.com');
       if (!targetUrl.protocol) throw new Error('Invalid target URL');
@@ -113,6 +113,63 @@ class ProxyEngine {
         url: `${API_SERVICE_URL}${encodedUrl}`,
       };
 
+      let targetProtocol = targetUrl.protocol;
+      if (targetProtocol === 'https:') {
+        targetProtocol = 'http:'; // Use HTTP for proxied requests
+      }
+
+      const options = {
+        method: proxiedRequest.method,
+        headers: proxiedRequest.headers,
+        hostname: targetUrl.hostname,
+        port: targetUrl.port,
+        path: targetUrl.pathname + targetUrl.search,
+      };
+
+      let targetResponse;
+      let targetRequest;
+
+      if (targetProtocol === 'http:') {
+        targetRequest = http.request(options, (res) => {
+          targetResponse = res;
+          response.writeHead(res.statusCode, res.headers);
+          res.on('data', (chunk) => {
+            response.write(chunk);
+          });
+          res.on('end', () => {
+            response.end();
+          });
+        });
+      } else {
+        options.rejectUnauthorized = false;
+        targetRequest = https.request(options, (res) => {
+          targetResponse = res;
+          response.writeHead(res.statusCode, res.headers);
+          res.on('data', (chunk) => {
+            response.write(chunk);
+          });
+          res.on('end', () => {
+            response.end();
+          });
+        });
+      }
+
+      targetRequest.on('error', (error) => {
+        console.error('Error with target request:', error);
+        response.writeHead(500, {
+          'Content-Type': 'text/plain',
+        });
+        response.end('Internal Server Error');
+      });
+
+      request.on('data', (chunk) => {
+        targetRequest.write(chunk);
+      });
+
+      request.on('end', () => {
+        targetRequest.end();
+      });
+
       if (request.upgrade) {
         const webSocket = new WebSocket(targetUrl.href);
         webSocket.on('open', () => {
@@ -122,25 +179,10 @@ class ProxyEngine {
           webSocket.on('message', (data) => {
             request.socket.write(data);
           });
-          webSocket.on('close', () => {
-            request.socket.destroy();
-          });
-          webSocket.on('error', (error) => {
-            console.error('WebSocket error:', error);
-            request.socket.destroy();
-          });
         });
-        return;
       }
-
-      const targetResponse = await this.forwardRequest(proxiedRequest);
-      const rewrittenHeaders = this.rewriteResponseHeaders(targetResponse.headers);
-
-      response.writeHead(targetResponse.statusCode, rewrittenHeaders);
-
-      targetResponse.pipe(response);
     } catch (error) {
-      console.error('Error proxying request:', error);
+      console.error('Error with proxy request:', error);
       response.writeHead(500, {
         'Content-Type': 'text/plain',
       });
@@ -149,68 +191,50 @@ class ProxyEngine {
   }
 
   /**
-   * Forward the request to the target server.
+   * Handle HTTPS CONNECT tunnel.
    * @param {object} request - The request object.
-   * @returns {object} The response object.
+   * @param {object} response - The response object.
    */
-  async forwardRequest(request) {
-    const { http } = await import('http');
-    const { URL } = await import('url');
+  async handleHttpsConnect(request, response) {
+    try {
+      const targetUrl = new URL(request.url, 'http://example.com');
+      if (!targetUrl.protocol) throw new Error('Invalid target URL');
 
-    return new Promise((resolve, reject) => {
-      const targetRequest = http.request(request.url, (targetResponse) => {
-        resolve(targetResponse);
-      });
-      targetRequest.on('error', (error) => {
-        reject(error);
-      });
-      targetRequest.write('');
-      targetRequest.end();
-    });
-  }
+      const targetHost = targetUrl.hostname;
+      const targetPort = targetUrl.port || 443;
 
-  /**
-   * Rewrite the response headers.
-   * @param {object} headers - The response headers.
-   * @returns {object} The rewritten response headers.
-   */
-  rewriteResponseHeaders(headers) {
-    const rewrittenHeaders = { ...headers };
-    delete rewrittenHeaders['content-security-policy'];
-    delete rewrittenHeaders['strict-transport-security'];
-    delete rewrittenHeaders['x-frame-options'];
-    rewrittenHeaders['access-control-allow-origin'] = '*';
-    rewrittenHeaders['access-control-allow-headers'] = 'Origin, X-Requested-With, Content-Type, Accept';
-    return rewrittenHeaders;
-  }
+      response.writeHead(200, {
+        'Content-Type': 'text/plain',
+      });
+      response.end();
 
-  /**
-   * Handle WebSocket upgrade.
-   * @param {object} request - The request object.
-   * @param {object} socket - The socket object.
-   * @param {object} head - The head object.
-   */
-  handleWebSocketUpgrade(request, socket, head) {
-    const { WebSocket } = require('ws');
-    const { URL } = require('url');
+      const socket = require('net').createConnection(targetPort, targetHost, () => {
+        request.socket.write(`HTTP/1.1 200 Connection established\r\n\r\n`);
+      });
 
-    const targetUrl = new URL(request.url, 'http://example.com');
-    const webSocket = new WebSocket(targetUrl.href);
+      request.socket.on('data', (chunk) => {
+        socket.write(chunk);
+      });
 
-    webSocket.on('open', () => {
-      socket.on('data', (data) => {
-        webSocket.send(data);
+      socket.on('data', (chunk) => {
+        request.socket.write(chunk);
       });
-      webSocket.on('message', (data) => {
-        socket.write(data);
+
+      socket.on('end', () => {
+        request.socket.end();
       });
-      webSocket.on('close', () => {
-        socket.destroy();
+
+      request.socket.on('end', () => {
+        socket.end();
       });
-      webSocket.on('error', (error) => {
-        console.error('WebSocket error:', error);
-        socket.destroy();
+    } catch (error) {
+      console.error('Error with HTTPS CONNECT:', error);
+      response.writeHead(500, {
+        'Content-Type': 'text/plain',
       });
-    });
+      response.end('Internal Server Error');
+    }
   }
 }
+
+module.exports = ProxyEngine;
