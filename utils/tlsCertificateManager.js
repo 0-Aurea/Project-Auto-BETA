@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { promisify } = require('util');
-const { createCertificate, createPrivateKey, createCertificateSigningRequest } = require('crypto');
+const { createCertificate, createPrivateKey, createCertificateSigningRequest, Certificate } = require('crypto');
 
 /**
  * TLS Certificate Manager utility class for handling TLS certificates.
@@ -129,7 +129,14 @@ class TLSCertificateManager {
    */
   static async loadCertificate(domain) {
     const certPath = path.join(TLSCertificateManager.CERT_DIR, `${domain}.crt`);
-    return await promisify(fs.readFile)(certPath, 'utf8');
+    try {
+      return await promisify(fs.readFile)(certPath, 'utf8');
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        throw new Error(`Certificate not found for domain: ${domain}`);
+      }
+      throw err;
+    }
   }
 
   /**
@@ -139,7 +146,51 @@ class TLSCertificateManager {
    */
   static async loadPrivateKey(domain) {
     const keyPath = path.join(TLSCertificateManager.KEY_DIR, `${domain}.key`);
-    return await promisify(fs.readFile)(keyPath, 'utf8');
+    try {
+      return await promisify(fs.readFile)(keyPath, 'utf8');
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        throw new Error(`Private key not found for domain: ${domain}`);
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Delete a TLS certificate and private key from file.
+   * @param {string} domain - The domain of the certificate and key.
+   * @returns {Promise<void>}
+   */
+  static async deleteCertificate(domain) {
+    const certPath = path.join(TLSCertificateManager.CERT_DIR, `${domain}.crt`);
+    const keyPath = path.join(TLSCertificateManager.KEY_DIR, `${domain}.key`);
+
+    try {
+      await promisify(fs.unlink)(certPath);
+      await promisify(fs.unlink)(keyPath);
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        // File does not exist, ignore
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  /**
+   * List all TLS certificates.
+   * @returns {Promise<string[]>} A promise resolving to a list of certificate domains.
+   */
+  static async listCertificates() {
+    try {
+      const certs = await promisify(fs.readdir)(TLSCertificateManager.CERT_DIR);
+      return certs.map((cert) => path.basename(cert, '.crt'));
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        return [];
+      }
+      throw err;
+    }
   }
 }
 
