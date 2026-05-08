@@ -253,35 +253,59 @@ iframe {
 .settings-header h2, .history-header h2, .bookmarks-header h2 {
   font-size: 1.25rem;
   font-weight: 600;
+  margin: 0;
 }
 
-.settings-toggle, .history-toggle, .bookmarks-toggle {
+.settings-header button, .history-header button, .bookmarks-header button {
   background-color: var(--bg-surface);
+  border: none;
   padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  font-size: 1rem;
   cursor: pointer;
 }
 
-.settings-toggle:hover, .history-toggle:hover, .bookmarks-toggle:hover {
-  background-color: var(--bg-elevated);
+.settings-toggle, .history-toggle, .bookmarks-toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
 }
 
-.ad-block-toggle, .dark-mode-toggle {
-  display: flex;
-  align-items: center;
-  margin-bottom: var(--space-2);
+.settings-toggle input, .history-toggle input, .bookmarks-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
 }
 
-.ad-block-toggle label, .dark-mode-toggle label {
-  margin-left: var(--space-1);
+.settings-toggle .slider, .history-toggle .slider, .bookmarks-toggle .slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--border);
+  border-radius: 24px;
+  transition: all 0.2s ease;
 }
 
-.search-engine-select {
+.settings-toggle .slider::before, .history-toggle .slider::before, .bookmarks-toggle .slider::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
   background-color: var(--bg-surface);
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.settings-toggle input:checked + .slider, .history-toggle input:checked + .slider, .bookmarks-toggle input:checked + .slider {
+  background-color: var(--accent);
+}
+
+.settings-toggle input:checked + .slider::before, .history-toggle input:checked + .slider::before, .bookmarks-toggle input:checked + .slider::before {
+  transform: translateX(20px);
 }
 
 .history-item {
@@ -299,18 +323,39 @@ iframe {
   margin-right: var(--space-1);
 }
 
+.history-item .title {
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.history-item .url {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
 .bookmark-card {
   background-color: var(--bg-surface);
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  margin-bottom: var(--space-2);
+  margin: var(--space-1);
+  width: calc(33.33% - 2 * var(--space-1));
 }
 
 .bookmark-card .favicon {
   width: 16px;
   height: 16px;
   margin-right: var(--space-1);
+}
+
+.bookmark-card .title {
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.bookmark-card .url {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -327,7 +372,7 @@ iframe {
 
 ::-webkit-scrollbar-thumb {
   background-color: var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-track {
