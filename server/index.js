@@ -145,47 +145,40 @@ wss.on('connection', (ws, req) => {
   }
 });
 
+const httpServer = http.createServer(app);
 const httpsServer = https.createServer({
   key: fs.readFileSync(config.server.https.key),
   cert: fs.readFileSync(config.server.https.cert),
 }, app);
 
-httpsServer.on('upgrade', (req, socket, head) => {
-  try {
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      wss.emit('connection', ws, req);
-    });
-  } catch (error) {
-    logger.error('WebSocket upgrade error:', error);
-  }
+httpServer.listen(8080, () => {
+  logger.info('HTTP server listening on port 8080');
 });
 
-httpsServer.listen(config.server.port, config.server.host, () => {
-  logger.info(`Server listening on ${config.server.host}:${config.server.port}`);
+httpsServer.listen(8443, () => {
+  logger.info('HTTPS server listening on port 8443');
+});
+
+httpServer.on('upgrade', (req, socket, head) => {
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    wss.emit('connection', ws, req);
+  });
+});
+
+httpsServer.on('upgrade', (req, socket, head) => {
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    wss.emit('connection', ws, req);
+  });
 });
 
 process.on('SIGINT', () => {
-  httpsServer.close(() => {
-    process.exit(0);
-  });
+  httpServer.close();
+  httpsServer.close();
+  process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  httpsServer.close(() => {
-    process.exit(0);
-  });
-});
-
-process.on('uncaughtException', (error) => {
-  logger.error('Uncaught exception:', error);
-  httpsServer.close(() => {
-    process.exit(1);
-  });
-});
-
-process.on('unhandledRejection', (reason) => {
-  logger.error('Unhandled rejection:', reason);
-  httpsServer.close(() => {
-    process.exit(1);
-  });
+  httpServer.close();
+  httpsServer.close();
+  process.exit(0);
 });
