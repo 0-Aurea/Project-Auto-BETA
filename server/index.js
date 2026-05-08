@@ -4,6 +4,7 @@ const https = require('https');
 const WebSocket = require('ws');
 const axios = require('axios');
 const url = require('url');
+const fs = require('fs');
 const config = require('./lib/config');
 const logger = require('./lib/logger');
 const cookieParser = require('cookie-parser');
@@ -132,6 +133,18 @@ const startServer = async () => {
         httpsServer.listen(config.server.https.port || 8443, () => {
           logger.info(`HTTPS server listening on ${host}:8443`);
         });
+
+        httpsServer.on('upgrade', (req, socket, head) => {
+          wss.handleUpgrade(req, socket, head, (ws) => {
+            wss.emit('connection', ws, req);
+          });
+        });
+      } else {
+        server.on('upgrade', (req, socket, head) => {
+          wss.handleUpgrade(req, socket, head, (ws) => {
+            wss.emit('connection', ws, req);
+          });
+        });
       }
     });
   } catch (error) {
@@ -140,5 +153,4 @@ const startServer = async () => {
   }
 };
 
-const fs = require('fs');
 startServer();
