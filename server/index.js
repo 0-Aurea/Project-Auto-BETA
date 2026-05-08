@@ -12,8 +12,6 @@ const cookieScoping = require('./lib/cookieScoping');
 const proxyEngine = require('./lib/proxyEngine');
 
 const app = express();
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
 
 app.use(cookieParser());
 app.use(express.json());
@@ -59,28 +57,7 @@ app.get('/service/:encodedUrl', async (req, res) => {
 
 app.use(cookieScoping);
 
-app.use(async (req, res, next) => {
-  try {
-    if (req.url.startsWith('/service/')) {
-      return next();
-    }
-
-    const targetUrl = req.query.url;
-    if (!targetUrl) {
-      return res.status(400).send({ error: 'Bad Request' });
-    }
-
-    const parsedTargetUrl = url.parse(targetUrl);
-    if (!parsedTargetUrl.protocol || !parsedTargetUrl.host) {
-      return res.status(400).send({ error: 'Bad Request' });
-    }
-
-    next();
-  } catch (error) {
-    logger.error('Error:', error);
-    res.status(500).send({ error: 'Internal Server Error' });
-  }
-});
+const wss = new WebSocket.Server({ noServer: true });
 
 wss.on('connection', (ws, req) => {
   try {
@@ -120,33 +97,34 @@ const startServer = async () => {
     const port = config.server.port;
     const host = config.server.host;
 
-    server.listen(port, host, () => {
+    const httpServer = http.createServer(app);
+    httpServer.listen(port, host, () => {
       logger.info(`Server listening on ${host}:${port}`);
-
-      if (config.server.https) {
-        const httpsOptions = {
-          key: fs.readFileSync(config.server.https.key),
-          cert: fs.readFileSync(config.server.https.cert),
-        };
-
-        const httpsServer = https.createServer(httpsOptions, app);
-        httpsServer.listen(config.server.https.port || 8443, () => {
-          logger.info(`HTTPS server listening on ${host}:8443`);
-        });
-
-        httpsServer.on('upgrade', (req, socket, head) => {
-          wss.handleUpgrade(req, socket, head, (ws) => {
-            wss.emit('connection', ws, req);
-          });
-        });
-      } else {
-        server.on('upgrade', (req, socket, head) => {
-          wss.handleUpgrade(req, socket, head, (ws) => {
-            wss.emit('connection', ws, req);
-          });
-        });
-      }
     });
+
+    if (config.server.https) {
+      const httpsOptions = {
+        key: fs.readFileSync(config.server.https.key),
+        cert: fs.readFileSync(config.server.https.cert),
+      };
+
+      const httpsServer = https.createServer(httpsOptions, app);
+      httpsServer.listen(config.server.https.port || 8443, () => {
+        logger.info(`HTTPS server listening on ${host}:8443`);
+      });
+
+      httpsServer.on('upgrade', (req, socket, head) => {
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          wss.emit('connection', ws, req);
+        });
+      });
+    } else {
+      httpServer.on('upgrade', (req, socket, head) => {
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          wss.emit('connection', ws, req);
+        });
+      });
+    }
   } catch (error) {
     logger.error('Error starting server:', error);
     process.exit(1);
