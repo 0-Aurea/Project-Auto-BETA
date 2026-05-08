@@ -9,6 +9,7 @@ const settingsToggle = document.getElementById('settings-toggle');
 const bookmarksToggle = document.getElementById('bookmarks-toggle');
 const proxyHistoryToggle = document.getElementById('proxy-history-toggle');
 const tabBarElement = document.getElementById('tab-bar');
+const viewportElement = document.getElementById('viewport');
 const searchBarElement = document.getElementById('search-bar');
 const settingsPanelElement = document.createElement('div');
 const bookmarksPanelElement = document.createElement('div');
@@ -25,11 +26,17 @@ document.body.appendChild(proxyHistoryPanelElement);
 const settingsManager = new SettingsManager(settingsPanelElement);
 const bookmarksManager = new BookmarkManager(bookmarksPanelElement);
 const historyManager = new HistoryManager(proxyHistoryPanelElement);
-const tabManager = new TabManager(tabBarElement);
+const tabManager = new TabManager({ 
+  tabBarElement, 
+  viewportElement, 
+  onTabChange: (tab) => {
+    searchBar.setSearchQuery(tab.url);
+  }
+});
 const searchBar = new SearchBar({ 
   onSearchQuery: (query) => {
     const encodedUrl = encode(query);
-    tabManager.openNewTab(encodedUrl);
+    tabManager.navigate(encodedUrl);
   }, 
   tabManager, 
   swConfig: { encode, decode } 
@@ -52,23 +59,6 @@ proxyHistoryToggle.addEventListener('click', () => {
   settingsPanelElement.classList.remove('open');
   bookmarksPanelElement.classList.remove('open');
 });
-
-tabManager.onTabChange = (tab) => {
-  searchBar.setSearchQuery(tab.url);
-};
-
-historyManager.onHistoryChange = (history) => {
-  searchBar.setSearchQuery(history[history.length - 1].url);
-};
-
-bookmarksManager.onBookmarkClick = (bookmark) => {
-  tabManager.openNewTab(bookmark.url);
-};
-
-settingsManager.onSettingsChange = (settings) => {
-  tabManager.updateTabSettings(settings);
-  searchBar.updateSearchSettings(settings);
-};
 
 tabManager.onTabClose = (tab) => {
   historyManager.removeHistoryEntry(tab.url);
@@ -121,10 +111,29 @@ navigator.serviceWorker.register('./sw.js')
 
 document.addEventListener('keydown', (event) => {
   if (event.ctrlKey && event.key === 't') {
-    tabManager.openNewTab('');
+    tabManager.addTab();
+    event.preventDefault();
   } else if (event.ctrlKey && event.key === 'w') {
     tabManager.closeActiveTab();
+    event.preventDefault();
   } else if (event.ctrlKey && event.key === 'l') {
     searchBar.focus();
+    event.preventDefault();
   }
 });
+tabManager.onTabChange = (tab) => {
+  searchBar.setSearchQuery(tab.url);
+};
+
+historyManager.onHistoryChange = (history) => {
+  searchBar.setSearchQuery(history[history.length - 1].url);
+};
+
+bookmarksManager.onBookmarkClick = (bookmark) => {
+  tabManager.navigate(bookmark.url);
+};
+
+settingsManager.onSettingsChange = (settings) => {
+  tabManager.updateTabSettings(settings);
+  searchBar.updateSearchSettings(settings);
+};
