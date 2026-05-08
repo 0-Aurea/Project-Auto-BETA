@@ -1,9 +1,13 @@
 const express = require('express');
 const axios = require('axios');
 const url = require('url');
+const http = require('http');
+const https = require('https');
+const WebSocket = require('ws');
 const config = require('./config');
 const logger = require('./logger');
 const cookieScoping = require('./cookieScoping');
+const { Transform } = require('stream');
 
 const proxyEngine = async (req, res) => {
   try {
@@ -15,6 +19,10 @@ const proxyEngine = async (req, res) => {
     const parsedTargetUrl = url.parse(targetUrl);
     if (!parsedTargetUrl.protocol || !parsedTargetUrl.host) {
       return res.status(400).send({ error: 'Invalid target URL' });
+    }
+
+    if (req.headers['upgrade'] === 'websocket') {
+      return handleWebSocketProxy(req, res, targetUrl);
     }
 
     const headers = req.headers;
@@ -74,6 +82,41 @@ const proxyEngine = async (req, res) => {
     logger.error(`Proxy error: ${error.message}`);
     res.status(500).send({ error: 'Internal Server Error' });
   }
+};
+
+const handleWebSocketProxy = (req, res, targetUrl) => {
+  const webSocketTarget = new url.URL(targetUrl);
+  const webSocketOptions = {
+    ...req.headers,
+    'User-Agent': 'NEXUS Proxy',
+  };
+
+  delete webSocketOptions['upgrade'];
+  delete webSocketOptions['connection'];
+
+  const wsProxy = new WebSocket(webSocketTarget.href, webSocketOptions);
+
+  wsProxy.on('open', () => {
+    const webSocketResponse = {
+      status: 101,
+      headers: {
+        'Upgrade': 'WebSocket',
+        'Connection': 'Upgrade',
+      },
+    };
+
+    res.writeHead(webSocketResponse.status, webSocketResponse.headers);
+    wsProxy.pipe(res).pipe(wsProxy);
+  });
+
+  wsProxy.on('error', (error) => {
+    logger.error(`WebSocket proxy error: ${error.message}`);
+    res.status(500).send({ error: 'Internal Server Error' });
+  });
+
+  req.on('close', () => {
+    wsProxy.close();
+  });
 };
 
 module.exports = proxyEngine;
