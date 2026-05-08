@@ -9,6 +9,8 @@ const { createSecureServer } = require('https');
 const { TLSCertificateManager } = require('./tlsCertificateManager');
 const { EncodingUtils } = require('./encodingUtils');
 const { REQUEST_HEADER_REWRITE_LIST } = require('./constants');
+const { UrlUtils } = require('./urlUtils');
+const { CssRewriterUtils } = require('./cssRewriter');
 
 class ProxyEngine {
   constructor() {
@@ -83,16 +85,29 @@ class ProxyEngine {
   }
 
   async fetchUrl(url) {
+    const options = {
+      method: 'GET',
+      headers: {},
+    };
     return new Promise((resolve, reject) => {
-      http.get(url, (response) => {
-        resolve(response);
-      }).on('error', (error) => {
+      const req = http.request(url, options, (response) => {
+        let data = [];
+        response.on('data', (chunk) => {
+          data.push(chunk);
+        });
+        response.on('end', () => {
+          const buffer = Buffer.concat(data);
+          resolve({ response, buffer });
+        });
+      });
+      req.on('error', (error) => {
         reject(error);
       });
+      req.end();
     });
   }
 
-  rewriteResponse(response, res) {
+  async rewriteResponse({ response, buffer }, res) {
     const headers = response.headers;
     REQUEST_HEADER_REWRITE_LIST.forEach((header) => delete headers[header]);
     if (headers['location']) {
@@ -101,8 +116,13 @@ class ProxyEngine {
     if (headers['set-cookie']) {
       headers['set-cookie'] = headers['set-cookie'].map((cookie) => this.rewriteCookie(cookie));
     }
+    if (headers['content-type'] && headers['content-type'].includes('text/html')) {
+      buffer = await this.rewriteHtml(buffer);
+    } else if (headers['content-type'] && headers['content-type'].includes('text/css')) {
+      buffer = await this.rewriteCss(buffer);
+    }
     res.writeHead(response.statusCode, headers);
-    response.pipe(res);
+    res.end(buffer);
   }
 
   rewriteUrl(url) {
@@ -143,16 +163,20 @@ class ProxyEngine {
     });
   }
 
-  async start() {
-    await this.init();
-    this.server.listen(8080, () => {
-      console.log('Proxy server listening on port 8080');
+  async rewriteHtml(buffer) {
+    const html = buffer.toString();
+    const rewrittenHtml = html.replace(/https?:\/\/[^'"]+/g, (match) => {
+      const url = UrlUtils.rewriteUrl(match);
+      return url;
     });
-    this.httpsServer.listen(8443, () => {
-      console.log('Proxy server listening on port 8443');
-    });
+    return Buffer.from(rewrittenHtml);
+  }
+
+  async rewriteCss(buffer) {
+    const css = buffer.toString();
+    const rewrittenCss = CssRewriterUtils.rewriteCss(css);
+    return Buffer.from(rewrittenCss);
   }
 }
 
-const proxyEngine = new ProxyEngine();
-proxyEngine.start();
+module.exports = { ProxyEngine };
