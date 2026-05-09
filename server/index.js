@@ -69,6 +69,7 @@ app.get('/service/:encodedUrl', async (req, res) => {
 
 app.use(cookieScoping);
 
+const httpServer = http.createServer(app);
 const wss = new WebSocket.Server({ noServer: true });
 
 wss.on('connection', (ws, req) => {
@@ -113,40 +114,35 @@ wss.on('connection', (ws, req) => {
   }
 });
 
+httpServer.on('upgrade', (req, socket, head) => {
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    wss.emit('connection', ws, req);
+  });
+});
+
 const startServer = async () => {
   try {
     const port = config.server.port;
     const host = config.server.host;
 
-    const httpServer = http.createServer(app);
     httpServer.listen(port, host, () => {
       logger.info(`Server listening on ${host}:${port}`);
     });
 
-    if (config.server.https) {
+    if (config.server.https.enabled) {
       const httpsOptions = {
         key: fs.readFileSync(config.server.https.key),
         cert: fs.readFileSync(config.server.https.cert),
       };
 
       const httpsServer = https.createServer(httpsOptions, app);
-      httpsServer.listen(config.server.https.port || 8443, host, () => {
-        logger.info(`HTTPS server listening on ${host}:8443`);
+      const httpsPort = config.server.https.port || 8443;
+
+      httpsServer.listen(httpsPort, host, () => {
+        logger.info(`HTTPS Server listening on ${host}:${httpsPort}`);
       });
 
       httpsServer.on('upgrade', (req, socket, head) => {
-        wss.handleUpgrade(req, socket, head, (ws) => {
-          wss.emit('connection', ws, req);
-        });
-      });
-
-      httpServer.on('upgrade', (req, socket, head) => {
-        wss.handleUpgrade(req, socket, head, (ws) => {
-          wss.emit('connection', ws, req);
-        });
-      });
-    } else {
-      httpServer.on('upgrade', (req, socket, head) => {
         wss.handleUpgrade(req, socket, head, (ws) => {
           wss.emit('connection', ws, req);
         });
