@@ -4,6 +4,7 @@ const config = {
     port: process.env.NEXUS_SERVER_PORT || 8080,
     host: process.env.NEXUS_SERVER_HOST || 'localhost',
     https: {
+      enabled: process.env.NEXUS_HTTPS_ENABLED || true,
       key: process.env.NEXUS_HTTPS_KEY || 'server.key',
       cert: process.env.NEXUS_HTTPS_CERT || 'server.crt',
       allowHTTP2: true,
@@ -24,13 +25,13 @@ const config = {
       },
       strategies: {
         local: {
-          username: 'admin',
-          password: 'password',
+          username: process.env.NEXUS_AUTH_USERNAME || 'admin',
+          password: process.env.NEXUS_AUTH_PASSWORD || 'password',
         },
       },
     },
     cors: {
-      enabled: true,
+      enabled: process.env.NEXUS_CORS_ENABLED || true,
       origin: process.env.NEXUS_CORS_ORIGIN || '*',
       methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
       preflightContinue: false,
