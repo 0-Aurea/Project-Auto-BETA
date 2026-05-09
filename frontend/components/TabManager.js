@@ -144,21 +144,20 @@ export class TabManager {
     }
 
     const newTab = this.tabs.find((tab) => tab.id === tabId);
-    newTab.iframeEl.style.display = 'block';
-    newTab.iframeEl.style.opacity = 1;
-
-    this.activeTabId = tabId;
-
-    this.renderTabBar();
-    this.onTabChange && this.onTabChange(newTab);
-  }
-
-  handleTabClick(tabId) {
-    this.switchTab(tabId);
+    if (newTab) {
+      newTab.iframeEl.style.display = 'block';
+      newTab.iframeEl.style.opacity = 1;
+      this.activeTabId = tabId;
+      this.onTabChange(tabId);
+    }
   }
 
   handleTabClose(tabId) {
     this.removeTab(tabId);
+  }
+
+  handleTabClick(tabId) {
+    this.switchTab(tabId);
   }
 
   handleNewTab() {
@@ -173,23 +172,15 @@ export class TabManager {
   }
 
   renderTabBar() {
-    const tabElements = this.tabBarElement.children;
-    for (let i = 0; i < tabElements.length; i++) {
-      const tabElement = tabElements[i];
-      if (tabElement.classList.contains('tab')) {
-        tabElement.classList.remove('active');
-        if (this.tabs.find((tab) => tab.id === i)) {
-          tabElement.classList.add('active');
-        }
-      }
-    }
+    this.tabBarElement.style.setProperty('--tab-count', this.tabs.length);
   }
 
-  navigateToUrl(url) {
-    const activeTab = this.tabs.find((tab) => tab.id === this.activeTabId);
-    if (activeTab) {
-      activeTab.url = url;
-      activeTab.iframeEl.src = encode(url);
+  navigate(tabId, url) {
+    const tab = this.tabs.find((tab) => tab.id === tabId);
+    if (tab) {
+      tab.url = url;
+      tab.iframeEl.src = url;
+      tab.iframeEl.contentWindow.location.href = url;
     }
   }
 }
