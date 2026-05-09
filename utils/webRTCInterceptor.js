@@ -20,6 +20,11 @@ class WebRTCInterceptor {
   static ICE_CANDIDATE_OBJECT_REGEX = /candidate\s*:\s*({.*?})/g;
 
   /**
+   * Regular expression to match WebRTC getUserMedia calls.
+   */
+  static GET_USER_MEDIA_REGEX = /navigator\.mediaDevices\.getUserMedia\s*\(\s*({.*?})\s*\)/g;
+
+  /**
    * Intercepts and scrubs WebRTC ICE candidate to prevent IP leaks.
    * @param {string} jsCode - The JavaScript code to intercept.
    * @returns {string} The modified JavaScript code with WebRTC ICE candidate scrubbing.
@@ -38,6 +43,9 @@ class WebRTCInterceptor {
       });
     }
 
+    // Wrap getUserMedia calls to prevent access to local media
+    jsCode = WebRTCInterceptor.wrapGetUserMedia(jsCode);
+
     return jsCode;
   }
 
@@ -48,13 +56,40 @@ class WebRTCInterceptor {
    */
   static wrapGetUserMedia(jsCode) {
     // Check if the code calls getUserMedia
-    const getUserMediaRegex = /navigator\.mediaDevices\.getUserMedia\s*\(\s*({.*?})\s*\)/g;
-    if (getUserMediaRegex.test(jsCode)) {
+    if (WebRTCInterceptor.GET_USER_MEDIA_REGEX.test(jsCode)) {
       // Replace the getUserMedia call with a stub that returns a rejected promise
-      jsCode = jsCode.replace(getUserMediaRegex, (match) => {
+      jsCode = jsCode.replace(WebRTCInterceptor.GET_USER_MEDIA_REGEX, (match) => {
         return 'Promise.reject(new Error("getUserMedia is not supported"))';
       });
     }
+
+    return jsCode;
+  }
+
+  /**
+   * Replaces RTCPeerConnection with a mock implementation to prevent IP leaks.
+   * @param {string} jsCode - The JavaScript code to modify.
+   * @returns {string} The modified JavaScript code with RTCPeerConnection mocking.
+   */
+  static mockPeerConnection(jsCode) {
+    // Regular expression to match RTCPeerConnection constructor calls
+    const peerConnectionRegex = /RTCPeerConnection\s*=/g;
+    jsCode = jsCode.replace(peerConnectionRegex, (match) => {
+      return 'MockRTCPeerConnection = function() {}';
+    });
+
+    // Mock implementation of RTCPeerConnection
+    jsCode += `
+      class MockRTCPeerConnection {
+        constructor() {}
+        addStream() {}
+        createOffer() { return Promise.resolve({}); }
+        createAnswer() { return Promise.resolve({}); }
+        setLocalDescription() { return Promise.resolve(); }
+        setRemoteDescription() { return Promise.resolve(); }
+      }
+      window.RTCPeerConnection = MockRTCPeerConnection;
+    `;
 
     return jsCode;
   }
