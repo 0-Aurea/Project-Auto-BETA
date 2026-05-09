@@ -3,10 +3,11 @@ import { SearchBar } from './components/SearchBar.js';
 import { SettingsManager } from './components/SettingsManager.js';
 import { HistoryManager } from './components/HistoryManager.js';
 import { BookmarkManager } from './components/BookmarkManager.js';
+import { NexusLogo } from './components/NexusLogo.js';
 import { encode, decode } from './sw-config.js';
 
 const settingsToggle = document.getElementById('settings-toggle');
-const bookmarksToggle = document.getElementById('bookmarks-toggle');
+const bookmarksToggle = document.getElementById('bookmark-toggle');
 const historyToggle = document.getElementById('history-toggle');
 const tabBarElement = document.getElementById('tab-bar');
 const viewportElement = document.getElementById('viewport');
@@ -23,6 +24,8 @@ historyPanelElement.classList.add('history-panel');
 document.body.appendChild(settingsPanelElement);
 document.body.appendChild(bookmarksPanelElement);
 document.body.appendChild(historyPanelElement);
+
+const nexusLogo = new NexusLogo({ logoContainerElement: navLogoElement });
 
 const tabManager = new TabManager({ 
   tabBarElement, 
@@ -127,15 +130,3 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
   }
 });
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(registrations => {
-    registrations.forEach(registration => registration.unregister())
-  })
-}
-navigator.serviceWorker.register('./sw.js')
-  .then(registration => {
-    console.log('Service Worker registered:', registration);
-  })
-  .catch(error => {
-    console.error('Service Worker registration failed:', error);
-  });
