@@ -147,9 +147,17 @@ export class TabManager {
     if (newTab) {
       newTab.iframeEl.style.display = 'block';
       newTab.iframeEl.style.opacity = 1;
-      this.activeTabId = tabId;
-      this.onTabChange(tabId);
+      newTab.iframeEl.style.zIndex = 1;
     }
+
+    this.activeTabId = tabId;
+    this.onTabChange(tabId);
+
+    const tabElements = this.tabBarElement.children;
+    for (let i = 0; i < tabElements.length; i++) {
+      tabElements[i].classList.remove('active');
+    }
+    tabElements[tabIndex(this.tabs, tabId)].classList.add('active');
   }
 
   handleTabClose(tabId) {
@@ -172,23 +180,21 @@ export class TabManager {
   }
 
   renderTabBar() {
-    // Update tab bar styles and classes
-    const tabs = this.tabs.map((tab) => {
-      const tabElement = this.tabBarElement.children[tab.id];
-      if (tab.id === this.activeTabId) {
-        tabElement.classList.add('active');
+    // Update tab bar styles and active tab indicator
+    const tabElements = this.tabBarElement.children;
+    for (let i = 0; i < tabElements.length; i++) {
+      if (i < this.tabs.length) {
+        tabElements[i].style.display = 'flex';
       } else {
-        tabElement.classList.remove('active');
+        tabElements[i].style.display = 'none';
       }
-      return tabElement;
-    });
+    }
   }
 
-  navigate(tabId, url) {
-    const tab = this.tabs.find((tab) => tab.id === tabId);
-    if (tab) {
-      tab.url = url;
-      tab.iframeEl.src = url;
+  tabIndex(tabs, tabId) {
+    for (let i = 0; i < tabs.length; i++) {
+      if (tabs[i].id === tabId) return i;
     }
+    return -1;
   }
 }
