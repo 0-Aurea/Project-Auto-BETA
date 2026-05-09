@@ -168,13 +168,13 @@ export class TabManager {
   }
 
   renderNewTabButton() {
-    const newTabButton = document.createElement('button');
+    const newTabButton = document.createElement('div');
     newTabButton.classList.add('new-tab-button');
     newTabButton.textContent = '+';
     this.tabBarElement.appendChild(newTabButton);
   }
 
   renderTabBar() {
-    // Update tab bar styles and layout
+    // Update tab bar styles and layout here
   }
 }
