@@ -122,27 +122,18 @@ const handleWebSocketProxy = (req, res, targetUrl) => {
     };
 
     res.writeHead(webSocketResponse.status, webSocketResponse.headers);
-  });
-
-  wsProxy.on('message', (message) => {
-    res.write(message);
-  });
-
-  wsProxy.on('data', (data) => {
-    res.write(data);
-  });
-
-  wsProxy.on('close', () => {
-    res.end();
-  });
-
-  wsProxy.on('error', (error) => {
-    logger.error(`WebSocket proxy error: ${error.message}`);
-    res.status(500).send({ error: 'Internal Server Error' });
-  });
-
-  req.on('close', () => {
-    wsProxy.close();
+    req.socket.on('data', (data) => {
+      wsProxy.send(data);
+    });
+    wsProxy.on('message', (message) => {
+      res.socket.write(message);
+    });
+    wsProxy.on('error', (error) => {
+      logger.error(`WebSocket proxy error: ${error.message}`);
+    });
+    wsProxy.on('close', () => {
+      res.socket.destroy();
+    });
   });
 };
 
