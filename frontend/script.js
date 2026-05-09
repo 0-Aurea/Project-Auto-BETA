@@ -42,6 +42,7 @@ const searchBar = new SearchBar({
     tabManager.navigate(encodedUrl);
   }, 
   tabManager, 
+  swConfig: { encode, decode },
   searchBarElement
 });
 
@@ -129,3 +130,51 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
   }
 });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    tabManager.saveTabs();
+  }
+});
+
+tabManager.onTabChange = (tab) => {
+  if (tab) {
+    historyManager.addHistoryEntry(tab.url);
+  }
+};
+searchBar.onSearchQuery = (query) => {
+  tabManager.navigate(query);
+};
+settingsManager.onSettingsChange = (settings) => {
+  localStorage.setItem('settings', JSON.stringify(settings));
+};
+historyManager.onHistoryChange = (history) => {
+  localStorage.setItem('history', JSON.stringify(history));
+};
+bookmarksManager.onBookmarkChange = (bookmarks) => {
+  localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
+};
+
+const loadSettings = () => {
+  const storedSettings = localStorage.getItem('settings');
+  if (storedSettings) {
+    settingsManager.loadSettings(JSON.parse(storedSettings));
+  }
+};
+
+const loadHistory = () => {
+  const storedHistory = localStorage.getItem('history');
+  if (storedHistory) {
+    historyManager.loadHistory(JSON.parse(storedHistory));
+  }
+};
+
+const loadBookmarks = () => {
+  const storedBookmarks = localStorage.getItem('bookmarks');
+  if (storedBookmarks) {
+    bookmarksManager.loadBookmarks(JSON.parse(storedBookmarks));
+  }
+};
+
+loadSettings();
+loadHistory();
+loadBookmarks();
