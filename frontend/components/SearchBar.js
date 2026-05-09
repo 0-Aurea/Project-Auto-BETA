@@ -125,10 +125,8 @@ export class SearchBar {
   handleSearchEngineChange(engine) {
     this.state.searchEngine = engine;
     localStorage.setItem('searchEngine', engine);
-    this.searchEngineSelect.querySelectorAll('.search-engine-option').forEach((option) => {
-      option.classList.remove('active');
-    });
-    this.searchEngineSelect.querySelector(`.search-engine-option:nth-child(${engine === 'google' ? 1 : 2})`).classList.add('active');
+    this.searchEngineSelect.children[0].classList.toggle('active', engine === 'google');
+    this.searchEngineSelect.children[1].classList.toggle('active', engine === 'bing');
     this.slider.classList.remove(`active-google`, `active-bing`);
     this.slider.classList.add(`active-${engine}`);
   }
