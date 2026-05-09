@@ -150,7 +150,7 @@ class WebSocketProxyUtils {
    * @param {Error} error - The WebSocket error.
    */
   static handleError(error) {
-    console.error('WebSocket error:', error);
+    console.error('WebSocket proxy error:', error);
   }
 }
 
