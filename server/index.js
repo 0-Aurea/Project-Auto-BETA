@@ -137,34 +137,8 @@ const startServer = async () => {
         });
       });
     }
-
-    // Handle HTTPS CONNECT tunnels
-    if (config.server.https) {
-      httpsServer.on('connection', (socket) => {
-        socket.on('data', (chunk) => {
-          const connectReq = chunk.toString();
-          const match = connectReq.match(/CONNECT (.+):443/);
-          if (match) {
-            const targetHost = match[1];
-            const targetSocket = net.connect(443, targetHost, () => {
-              socket.write(`HTTP/1.1 200 Connection established\r\n\r\n`);
-              targetSocket.pipe(socket);
-              socket.pipe(targetSocket);
-            });
-            targetSocket.on('error', (error) => {
-              logger.error('Target socket error:', error);
-              socket.destroy();
-            });
-            socket.on('error', (error) => {
-              logger.error('Socket error:', error);
-              targetSocket.destroy();
-            });
-          }
-        });
-      });
-    }
   } catch (error) {
-    logger.error('Error starting server:', error);
+    logger.error('Server error:', error);
     process.exit(1);
   }
 };
