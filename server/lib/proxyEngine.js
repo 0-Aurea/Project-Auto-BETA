@@ -8,6 +8,9 @@ const config = require('./config');
 const logger = require('./logger');
 const { Transform } = require('stream');
 
+const tls = require('tls');
+const crypto = require('crypto');
+
 const proxyEngine = async (req, res) => {
   try {
     const targetUrl = req.query.url;
@@ -22,6 +25,10 @@ const proxyEngine = async (req, res) => {
 
     if (req.headers['upgrade'] === 'websocket') {
       return handleWebSocketProxy(req, res, targetUrl);
+    }
+
+    if (req.method === 'CONNECT') {
+      return handleHttpsConnect(req, res, targetUrl);
     }
 
     const headers = req.headers;
@@ -123,32 +130,76 @@ const handleWebSocketProxy = (req, res, targetUrl) => {
 
     res.writeHead(webSocketResponse.status, webSocketResponse.headers);
     req.socket.setKeepAlive(true);
-  });
+    req.socket.setTimeout(0);
 
-  wsProxy.on('message', (message) => {
-    res.socket.write(message);
-  });
+    wsProxy.on('message', (message) => {
+      res.write(message);
+    });
 
-  wsProxy.on('close', () => {
-    res.socket.destroy();
+    wsProxy.on('close', () => {
+      res.end();
+    });
+
+    wsProxy.on('error', (error) => {
+      logger.error(`WebSocket proxy error: ${error.message}`);
+      res.end();
+    });
+
+    req.on('data', (chunk) => {
+      wsProxy.send(chunk.toString());
+    });
+
+    req.on('end', () => {
+      wsProxy.close();
+    });
   });
 
   wsProxy.on('error', (error) => {
     logger.error(`WebSocket proxy error: ${error.message}`);
-    res.socket.destroy();
+    res.end();
+  });
+};
+
+const handleHttpsConnect = (req, res, targetUrl) => {
+  const targetHost = url.parse(targetUrl).host;
+  const options = {
+    host: targetHost,
+    port: 443,
+    rejectUnauthorized: false,
+  };
+
+  const tlsSocket = tls.connect(options, () => {
+    res.writeHead(200, { 'Connection': 'established' });
+    res.end();
+
+    req.socket.setKeepAlive(true);
+    req.socket.setTimeout(0);
+
+    req.on('data', (chunk) => {
+      tlsSocket.write(chunk);
+    });
+
+    req.on('end', () => {
+      tlsSocket.end();
+    });
+
+    tlsSocket.on('data', (chunk) => {
+      res.write(chunk);
+    });
+
+    tlsSocket.on('end', () => {
+      res.end();
+    });
+
+    tlsSocket.on('error', (error) => {
+      logger.error(`HTTPS connect error: ${error.message}`);
+      res.end();
+    });
   });
 
-  req.socket.on('message', (message) => {
-    wsProxy.send(message);
-  });
-
-  req.socket.on('close', () => {
-    wsProxy.close();
-  });
-
-  req.socket.on('error', (error) => {
-    logger.error(`WebSocket proxy error: ${error.message}`);
-    wsProxy.close();
+  tlsSocket.on('error', (error) => {
+    logger.error(`HTTPS connect error: ${error.message}`);
+    res.end();
   });
 };
 
