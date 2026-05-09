@@ -20,10 +20,14 @@ app.use(authMiddleware.authenticate);
 app.use(cookieScoping);
 
 const httpServer = http.createServer(app);
-const httpsServer = https.createServer({
-  key: config.server.https.key,
-  cert: config.server.https.cert,
-}, app);
+let httpsServer;
+
+if (config.server.https.enabled) {
+  httpsServer = https.createServer({
+    key: config.server.https.key,
+    cert: config.server.https.cert,
+  }, app);
+}
 
 const wss = new WebSocket.Server({ server: httpServer });
 
@@ -116,40 +120,42 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-httpsServer.on('connection', (socket) => {
-  socket.on('data', (chunk) => {
-    const req = chunk.toString();
-    if (req.startsWith('CONNECT')) {
-      const [, targetHost, targetPort] = req.split(' ');
-      const targetSocket = tls.connect(targetPort, targetHost, () => {
-        socket.write(`HTTP/1.1 200 Connection Established\r\n\r\n`);
-      });
+if (httpsServer) {
+  httpsServer.on('connection', (socket) => {
+    socket.on('data', (chunk) => {
+      const req = chunk.toString();
+      if (req.startsWith('CONNECT')) {
+        const [, targetHost, targetPort] = req.split(' ');
+        const targetSocket = tls.connect(targetPort, targetHost, () => {
+          socket.write(`HTTP/1.1 200 Connection Established\r\n\r\n`);
+        });
 
-      socket.on('data', (chunk) => {
-        targetSocket.write(chunk);
-      });
+        socket.on('data', (chunk) => {
+          targetSocket.write(chunk);
+        });
 
-      targetSocket.on('data', (chunk) => {
-        socket.write(chunk);
-      });
+        targetSocket.on('data', (chunk) => {
+          socket.write(chunk);
+        });
 
-      targetSocket.on('error', (error) => {
-        logger.error('Target socket error:', error);
-        socket.destroy();
-      });
+        targetSocket.on('error', (error) => {
+          logger.error('Target socket error:', error);
+          socket.destroy();
+        });
 
-      socket.on('error', (error) => {
-        logger.error('Socket error:', error);
-        targetSocket.destroy();
-      });
+        socket.on('error', (error) => {
+          logger.error('Socket error:', error);
+          targetSocket.destroy();
+        });
 
-      socket.on('close', () => {
-        targetSocket.destroy();
-      });
+        socket.on('close', () => {
+          targetSocket.destroy();
+        });
 
-      targetSocket.on('close', () => {
-        socket.destroy();
-      });
-    }
+        targetSocket.on('close', () => {
+          socket.destroy();
+        });
+      }
+    });
   });
-});
+}
