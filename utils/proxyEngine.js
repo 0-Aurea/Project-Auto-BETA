@@ -1,6 +1,5 @@
 const http = require('http');
 const https = require('https');
-const tls = require('tls');
 const WebSocket = require('ws');
 const { URL } = require('url');
 const { promisify } = require('util');
@@ -125,39 +124,47 @@ class ProxyEngine {
       res.setHeader(key, headers[key]);
     });
     res.writeHead(response.statusCode);
-    if (buffer) {
-      const rewrittenBuffer = await this.rewriteBuffer(buffer, response);
-      res.end(rewrittenBuffer);
-    } else {
-      res.end();
+    if (headers['content-type'] && headers['content-type'].includes('text/html')) {
+      buffer = await this.rewriteHtml(buffer);
+    } else if (headers['content-type'] && headers['content-type'].includes('text/css')) {
+      buffer = await this.rewriteCss(buffer);
+    } else if (headers['content-type'] && headers['content-type'].includes('application/javascript')) {
+      buffer = await this.rewriteJs(buffer);
     }
+    res.end(buffer);
   }
 
-  async rewriteBuffer(buffer, response) {
-    const contentType = response.headers['content-type'];
-    if (contentType && contentType.includes('text/html')) {
-      return HTMLRewriter.rewrite(buffer.toString());
-    } else if (contentType && contentType.includes('application/javascript')) {
-      return JSRewriterUtils.rewrite(buffer.toString());
-    } else if (contentType && contentType.includes('text/css')) {
-      return CssRewriterUtils.rewrite(buffer.toString());
-    }
-    return buffer;
+  async rewriteHtml(buffer) {
+    const html = buffer.toString();
+    return HTMLRewriter.rewriteHtml(html);
+  }
+
+  async rewriteCss(buffer) {
+    const css = buffer.toString();
+    return CssRewriterUtils.rewriteCss(css);
+  }
+
+  async rewriteJs(buffer) {
+    const js = buffer.toString();
+    return JSRewriterUtils.rewriteJs(js);
   }
 
   rewriteUrl(url) {
-    const { hostname, pathname, search, hash } = new URL(url);
-    return UrlUtils.rewriteUrl(hostname, pathname, search, hash);
+    const { hostname, pathname } = new URL(url);
+    return `/${hostname}${pathname}`;
   }
 
   rewriteCookie(cookie) {
-    return cookie.replace(/Domain=[^;]*/, '');
+    return cookie.replace(/domain=[^;]*/, '');
   }
 
   async establishTlsTunnel(url) {
+    const tlsOptions = {
+      rejectUnauthorized: false,
+    };
     return new Promise((resolve, reject) => {
-      const tlsSocket = tls.connect(url, (stream) => {
-        resolve(stream);
+      const tlsSocket = tls.connect(url, tlsOptions, () => {
+        resolve(tlsSocket);
       });
       tlsSocket.on('error', (error) => {
         reject(error);
@@ -176,6 +183,21 @@ class ProxyEngine {
       });
     });
   }
+
+  start() {
+    const port = 8080;
+    this.server.listen(port, () => {
+      console.log(`Proxy server listening on port ${port}`);
+    });
+    this.httpsServer.listen(8443, () => {
+      console.log('Proxy server listening on port 8443 (HTTPS)');
+    });
+  }
 }
 
-module.exports = { ProxyEngine };
+const proxyEngine = new ProxyEngine();
+proxyEngine.init().then(() => {
+  proxyEngine.start();
+}).catch((error) => {
+  console.error(error);
+});
