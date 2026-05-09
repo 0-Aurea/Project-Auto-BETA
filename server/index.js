@@ -33,22 +33,32 @@ app.get('/service/:encodedUrl', async (req, res) => {
     };
 
     const response = await axios(options);
-    const modifiedResponse = {
-      ...response,
-      data: response.data,
-    };
 
-    Object.keys(response.headers).forEach((header) => {
-      if (header === 'content-security-policy' || header === 'strict-transport-security' || header === 'x-frame-options') {
-        delete modifiedResponse.headers[header];
-      } else if (header === 'location') {
-        modifiedResponse.headers[header] = modifiedResponse.headers[header].replace('http:', '').replace('https:', '');
-      } else if (header === 'set-cookie') {
-        modifiedResponse.headers[header] = modifiedResponse.headers[header].map((cookie) => cookie.replace('Path=/', `Path=/; Domain=${req.headers.host}`));
-      }
-    });
+    // Strip CSP, HSTS, and X-Frame-Options
+    response.headers['content-security-policy'] = undefined;
+    response.headers['strict-transport-security'] = undefined;
+    response.headers['x-frame-options'] = undefined;
 
-    res.set(modifiedResponse.headers);
+    // Rewrite Location header
+    if (response.headers.location) {
+      const parsedLocation = url.parse(response.headers.location);
+      response.headers.location = `${parsedLocation.protocol}://${parsedLocation.host}${parsedLocation.path}`;
+    }
+
+    // Rewrite Set-Cookie header
+    if (response.headers['set-cookie']) {
+      response.headers['set-cookie'] = response.headers['set-cookie'].map((cookie) => cookie.replace('Path=/', `Path=/; Domain=${req.headers.host}`));
+    }
+
+    // Rewrite absolute URLs in HTML, JS, and CSS response bodies
+    if (response.data && typeof response.data === 'string') {
+      response.data = response.data.replace(/https?:\/\/[^/]+/g, (match) => {
+        const parsedMatch = url.parse(match);
+        return `${parsedMatch.protocol}://${parsedMatch.host}`;
+      });
+    }
+
+    res.set(response.headers);
     res.status(response.status);
     res.send(response.data);
   } catch (error) {
@@ -111,7 +121,7 @@ const startServer = async () => {
       };
 
       const httpsServer = https.createServer(httpsOptions, app);
-      httpsServer.listen(config.server.https.port || 8443, () => {
+      httpsServer.listen(config.server.https.port || 8443, host, () => {
         logger.info(`HTTPS server listening on ${host}:8443`);
       });
 
@@ -124,6 +134,32 @@ const startServer = async () => {
       httpServer.on('upgrade', (req, socket, head) => {
         wss.handleUpgrade(req, socket, head, (ws) => {
           wss.emit('connection', ws, req);
+        });
+      });
+    }
+
+    // Handle HTTPS CONNECT tunnels
+    if (config.server.https) {
+      httpsServer.on('connection', (socket) => {
+        socket.on('data', (chunk) => {
+          const connectReq = chunk.toString();
+          const match = connectReq.match(/CONNECT (.+):443/);
+          if (match) {
+            const targetHost = match[1];
+            const targetSocket = net.connect(443, targetHost, () => {
+              socket.write(`HTTP/1.1 200 Connection established\r\n\r\n`);
+              targetSocket.pipe(socket);
+              socket.pipe(targetSocket);
+            });
+            targetSocket.on('error', (error) => {
+              logger.error('Target socket error:', error);
+              socket.destroy();
+            });
+            socket.on('error', (error) => {
+              logger.error('Socket error:', error);
+              targetSocket.destroy();
+            });
+          }
         });
       });
     }
