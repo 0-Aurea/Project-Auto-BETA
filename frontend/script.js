@@ -34,7 +34,6 @@ const tabManager = new TabManager({
     searchBar.setSearchQuery(tab.url);
   },
   searchBarElement,
-  swConfig: { encode, decode },
 });
 
 const searchBar = new SearchBar({ 
@@ -43,7 +42,6 @@ const searchBar = new SearchBar({
     tabManager.navigate(encodedUrl);
   }, 
   tabManager, 
-  swConfig: { encode, decode },
   searchBarElement
 });
 
@@ -130,11 +128,4 @@ document.addEventListener('keydown', (event) => {
     searchBar.focus();
     event.preventDefault();
   }
-});
- 
-searchBarElement.addEventListener('submit', (event) => {
-  event.preventDefault();
-  const searchQuery = searchBar.getSearchQuery();
-  const encodedUrl = encode(searchQuery);
-  tabManager.navigate(encodedUrl);
 });
