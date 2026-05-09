@@ -213,132 +213,140 @@ iframe {
   height: 100%;
 }
 
-.settings-panel,
-.history-panel,
-.bookmarks-panel {
+.settings-panel, .history-panel, .bookmarks-panel {
   position: fixed;
   top: 0;
   right: 0;
-  width: 300px;
-  height: 100vh;
   background-color: var(--bg-elevated);
   padding: var(--space-2);
-  border-left: 1px solid var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
   transform: translateX(100%);
   transition: transform 0.2s cubic-bezier(0.16,1,0.3,1);
 }
 
-.settings-panel.show,
-.history-panel.show,
-.bookmarks-panel.show {
+.settings-panel.show, .history-panel.show, .bookmarks-panel.show {
   transform: translateX(0);
 }
 
-.settings-panel-overlay,
-.history-panel-overlay,
-.bookmarks-panel-overlay {
+.settings-panel::before, .history-panel::before, .bookmarks-panel::before {
+  content: '';
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
-  height: 100vh;
+  height: 100%;
   background-color: rgba(0,0,0,0.5);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
+  backdrop-filter: blur(10px);
 }
 
-.settings-panel-overlay.show,
-.history-panel-overlay.show,
-.bookmarks-panel-overlay.show {
-  opacity: 1;
-  pointer-events: all;
+.settings-header, .history-header, .bookmarks-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2);
 }
 
-.settings-switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
+.settings-header h2, .history-header h2, .bookmarks-header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
 }
 
-.settings-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.settings-switch .slider {
-  position: absolute;
+.settings-toggle, .history-toggle, .bookmarks-toggle {
+  background-color: var(--bg-surface);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   cursor: pointer;
+}
+
+.settings-toggle:hover, .history-toggle:hover, .bookmarks-toggle:hover {
+  background-color: var(--bg-elevated);
+}
+
+.ad-block-toggle, .dark-mode-toggle {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.ad-block-toggle label, .dark-mode-toggle label {
+  margin-left: var(--space-1);
+}
+
+.search-engine-select {
+  background-color: var(--bg-surface);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.history-list, .bookmarks-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.history-item, .bookmark-item {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.history-item:last-child, .bookmark-item:last-child {
+  border-bottom: none;
+}
+
+.history-item .favicon, .bookmark-item .favicon {
+  width: 16px;
+  height: 16px;
+  margin-right: var(--space-1);
+}
+
+.bookmark-item .title {
+  font-weight: 600;
+}
+
+.bookmarks-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.bookmark-card {
+  background-color: var(--bg-surface);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.bookmark-card .favicon {
+  width: 32px;
+  height: 32px;
+  margin-bottom: var(--space-1);
+}
+
+.bookmark-card .title {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.loading-bar {
+  position: fixed;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--bg-surface);
-  transition: 0.2s;
-}
-
-.settings-switch .slider:before {
-  position: absolute;
-  content: "";
-  height: 20px;
-  width: 20px;
-  left: 2px;
-  bottom: 2px;
-  background-color: var(--bg-base);
-  transition: 0.2s;
-}
-
-.settings-switch input:checked + .slider {
+  width: 100%;
+  height: 2px;
   background-color: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.2s ease;
 }
 
-.settings-switch input:checked + .slider:before {
-  transform: translateX(20px);
-}
-
-.settings-switch .slider.round {
-  border-radius: 24px;
-}
-
-.settings-switch .slider.round:before {
-  border-radius: 50%;
-}
-
-select {
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border);
-  padding: var(--space-1) var(--space-2);
-  font-size: 1rem;
-  color: var(--text-primary);
-}
-
-option {
-  background-color: var(--bg-surface);
-  color: var(--text-primary);
-}
-
-::-webkit-scrollbar {
-  width: 10px;
-}
-
-::-webkit-scrollbar-track {
-  background-color: var(--bg-base);
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: var(--border);
-  border-radius: var(--radius-lg);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background-color: var(--border-bright);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  * {
-    transition: none !important;
-    animation: none !important;
-  }
+.loading-bar.show {
+  transform: scaleX(1);
 }
