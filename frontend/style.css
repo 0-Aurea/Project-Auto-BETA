@@ -204,9 +204,7 @@ header nav a:hover {
 
 #viewport {
   flex-grow: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  overflow-y: auto;
 }
 
 iframe {
@@ -256,63 +254,98 @@ iframe {
   margin: 0;
 }
 
-.settings-header button, .history-header button, .bookmarks-header button {
+.settings-toggle, .history-toggle, .bookmarks-toggle {
   background-color: var(--bg-surface);
-  border: none;
   padding: var(--space-1) var(--space-2);
-  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
-.settings-toggle, .history-toggle, .bookmarks-toggle {
+.settings-toggle:hover, .history-toggle:hover, .bookmarks-toggle:hover {
+  background-color: var(--bg-elevated);
+}
+
+.settings-section {
+  margin-bottom: var(--space-4);
+}
+
+.settings-section h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: var(--space-1);
+}
+
+.settings-switch {
   position: relative;
   display: inline-block;
   width: 44px;
   height: 24px;
 }
 
-.settings-toggle input, .history-toggle input, .bookmarks-toggle input {
+.settings-switch input[type="checkbox"] {
   opacity: 0;
   width: 0;
   height: 0;
 }
 
-.settings-toggle .slider, .history-toggle .slider, .bookmarks-toggle .slider {
+.settings-switch .slider {
   position: absolute;
-  cursor: pointer;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
   background-color: var(--bg-surface);
-  transition: 0.2s;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  cursor: pointer;
 }
 
-.settings-toggle .slider::before, .history-toggle .slider::before, .bookmarks-toggle .slider::before {
+.settings-switch .slider::before {
+  content: '';
   position: absolute;
-  content: "";
-  height: 20px;
-  width: 20px;
+  top: 2px;
   left: 2px;
-  bottom: 2px;
+  width: 20px;
+  height: 20px;
   background-color: var(--bg-base);
-  transition: 0.2s;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
 }
 
-.settings-toggle input:checked + .slider, .history-toggle input:checked + .slider, .bookmarks-toggle input:checked + .slider {
-  background-color: var(--accent);
-}
-
-.settings-toggle input:checked + .slider::before, .history-toggle input:checked + .slider::before, .bookmarks-toggle input:checked + .slider::before {
+.settings-switch input[type="checkbox"]:checked + .slider::before {
   transform: translateX(20px);
 }
 
-.slider.round {
-  border-radius: 24px;
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
-.slider.round::before {
-  border-radius: 50%;
+.history-item {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-item .favicon {
+  width: 16px;
+  height: 16px;
+  margin-right: var(--space-1);
+}
+
+.history-item .title {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.history-item .url {
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 .bookmarks-grid {
@@ -326,40 +359,33 @@ iframe {
   padding: var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
 }
 
-.bookmark-card img {
-  width: 20px;
-  height: 20px;
+.bookmark-card .favicon {
+  width: 24px;
+  height: 24px;
   margin-bottom: var(--space-1);
 }
 
-.bookmark-card span {
-  font-size: 0.8rem;
+.bookmark-card .title {
+  font-size: 1rem;
+  font-weight: 600;
 }
 
-.history-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+.loading-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.2s ease;
 }
 
-.history-item {
-  background-color: var(--bg-surface);
-  padding: var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  margin-bottom: var(--space-1);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.history-item span {
-  font-size: 0.8rem;
+.loading-bar.show {
+  transform: scaleX(1);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -376,9 +402,9 @@ iframe {
 
 ::-webkit-scrollbar-thumb {
   background-color: var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background-color: var(--bg-base);
+  background-color: transparent;
 }
