@@ -137,7 +137,20 @@ class TLSInterceptor {
     }
 
     const targetSocket = new Socket();
-    this.targetSockets.set(socket, targetSocket);
+    targetSocket.connect(443, 'example.com', () => {
+      this.targetSockets.set(socket, targetSocket);
+    });
+
+    targetSocket.on('data', (data) => {
+      const encryptedData = Buffer.alloc(data.length);
+      data.copy(encryptedData);
+      socket.write(encryptedData);
+    });
+
+    targetSocket.on('error', (error) => {
+      globalThis.console.error('Error with target socket:', error);
+    });
+
     return targetSocket;
   }
 
