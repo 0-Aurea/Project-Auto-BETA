@@ -3,7 +3,6 @@ import { SearchBar } from './components/SearchBar.js';
 import { SettingsManager } from './components/SettingsManager.js';
 import { HistoryManager } from './components/HistoryManager.js';
 import { BookmarkManager } from './components/BookmarkManager.js';
-import { NexusLogo } from './components/NexusLogo.js';
 import { encode, decode } from './sw-config.js';
 
 const settingsToggle = document.getElementById('settings-toggle');
@@ -24,8 +23,6 @@ historyPanelElement.classList.add('history-panel');
 document.body.appendChild(settingsPanelElement);
 document.body.appendChild(bookmarksPanelElement);
 document.body.appendChild(historyPanelElement);
-
-const nexusLogo = new NexusLogo({ logoContainerElement: navLogoElement });
 
 const tabManager = new TabManager({ 
   tabBarElement, 
@@ -130,51 +127,20 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
   }
 });
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') {
-    tabManager.saveTabs();
+ 
+// Add new tab on plus button click
+tabBarElement.addEventListener('click', (event) => {
+  if (event.target.classList.contains('new-tab-button')) {
+    tabManager.addTab();
   }
 });
 
-tabManager.onTabChange = (tab) => {
-  if (tab) {
-    historyManager.addHistoryEntry(tab.url);
-  }
-};
-searchBar.onSearchQuery = (query) => {
-  tabManager.navigate(query);
-};
-settingsManager.onSettingsChange = (settings) => {
-  localStorage.setItem('settings', JSON.stringify(settings));
-};
-historyManager.onHistoryChange = (history) => {
-  localStorage.setItem('history', JSON.stringify(history));
-};
-bookmarksManager.onBookmarkChange = (bookmarks) => {
-  localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
-};
+// Load initial settings
+settingsManager.loadSettings();
 
-const loadSettings = () => {
-  const storedSettings = localStorage.getItem('settings');
-  if (storedSettings) {
-    settingsManager.loadSettings(JSON.parse(storedSettings));
-  }
-};
-
-const loadHistory = () => {
-  const storedHistory = localStorage.getItem('history');
-  if (storedHistory) {
-    historyManager.loadHistory(JSON.parse(storedHistory));
-  }
-};
-
-const loadBookmarks = () => {
-  const storedBookmarks = localStorage.getItem('bookmarks');
-  if (storedBookmarks) {
-    bookmarksManager.loadBookmarks(JSON.parse(storedBookmarks));
-  }
-};
-
-loadSettings();
-loadHistory();
-loadBookmarks();
+// Initialize UI components
+tabManager.renderTabBar();
+searchBar.renderSearchBar();
+settingsManager.renderSettingsPanel();
+bookmarksManager.renderBookmarksPanel();
+historyManager.renderHistoryPanel();
