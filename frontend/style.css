@@ -87,11 +87,11 @@ header nav a:hover {
   display: flex;
   align-items: center;
   margin-right: var(--space-4);
+  font-size: 1.25rem;
+  font-weight: 600;
 }
 
 .logo-text {
-  font-size: 1.25rem;
-  font-weight: 600;
   background: linear-gradient(135deg, var(--accent), #a78bfa);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -254,120 +254,87 @@ iframe {
   margin: 0;
 }
 
-.settings-header button, .history-header button, .bookmarks-header button {
-  background-color: transparent;
-  border: none;
-  padding: var(--space-1) var(--space-2);
-  font-size: 1rem;
-  cursor: pointer;
-}
-
 .settings-toggle, .history-toggle, .bookmarks-toggle {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
-}
-
-.settings-toggle input, .history-toggle input, .bookmarks-toggle input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.settings-toggle .slider, .history-toggle .slider, .bookmarks-toggle .slider {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
   background-color: var(--bg-surface);
-  border-radius: 24px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-.settings-toggle .slider::before, .history-toggle .slider::before, .bookmarks-toggle .slider::before {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 20px;
-  height: 20px;
-  background-color: var(--bg-base);
-  border-radius: 50%;
-  transition: all 0.2s ease;
+.settings-toggle:hover, .history-toggle:hover, .bookmarks-toggle:hover {
+  background-color: var(--bg-elevated);
 }
 
-.settings-toggle input:checked + .slider, .history-toggle input:checked + .slider, .bookmarks-toggle input:checked + .slider {
-  background-color: var(--accent);
-}
-
-.settings-toggle input:checked + .slider::before, .history-toggle input:checked + .slider::before, .bookmarks-toggle input:checked + .slider::before {
-  transform: translateX(20px);
-}
-
-.history-list, .bookmarks-list {
+.settings-list, .history-list, .bookmarks-list {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.history-item, .bookmark-item {
-  padding: var(--space-1) var(--space-2);
-  border-bottom: 1px solid var(--border);
+.settings-list li, .history-list li, .bookmarks-list li {
+  margin-bottom: var(--space-1);
 }
 
-.history-item:last-child, .bookmark-item:last-child {
-  border-bottom: none;
+.settings-list label, .history-list label, .bookmarks-list label {
+  font-size: 1rem;
+  margin-right: var(--space-1);
 }
 
-.history-item .favicon, .bookmark-item .favicon {
+.settings-list input[type="checkbox"], .settings-list input[type="select"] {
+  margin-right: var(--space-1);
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--space-1);
+}
+
+.history-item favicon {
   width: 16px;
   height: 16px;
   margin-right: var(--space-1);
 }
 
-.history-item .title, .bookmark-item .title {
-  font-size: 1rem;
-  color: var(--text-primary);
-}
-
-.history-item .url, .bookmark-item .url {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-}
-
-.bookmark-item .grid {
+.bookmarks-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--space-1);
 }
 
-.bookmark-item .grid img {
+.bookmarks-card {
+  background-color: var(--bg-surface);
+  padding: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.bookmarks-card favicon {
+  width: 24px;
+  height: 24px;
+  margin-bottom: var(--space-1);
+}
+
+.bookmarks-card span {
+  font-size: 0.8rem;
+}
+
+.loading-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: var(--radius-sm);
+  height: 2px;
+  background-color: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.2s ease;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  * {
-    transition: none !important;
-    animation: none !important;
-  }
-}
-
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: var(--border);
-  border-radius: var(--radius-sm);
-}
-
-::-webkit-scrollbar-track {
-  background-color: transparent;
+.loading-bar.show {
+  transform: scaleX(1);
 }
