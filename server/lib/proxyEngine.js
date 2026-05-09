@@ -55,6 +55,13 @@ const proxyEngine = async (req, res) => {
         });
       }
 
+      if (rewrittenHeaders['location']) {
+        const locationUrl = url.parse(rewrittenHeaders['location']);
+        if (locationUrl.host) {
+          rewrittenHeaders['location'] = `${req.protocol}://${req.get('host')}${locationUrl.pathname}${locationUrl.search}`;
+        }
+      }
+
       // Add CORS headers
       rewrittenHeaders['access-control-allow-origin'] = config.server.cors.origin;
       rewrittenHeaders['access-control-allow-methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
