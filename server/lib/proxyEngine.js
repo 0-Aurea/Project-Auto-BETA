@@ -168,46 +168,51 @@ const handleWebSocketProxy = (req, res, targetUrl) => {
 };
 
 const handleHttpsConnect = (req, res, targetUrl) => {
-  const targetHost = url.parse(targetUrl).host;
+  const parsedTargetUrl = url.parse(targetUrl);
   const options = {
-    host: targetHost,
+    hostname: parsedTargetUrl.host,
     port: 443,
-    rejectUnauthorized: false,
+    method: 'CONNECT',
   };
 
-  const tlsSocket = tls.connect(options, () => {
-    res.writeHead(200, { 'Connection': 'keep-alive' });
-    res.socket.setKeepAlive(true);
+  const httpsSocket = tls.connect(options, () => {
+    res.writeHead(200, 'Connection established');
+    res.end();
 
-    req.socket.on('data', (chunk) => {
-      tlsSocket.write(chunk);
-    });
+    const pipeData = (source, destination) => {
+      source.on('data', (data) => {
+        destination.write(data);
+      });
 
-    req.socket.on('close', () => {
-      tlsSocket.end();
-    });
+      source.on('end', () => {
+        destination.end();
+      });
 
-    req.socket.on('error', (error) => {
-      logger.error(`HTTPS CONNECT socket error: ${error.message}`);
-      tlsSocket.end();
-    });
+      source.on('error', (error) => {
+        logger.error(`HTTPS connect error: ${error.message}`);
+        destination.end();
+      });
 
-    tlsSocket.on('data', (chunk) => {
-      res.socket.write(chunk);
-    });
+      destination.on('data', (data) => {
+        source.write(data);
+      });
 
-    tlsSocket.on('close', () => {
-      req.socket.end();
-    });
+      destination.on('end', () => {
+        source.end();
+      });
 
-    tlsSocket.on('error', (error) => {
-      logger.error(`HTTPS CONNECT TLS socket error: ${error.message}`);
-      req.socket.end();
-    });
+      destination.on('error', (error) => {
+        logger.error(`HTTPS connect error: ${error.message}`);
+        source.end();
+      });
+    };
+
+    pipeData(req.socket, httpsSocket);
+    pipeData(httpsSocket, req.socket);
   });
 
-  tlsSocket.on('error', (error) => {
-    logger.error(`HTTPS CONNECT TLS socket error: ${error.message}`);
+  httpsSocket.on('error', (error) => {
+    logger.error(`HTTPS connect error: ${error.message}`);
     res.status(500).send({ error: 'Internal Server Error' });
   });
 };
