@@ -2,9 +2,9 @@
   "name": "nexus-proxy",
   "version": "1.0.0",
   "description": "A fully self-hosted web proxy",
-  "main": "dist/server/index.js",
+  "main": "server/index.js",
   "scripts": {
-    "start": "node dist/server/index.js",
+    "start": "node server/index.js",
     "dev": "nodemon server/index.js",
     "build": "npm run lint && npm run test && npm run build:sw && npm run build:server",
     "lint": "eslint .",
