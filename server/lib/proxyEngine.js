@@ -127,36 +127,43 @@ const handleWebSocketProxy = (req, res, targetUrl) => {
         'Connection': 'Upgrade',
       },
     };
+    res.writeHead(101, webSocketResponse.headers);
+    res.socket.setKeepAlive(true);
 
-    res.writeHead(webSocketResponse.status, webSocketResponse.headers);
-    req.socket.setKeepAlive(true);
-    req.socket.setTimeout(0);
+    const pipeWebSocketData = (wsProxy, socket) => {
+      wsProxy.on('message', (message) => {
+        socket.write(message);
+      });
 
-    wsProxy.on('message', (message) => {
-      res.write(message);
-    });
+      wsProxy.on('close', () => {
+        socket.end();
+      });
 
-    wsProxy.on('close', () => {
-      res.end();
-    });
+      wsProxy.on('error', (error) => {
+        logger.error(`WebSocket proxy error: ${error.message}`);
+        socket.end();
+      });
 
-    wsProxy.on('error', (error) => {
-      logger.error(`WebSocket proxy error: ${error.message}`);
-      res.end();
-    });
+      socket.on('message', (message) => {
+        wsProxy.send(message);
+      });
 
-    req.on('data', (chunk) => {
-      wsProxy.send(chunk.toString());
-    });
+      socket.on('close', () => {
+        wsProxy.close();
+      });
 
-    req.on('end', () => {
-      wsProxy.close();
-    });
+      socket.on('error', (error) => {
+        logger.error(`WebSocket socket error: ${error.message}`);
+        wsProxy.close();
+      });
+    };
+
+    pipeWebSocketData(wsProxy, res.socket);
   });
 
   wsProxy.on('error', (error) => {
     logger.error(`WebSocket proxy error: ${error.message}`);
-    res.end();
+    res.status(500).send({ error: 'Internal Server Error' });
   });
 };
 
@@ -169,37 +176,39 @@ const handleHttpsConnect = (req, res, targetUrl) => {
   };
 
   const tlsSocket = tls.connect(options, () => {
-    res.writeHead(200, { 'Connection': 'established' });
-    res.end();
+    res.writeHead(200, { 'Connection': 'keep-alive' });
+    res.socket.setKeepAlive(true);
 
-    req.socket.setKeepAlive(true);
-    req.socket.setTimeout(0);
-
-    req.on('data', (chunk) => {
+    req.socket.on('data', (chunk) => {
       tlsSocket.write(chunk);
     });
 
-    req.on('end', () => {
+    req.socket.on('close', () => {
+      tlsSocket.end();
+    });
+
+    req.socket.on('error', (error) => {
+      logger.error(`HTTPS CONNECT socket error: ${error.message}`);
       tlsSocket.end();
     });
 
     tlsSocket.on('data', (chunk) => {
-      res.write(chunk);
+      res.socket.write(chunk);
     });
 
-    tlsSocket.on('end', () => {
-      res.end();
+    tlsSocket.on('close', () => {
+      req.socket.end();
     });
 
     tlsSocket.on('error', (error) => {
-      logger.error(`HTTPS connect error: ${error.message}`);
-      res.end();
+      logger.error(`HTTPS CONNECT TLS socket error: ${error.message}`);
+      req.socket.end();
     });
   });
 
   tlsSocket.on('error', (error) => {
-    logger.error(`HTTPS connect error: ${error.message}`);
-    res.end();
+    logger.error(`HTTPS CONNECT TLS socket error: ${error.message}`);
+    res.status(500).send({ error: 'Internal Server Error' });
   });
 };
 
