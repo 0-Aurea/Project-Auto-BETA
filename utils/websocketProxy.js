@@ -128,14 +128,9 @@ class WebSocketProxyUtils {
       // Remove sensitive headers
       const filteredHeaders = EncodingUtils.filterHeaders(headers, REQUEST_HEADER_REWRITE_LIST);
 
-      // Isolate cookies per proxied origin
-      const cookieHeader = headers['cookie'];
-      const isolatedCookieHeader = CookieScopingUtils.isolateCookies(cookieHeader, origin);
-
-      // Rewrite headers
+      // Add or modify headers as needed
       const rewrittenHeaders = {
         ...filteredHeaders,
-        'Cookie': isolatedCookieHeader,
         'Origin': origin,
       };
 
@@ -150,7 +145,7 @@ class WebSocketProxyUtils {
    * Handle WebSocket errors.
    * @param {Error} error - The WebSocket error.
    */
-  static handleError(error) {
+  static handleWebSocketError(error) {
     console.error('WebSocket error:', error);
   }
 }
