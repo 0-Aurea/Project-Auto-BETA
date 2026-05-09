@@ -122,18 +122,33 @@ const handleWebSocketProxy = (req, res, targetUrl) => {
     };
 
     res.writeHead(webSocketResponse.status, webSocketResponse.headers);
-    req.socket.on('data', (data) => {
-      wsProxy.send(data);
-    });
-    wsProxy.on('message', (message) => {
-      res.socket.write(message);
-    });
-    wsProxy.on('error', (error) => {
-      logger.error(`WebSocket proxy error: ${error.message}`);
-    });
-    wsProxy.on('close', () => {
-      res.socket.destroy();
-    });
+    req.socket.setKeepAlive(true);
+  });
+
+  wsProxy.on('message', (message) => {
+    res.socket.write(message);
+  });
+
+  wsProxy.on('close', () => {
+    res.socket.destroy();
+  });
+
+  wsProxy.on('error', (error) => {
+    logger.error(`WebSocket proxy error: ${error.message}`);
+    res.socket.destroy();
+  });
+
+  req.socket.on('message', (message) => {
+    wsProxy.send(message);
+  });
+
+  req.socket.on('close', () => {
+    wsProxy.close();
+  });
+
+  req.socket.on('error', (error) => {
+    logger.error(`WebSocket proxy error: ${error.message}`);
+    wsProxy.close();
   });
 };
 
