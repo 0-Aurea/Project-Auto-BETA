@@ -127,20 +127,3 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
   }
 });
- 
-// Add new tab on plus button click
-tabBarElement.addEventListener('click', (event) => {
-  if (event.target.classList.contains('new-tab-button')) {
-    tabManager.addTab();
-  }
-});
-
-// Load initial settings
-settingsManager.loadSettings();
-
-// Initialize UI components
-tabManager.renderTabBar();
-searchBar.renderSearchBar();
-settingsManager.renderSettingsPanel();
-bookmarksManager.renderBookmarksPanel();
-historyManager.renderHistoryPanel();
