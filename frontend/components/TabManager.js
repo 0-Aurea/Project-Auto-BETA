@@ -139,20 +139,22 @@ export class TabManager {
 
     const oldTab = this.tabs.find((tab) => tab.id === this.activeTabId);
     if (oldTab) {
+      oldTab.iframeEl.style.display = 'none';
       oldTab.iframeEl.style.opacity = 0;
-      oldTab.iframeEl.style.zIndex = -1;
-      const oldTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
-      oldTabElement.classList.remove('active');
     }
 
     const newTab = this.tabs.find((tab) => tab.id === tabId);
+    newTab.iframeEl.style.display = 'block';
     newTab.iframeEl.style.opacity = 1;
-    newTab.iframeEl.style.zIndex = 1;
-    const newTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === tabId)];
-    newTabElement.classList.add('active');
 
     this.activeTabId = tabId;
     this.onTabChange(tabId);
+
+    const tabElements = this.tabBarElement.children;
+    for (let i = 0; i < tabElements.length; i++) {
+      tabElements[i].classList.remove('active');
+    }
+    tabElements[tabIndex(this.tabs, tabId)].classList.add('active');
   }
 
   handleTabClose(tabId) {
@@ -168,13 +170,37 @@ export class TabManager {
   }
 
   renderNewTabButton() {
-    const newTabButton = document.createElement('div');
+    const newTabButton = document.createElement('button');
     newTabButton.classList.add('new-tab-button');
     newTabButton.textContent = '+';
     this.tabBarElement.appendChild(newTabButton);
   }
 
   renderTabBar() {
-    // Update tab bar styles and layout here
+    const tabElements = this.tabBarElement.children;
+    for (let i = 0; i < tabElements.length; i++) {
+      if (tabElements[i].classList.contains('new-tab-button')) {
+        continue;
+      }
+      tabElements[i].style.transform = '';
+      tabElements[i].style.opacity = '';
+    }
+  }
+
+  tabIndex(tabs, tabId) {
+    for (let i = 0; i < tabs.length; i++) {
+      if (tabs[i].id === tabId) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  navigate(tabId, url) {
+    const tab = this.tabs.find((tab) => tab.id === tabId);
+    if (tab) {
+      tab.url = url;
+      tab.iframeEl.src = url;
+    }
   }
 }
