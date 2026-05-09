@@ -142,31 +142,25 @@ export class TabManager {
     tab.iframeEl.style.display = 'block';
     tab.iframeEl.style.zIndex = 1;
     tab.iframeEl.style.opacity = 1;
-    tab.iframeEl.style.transition = 'opacity 0.2s ease-in-out';
-
-    const activeTabElement = this.tabBarElement.children[tabIndex];
-    activeTabElement.classList.add('active');
-    activeTabElement.style.borderBottom = '2px solid var(--accent)';
 
     if (this.activeTabId !== null) {
-      const prevTabIndex = this.tabs.findIndex((tab) => tab.id === this.activeTabId);
-      const prevTabElement = this.tabBarElement.children[prevTabIndex];
-      prevTabElement.classList.remove('active');
-      prevTabElement.style.borderBottom = '';
-      this.tabs[prevTabIndex].iframeEl.style.display = 'none';
-      this.tabs[prevTabIndex].iframeEl.style.opacity = 0;
+      const activeTabIndex = this.tabs.findIndex((tab) => tab.id === this.activeTabId);
+      const activeTab = this.tabs[activeTabIndex];
+      activeTab.iframeEl.style.display = 'none';
+      activeTab.iframeEl.style.zIndex = -1;
+      activeTab.iframeEl.style.opacity = 0;
     }
 
     this.activeTabId = tabId;
     this.onTabChange(tabId);
   }
 
-  handleTabClose(tabId) {
-    this.removeTab(tabId);
-  }
-
   handleTabClick(tabId) {
     this.switchTab(tabId);
+  }
+
+  handleTabClose(tabId) {
+    this.removeTab(tabId);
   }
 
   handleNewTab() {
@@ -181,12 +175,16 @@ export class TabManager {
   }
 
   renderTabBar() {
-    // Add active class to active tab
-    const activeTabIndex = this.tabs.findIndex((tab) => tab.id === this.activeTabId);
-    if (activeTabIndex !== -1) {
-      const activeTabElement = this.tabBarElement.children[activeTabIndex];
-      activeTabElement.classList.add('active');
-    }
+    // Update tab bar styles and active tab indicator
+    const tabs = this.tabs;
+    tabs.forEach((tab, index) => {
+      const tabElement = this.tabBarElement.children[index];
+      if (tab.id === this.activeTabId) {
+        tabElement.classList.add('active');
+      } else {
+        tabElement.classList.remove('active');
+      }
+    });
   }
 
   navigate(tabId, url) {
