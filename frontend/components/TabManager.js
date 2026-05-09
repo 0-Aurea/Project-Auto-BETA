@@ -139,20 +139,17 @@ export class TabManager {
 
     const oldTab = this.tabs.find((tab) => tab.id === this.activeTabId);
     if (oldTab) {
+      oldTab.iframeEl.style.display = 'none';
       oldTab.iframeEl.style.opacity = 0;
-      oldTab.iframeEl.style.zIndex = -1;
-      const oldTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
-      oldTabElement.classList.remove('active');
     }
 
     const newTab = this.tabs.find((tab) => tab.id === tabId);
-    newTab.iframeEl.style.opacity = 1;
-    newTab.iframeEl.style.zIndex = 1;
-    const newTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === tabId)];
-    newTabElement.classList.add('active');
-
-    this.activeTabId = tabId;
-    this.onTabChange(tabId);
+    if (newTab) {
+      newTab.iframeEl.style.display = 'block';
+      newTab.iframeEl.style.opacity = 1;
+      this.activeTabId = tabId;
+      this.onTabChange(tabId);
+    }
   }
 
   handleTabClose(tabId) {
@@ -175,6 +172,23 @@ export class TabManager {
   }
 
   renderTabBar() {
-    this.tabBarElement.style.width = `${this.tabs.length * 48}px`;
+    // Update tab bar styles and classes
+    const tabs = this.tabs.map((tab) => {
+      const tabElement = this.tabBarElement.children[tab.id];
+      if (tab.id === this.activeTabId) {
+        tabElement.classList.add('active');
+      } else {
+        tabElement.classList.remove('active');
+      }
+      return tabElement;
+    });
+  }
+
+  navigate(tabId, url) {
+    const tab = this.tabs.find((tab) => tab.id === tabId);
+    if (tab) {
+      tab.url = url;
+      tab.iframeEl.src = url;
+    }
   }
 }
