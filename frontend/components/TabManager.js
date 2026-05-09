@@ -135,21 +135,20 @@ export class TabManager {
   }
 
   switchTab(tabId) {
-    if (this.activeTabId === tabId) return;
+    const tabIndex = this.tabs.findIndex((tab) => tab.id === tabId);
+    if (tabIndex === -1) return;
 
-    const oldTab = this.tabs.find((tab) => tab.id === this.activeTabId);
-    if (oldTab) {
-      oldTab.iframeEl.style.opacity = 0;
-      oldTab.iframeEl.style.zIndex = -1;
-      const oldTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
-      oldTabElement.classList.remove('active');
+    const tab = this.tabs[tabIndex];
+    tab.iframeEl.style.display = 'block';
+    tab.iframeEl.style.zIndex = 1;
+    tab.iframeEl.style.opacity = 1;
+
+    if (this.activeTabId !== null) {
+      const activeTabIndex = this.tabs.findIndex((tab) => tab.id === this.activeTabId);
+      this.tabs[activeTabIndex].iframeEl.style.display = 'none';
+      this.tabs[activeTabIndex].iframeEl.style.zIndex = -1;
+      this.tabs[activeTabIndex].iframeEl.style.opacity = 0;
     }
-
-    const newTab = this.tabs.find((tab) => tab.id === tabId);
-    newTab.iframeEl.style.opacity = 1;
-    newTab.iframeEl.style.zIndex = 1;
-    const newTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === tabId)];
-    newTabElement.classList.add('active');
 
     this.activeTabId = tabId;
     this.onTabChange(tabId);
@@ -175,6 +174,24 @@ export class TabManager {
   }
 
   renderTabBar() {
-    // Update tab bar styles and layout
+    // Update tab bar styles and classes
+    const tabs = this.tabs;
+    tabs.forEach((tab, index) => {
+      const tabElement = this.tabBarElement.children[index];
+      if (tab.id === this.activeTabId) {
+        tabElement.classList.add('active');
+      } else {
+        tabElement.classList.remove('active');
+      }
+    });
+  }
+
+  navigate(tabId, url) {
+    const tabIndex = this.tabs.findIndex((tab) => tab.id === tabId);
+    if (tabIndex === -1) return;
+
+    const tab = this.tabs[tabIndex];
+    tab.url = url;
+    tab.iframeEl.src = encode(url);
   }
 }
