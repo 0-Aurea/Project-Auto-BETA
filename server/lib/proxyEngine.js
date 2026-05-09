@@ -59,6 +59,8 @@ const proxyEngine = async (req, res) => {
         const locationUrl = url.parse(rewrittenHeaders['location']);
         if (locationUrl.host) {
           rewrittenHeaders['location'] = `${req.protocol}://${req.get('host')}${locationUrl.pathname}${locationUrl.search}`;
+        } else {
+          rewrittenHeaders['location'] = `${req.protocol}://${req.get('host')}${locationUrl.pathname}${locationUrl.search}`;
         }
       }
 
@@ -140,11 +142,7 @@ const handleWebSocketProxy = (req, res, targetUrl) => {
   });
 
   req.on('close', () => {
-    wsProxy.terminate();
-  });
-
-  res.on('close', () => {
-    wsProxy.terminate();
+    wsProxy.close();
   });
 };
 
