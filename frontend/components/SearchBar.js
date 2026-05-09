@@ -124,10 +124,10 @@ export class SearchBar {
 
   handleSearchEngineChange(engine) {
     this.state.searchEngine = engine;
+    localStorage.setItem('searchEngine', engine);
     this.searchEngineSelect.children[0].classList.toggle('active', engine === 'google');
     this.searchEngineSelect.children[1].classList.toggle('active', engine === 'bing');
     this.slider.classList.remove(`active-google`, `active-bing`);
     this.slider.classList.add(`active-${engine}`);
-    localStorage.setItem('searchEngine', engine);
   }
 }
