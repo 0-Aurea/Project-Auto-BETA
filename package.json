@@ -2,7 +2,7 @@
   "name": "nexus-proxy",
   "version": "1.0.0",
   "description": "A fully self-hosted web proxy",
-  "main": "server/index.js",
+  "main": "dist/server/index.js",
   "scripts": {
     "start": "node dist/server/index.js",
     "dev": "nodemon server/index.js",
