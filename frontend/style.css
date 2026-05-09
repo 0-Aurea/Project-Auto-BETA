@@ -213,7 +213,9 @@ iframe {
   height: 100%;
 }
 
-.settings-panel, .history-panel, .bookmarks-panel {
+.settings-panel,
+.history-panel,
+.bookmarks-panel {
   position: fixed;
   top: 0;
   right: 0;
@@ -226,113 +228,91 @@ iframe {
   transition: transform 0.2s cubic-bezier(0.16,1,0.3,1);
 }
 
-.settings-panel.show, .history-panel.show, .bookmarks-panel.show {
+.settings-panel.show,
+.history-panel.show,
+.bookmarks-panel.show {
   transform: translateX(0);
 }
 
-.settings-panel::before, .history-panel::before, .bookmarks-panel::before {
-  content: '';
+.settings-panel-overlay,
+.history-panel-overlay,
+.bookmarks-panel-overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   background-color: rgba(0,0,0,0.5);
-  backdrop-filter: blur(10px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 
-.settings-header, .history-header, .bookmarks-header {
+.settings-panel-overlay.show,
+.history-panel-overlay.show,
+.bookmarks-panel-overlay.show {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.settings-panel-content {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-2);
+  flex-direction: column;
 }
 
-.settings-header h2, .history-header h2, .bookmarks-header h2 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.settings-toggle, .history-toggle, .bookmarks-toggle {
-  background-color: var(--bg-surface);
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-
-.settings-toggle:hover, .history-toggle:hover, .bookmarks-toggle:hover {
-  background-color: var(--bg-elevated);
-}
-
-.settings-content, .history-content, .bookmarks-content {
-  padding: var(--space-2);
-}
-
-.settings-content label, .history-content label, .bookmarks-content label {
-  display: block;
+.settings-panel-content label {
   margin-bottom: var(--space-1);
 }
 
-.settings-content input[type="checkbox"], .history-content input[type="checkbox"], .bookmarks-content input[type="checkbox"] {
+.settings-panel-content input[type="checkbox"] {
   margin-right: var(--space-1);
 }
 
-.settings-content select, .history-content select, .bookmarks-content select {
+.settings-panel-content select {
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
 
-.history-item {
+.history-panel-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.history-panel-content .history-item {
   padding: var(--space-1) var(--space-2);
   border-bottom: 1px solid var(--border);
 }
 
-.history-item:last-child {
+.history-panel-content .history-item:last-child {
   border-bottom: none;
 }
 
-.history-item .favicon {
+.history-panel-content .history-item .favicon {
   width: 16px;
   height: 16px;
   margin-right: var(--space-1);
 }
 
-.bookmarks-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-2);
+.bookmarks-panel-content {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
 }
 
-.bookmark-card {
+.bookmarks-panel-content .bookmark-card {
   background-color: var(--bg-surface);
   padding: var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  margin: var(--space-1);
+  width: calc(33.33% - var(--space-2));
 }
 
-.bookmark-card .favicon {
+.bookmarks-panel-content .bookmark-card .favicon {
   width: 24px;
   height: 24px;
   margin-bottom: var(--space-1);
-}
-
-.loading-bar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background-color: var(--accent);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.2s ease;
-}
-
-.loading-bar.show {
-  transform: scaleX(1);
 }
 
 @media (prefers-reduced-motion: reduce) {
