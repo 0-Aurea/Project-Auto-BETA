@@ -149,11 +149,9 @@ class WebSocketProxyUtils {
   /**
    * Handle WebSocket errors.
    * @param {Error} error - The WebSocket error.
-   * @param {WebSocket} ws - The WebSocket instance.
    */
-  static handleWebSocketError(error, ws) {
+  static handleError(error) {
     console.error('WebSocket error:', error);
-    ws.close();
   }
 }
 
