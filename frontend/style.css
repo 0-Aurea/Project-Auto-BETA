@@ -204,7 +204,9 @@ header nav a:hover {
 
 #viewport {
   flex-grow: 1;
-  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 iframe {
@@ -234,85 +236,139 @@ iframe {
   transform: translateX(0);
 }
 
-.settings-panel-overlay,
-.history-panel-overlay,
-.bookmarks-panel-overlay {
+.settings-panel::before,
+.history-panel::before,
+.bookmarks-panel::before {
+  content: '';
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   background-color: rgba(0,0,0,0.5);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
+  backdrop-filter: blur(10px);
 }
 
-.settings-panel-overlay.show,
-.history-panel-overlay.show,
-.bookmarks-panel-overlay.show {
-  opacity: 1;
-  pointer-events: all;
-}
-
-.settings-panel-content {
+.settings-header,
+.history-header,
+.bookmarks-header {
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2);
 }
 
-.settings-panel-content label {
-  margin-bottom: var(--space-1);
+.settings-header h2,
+.history-header h2,
+.bookmarks-header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
 }
 
-.settings-panel-content input[type="checkbox"] {
-  margin-right: var(--space-1);
+.settings-header button,
+.history-header button,
+.bookmarks-header button {
+  background-color: transparent;
+  border: none;
+  padding: var(--space-1) var(--space-2);
+  font-size: 1rem;
+  cursor: pointer;
 }
 
-.settings-panel-content select {
+.settings-toggle,
+.history-toggle,
+.bookmarks-toggle {
+  background-color: var(--bg-surface);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.settings-toggle:hover,
+.history-toggle:hover,
+.bookmarks-toggle:hover {
+  background-color: var(--bg-elevated);
+}
+
+.ad-block-toggle,
+.dark-mode-toggle {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.ad-block-toggle label,
+.dark-mode-toggle label {
+  margin-left: var(--space-1);
+}
+
+.search-engine-select {
+  background-color: var(--bg-surface);
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
 
-.history-panel-content {
-  display: flex;
-  flex-direction: column;
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
-.history-panel-content .history-item {
+.history-list li {
   padding: var(--space-1) var(--space-2);
   border-bottom: 1px solid var(--border);
 }
 
-.history-panel-content .history-item:last-child {
+.history-list li:last-child {
   border-bottom: none;
 }
 
-.history-panel-content .history-item .favicon {
-  width: 16px;
-  height: 16px;
-  margin-right: var(--space-1);
+.bookmarks-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
 }
 
-.bookmarks-panel-content {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-start;
-}
-
-.bookmarks-panel-content .bookmark-card {
+.bookmark-card {
   background-color: var(--bg-surface);
   padding: var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  margin: var(--space-1);
-  width: calc(33.33% - var(--space-2));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-.bookmarks-panel-content .bookmark-card .favicon {
-  width: 24px;
-  height: 24px;
-  margin-bottom: var(--space-1);
+.bookmark-card img {
+  width: 100%;
+  height: 100px;
+  object-fit: cover;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.bookmark-card h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.loading-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.2s ease;
+}
+
+.loading-bar.show {
+  transform: scaleX(1);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -329,7 +385,7 @@ iframe {
 
 ::-webkit-scrollbar-thumb {
   background-color: var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
 }
 
 ::-webkit-scrollbar-track {
