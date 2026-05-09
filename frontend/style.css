@@ -191,20 +191,22 @@ header nav a:hover {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   cursor: pointer;
+  transition: background-color 0.2s ease;
 }
 
 .search-engine-pill.active {
-  background-color: var(--accent);
-  color: var(--text-primary);
+  background-color: var(--bg-elevated);
 }
 
-.search-engine-pill:not(.active):hover {
-  background-color: var(--bg-elevated);
+.search-engine-pill:not(:last-child) {
+  margin-right: var(--space-1);
 }
 
 #viewport {
   flex-grow: 1;
-  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 iframe {
@@ -254,63 +256,110 @@ iframe {
   margin: 0;
 }
 
-.settings-toggle, .history-toggle, .bookmarks-toggle {
+.settings-header button, .history-header button, .bookmarks-header button {
   background-color: var(--bg-surface);
+  border: none;
   padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  font-size: 1rem;
   cursor: pointer;
 }
 
-.settings-toggle:hover, .history-toggle:hover, .bookmarks-toggle:hover {
-  background-color: var(--bg-elevated);
+.settings-toggle, .history-toggle, .bookmarks-toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
 }
 
-.ad-block-toggle, .dark-mode-toggle {
-  display: flex;
-  align-items: center;
-  margin-bottom: var(--space-2);
+.settings-toggle input, .history-toggle input, .bookmarks-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
 }
 
-.ad-block-toggle label, .dark-mode-toggle label {
-  margin-left: var(--space-1);
-}
-
-.search-engine-select {
+.settings-toggle .slider, .history-toggle .slider, .bookmarks-toggle .slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background-color: var(--bg-surface);
-  padding: var(--space-1) var(--space-2);
+  transition: 0.2s;
+}
+
+.settings-toggle .slider::before, .history-toggle .slider::before, .bookmarks-toggle .slider::before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--bg-base);
+  transition: 0.2s;
+}
+
+.settings-toggle input:checked + .slider, .history-toggle input:checked + .slider, .bookmarks-toggle input:checked + .slider {
+  background-color: var(--accent);
+}
+
+.settings-toggle input:checked + .slider::before, .history-toggle input:checked + .slider::before, .bookmarks-toggle input:checked + .slider::before {
+  transform: translateX(20px);
+}
+
+.slider.round {
+  border-radius: 24px;
+}
+
+.slider.round::before {
+  border-radius: 50%;
+}
+
+.bookmarks-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.bookmark-card {
+  background-color: var(--bg-surface);
+  padding: var(--space-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-
-.history-list, .bookmarks-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.history-item, .bookmark-item {
-  padding: var(--space-1) var(--space-2);
-  border-bottom: 1px solid var(--border);
-}
-
-.history-item:last-child, .bookmark-item:last-child {
-  border-bottom: none;
-}
-
-.history-item:hover, .bookmark-item:hover {
-  background-color: var(--bg-elevated);
-}
-
-.bookmark-item {
+  border-radius: var(--radius-lg);
   display: flex;
+  flex-direction: column;
   align-items: center;
 }
 
-.bookmark-favicon {
-  width: 16px;
-  height: 16px;
-  margin-right: var(--space-1);
+.bookmark-card img {
+  width: 20px;
+  height: 20px;
+  margin-bottom: var(--space-1);
+}
+
+.bookmark-card span {
+  font-size: 0.8rem;
+}
+
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.history-item {
+  background-color: var(--bg-surface);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.history-item span {
+  font-size: 0.8rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -327,9 +376,9 @@ iframe {
 
 ::-webkit-scrollbar-thumb {
   background-color: var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
 }
 
 ::-webkit-scrollbar-track {
-  background-color: transparent;
+  background-color: var(--bg-base);
 }
