@@ -74,6 +74,10 @@ const wss = new WebSocket.Server({ noServer: true });
 wss.on('connection', (ws, req) => {
   try {
     const targetUrl = req.url.split('?url=')[1];
+    if (!targetUrl) {
+      return ws.close(1000, 'Bad Request');
+    }
+
     const parsedTargetUrl = url.parse(targetUrl);
 
     const wsTarget = new WebSocket(parsedTargetUrl.href);
@@ -88,19 +92,24 @@ wss.on('connection', (ws, req) => {
 
     wsTarget.on('error', (error) => {
       logger.error('WebSocket target error:', error);
-      ws.close();
+      ws.close(1000, 'Internal Server Error');
     });
 
     ws.on('error', (error) => {
       logger.error('WebSocket error:', error);
-      wsTarget.close();
+      wsTarget.close(1000, 'Internal Server Error');
     });
 
     ws.on('close', () => {
-      wsTarget.close();
+      wsTarget.close(1000, 'Client Closed');
+    });
+
+    wsTarget.on('close', () => {
+      ws.close(1000, 'Target Closed');
     });
   } catch (error) {
     logger.error('WebSocket error:', error);
+    ws.close(1000, 'Internal Server Error');
   }
 });
 
@@ -126,6 +135,12 @@ const startServer = async () => {
       });
 
       httpsServer.on('upgrade', (req, socket, head) => {
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          wss.emit('connection', ws, req);
+        });
+      });
+
+      httpServer.on('upgrade', (req, socket, head) => {
         wss.handleUpgrade(req, socket, head, (ws) => {
           wss.emit('connection', ws, req);
         });
