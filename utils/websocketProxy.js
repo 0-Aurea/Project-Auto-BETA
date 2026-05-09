@@ -136,7 +136,6 @@ class WebSocketProxyUtils {
       const rewrittenHeaders = {
         ...filteredHeaders,
         'Cookie': isolatedCookieHeader,
-        'Origin': origin,
       };
 
       return rewrittenHeaders;
@@ -144,6 +143,14 @@ class WebSocketProxyUtils {
       console.error('Error rewriting WebSocket headers:', error);
       return headers;
     }
+  }
+
+  /**
+   * Handle WebSocket errors.
+   * @param {Error} error - The WebSocket error.
+   */
+  static handleError(error) {
+    console.error('WebSocket error:', error);
   }
 }
 
