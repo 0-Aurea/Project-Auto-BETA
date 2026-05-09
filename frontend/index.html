@@ -14,9 +14,7 @@
   <div class="app-container">
     <header>
       <nav>
-        <div class="nav-logo" id="nav-logo">
-          <span class="logo-text">Nexus</span>
-        </div>
+        <div class="nav-logo" id="nav-logo"></div>
         <ul class="nav-links">
           <li><a href="#" id="history-toggle">History</a></li>
           <li><a href="#" id="bookmarks-toggle">Bookmarks</a></li>
@@ -27,14 +25,7 @@
     <main>
       <div class="loading-bar" id="loading-bar"></div>
       <div class="search-bar-container">
-        <div class="search-bar" id="search-bar">
-          <input type="search" id="search-input" placeholder="Search...">
-          <div class="search-engine-toggle">
-            <button class="search-engine-button" id="google-button">Google</button>
-            <button class="search-engine-button" id="bing-button">Bing</button>
-          </div>
-          <button id="search-button">Go</button>
-        </div>
+        <div class="search-bar" id="search-bar"></div>
       </div>
       <div class="tab-bar-container">
         <div class="tab-bar" id="tab-bar">
@@ -47,34 +38,13 @@
     </main>
     <div class="panel-overlay" id="panel-overlay"></div>
     <div class="settings-panel-container">
-      <div class="settings-panel" id="settings-panel">
-        <h2>Settings</h2>
-        <label>
-          <input type="checkbox" id="ad-block-enabled-checkbox">
-          Ad Block Enabled
-        </label>
-        <label>
-          <select id="search-engine-mode-select">
-            <option value="google">Google</option>
-            <option value="bing">Bing</option>
-          </select>
-          Search Engine
-        </label>
-      </div>
+      <div class="settings-panel" id="settings-panel"></div>
     </div>
     <div class="history-panel-container">
-      <div class="history-panel" id="history-panel">
-        <h2>History</h2>
-        <ul id="history-list"></ul>
-        <button id="clear-history-button">Clear History</button>
-      </div>
+      <div class="history-panel" id="history-panel"></div>
     </div>
     <div class="bookmarks-panel-container">
-      <div class="bookmarks-panel" id="bookmarks-panel">
-        <h2>Bookmarks</h2>
-        <ul id="bookmarks-list"></ul>
-        <button id="add-bookmark-button">Add Bookmark</button>
-      </div>
+      <div class="bookmarks-panel" id="bookmarks-panel"></div>
     </div>
   </div>
   <script type="module" src="script.js"></script>
