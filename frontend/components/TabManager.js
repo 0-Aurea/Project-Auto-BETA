@@ -175,25 +175,6 @@ export class TabManager {
   }
 
   renderTabBar() {
-    // Add active class to active tab
-    const activeTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
-    if (activeTabElement) {
-      activeTabElement.classList.add('active');
-    }
-
-    // Update favicon and title for each tab
-    this.tabs.forEach((tab, index) => {
-      const tabElement = this.tabBarElement.children[index];
-      tabElement.querySelector('.tab-favicon').src = tab.favicon || 'https://example.com/globe-emoji.png';
-      tabElement.querySelector('.tab-title').textContent = tab.title || 'Untitled';
-    });
-  }
-
-  navigateToUrl(tabId, url) {
-    const tab = this.tabs.find((tab) => tab.id === tabId);
-    if (tab) {
-      tab.url = url;
-      tab.iframeEl.src = url;
-    }
+    // Update tab bar styles and layout
   }
 }
