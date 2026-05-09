@@ -10,12 +10,14 @@ const logger = require('./lib/logger');
 const cookieParser = require('cookie-parser');
 const cookieScoping = require('./lib/cookieScoping');
 const proxyEngine = require('./lib/proxyEngine');
+const authMiddleware = require('./middleware/auth');
 
 const app = express();
 
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(authMiddleware.authenticate);
 
 app.get('/service/:encodedUrl', async (req, res) => {
   try {
