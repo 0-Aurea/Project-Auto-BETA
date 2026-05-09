@@ -39,32 +39,32 @@ async function deleteResponse(request) {
 }
 
 async function handleFetch(request) {
-  if (request.method === 'GET') {
-    const url = new URL(request.url);
-    if (url.pathname === '/service/') {
-      const encodedUrl = url.searchParams.get('url');
-      if (encodedUrl) {
-        const decodedUrl = decodeURIComponent(encodedUrl);
-        const newRequest = new Request(decodedUrl, {
-          method: request.method,
-          headers: request.headers,
-          body: request.body,
-        });
-        const response = await fetch(newRequest);
-        const rewrittenResponse = await rewriteResponse(response);
-        return rewrittenResponse;
+  try {
+    if (request.method === 'GET') {
+      const url = new URL(request.url);
+      if (url.pathname === '/service/') {
+        const encodedUrl = url.searchParams.get('url');
+        if (encodedUrl) {
+          const decodedUrl = decodeURIComponent(encodedUrl);
+          const newRequest = new Request(decodedUrl, {
+            method: request.method,
+            headers: request.headers,
+            body: request.body,
+          });
+          const response = await fetch(newRequest);
+          const rewrittenResponse = await rewriteResponse(response, decodedUrl);
+          return rewrittenResponse;
+        }
       }
     }
-  }
 
-  const cacheResponse = await getResponse(request);
-  if (cacheResponse) {
-    return cacheResponse;
-  }
+    const cacheResponse = await getResponse(request);
+    if (cacheResponse) {
+      return cacheResponse;
+    }
 
-  try {
     const response = await fetch(request);
-    const rewrittenResponse = await rewriteResponse(response);
+    const rewrittenResponse = await rewriteResponse(response, request.url);
     await putResponse(request, rewrittenResponse.clone());
     return rewrittenResponse;
   } catch (error) {
@@ -73,26 +73,33 @@ async function handleFetch(request) {
   }
 }
 
-async function rewriteResponse(response) {
+async function rewriteResponse(response, baseUrl) {
   const contentType = response.headers.get('Content-Type');
   if (contentType && contentType.includes('text/html')) {
     const html = await response.text();
-    const rewrittenHtml = rewriteHTML(html, response.url);
+    const rewrittenHtml = rewriteHTML(html, baseUrl);
     return new Response(rewrittenHtml, {
       status: response.status,
       headers: response.headers,
     });
   } else if (contentType && contentType.includes('application/javascript')) {
     const js = await response.text();
-    const rewrittenJs = rewriteJS(js, response.url);
+    const rewrittenJs = rewriteJS(js, baseUrl);
     return new Response(rewrittenJs, {
       status: response.status,
       headers: response.headers,
     });
   } else if (contentType && contentType.includes('text/css')) {
     const css = await response.text();
-    const rewrittenCss = rewriteCSS(css, response.url);
+    const rewrittenCss = rewriteCSS(css, baseUrl);
     return new Response(rewrittenCss, {
+      status: response.status,
+      headers: response.headers,
+    });
+  } else if (contentType && contentType.includes('application/json')) {
+    const json = await response.json();
+    const rewrittenJson = rewriteJSON(json, baseUrl);
+    return new Response(JSON.stringify(rewrittenJson), {
       status: response.status,
       headers: response.headers,
     });
@@ -101,16 +108,41 @@ async function rewriteResponse(response) {
 }
 
 function rewriteHTML(html, baseUrl) {
-  const rewrittenHtml = html.replace(/href="\/\//g, `href="${baseUrl}/`);
-  return rewrittenHtml.replace(/src="\/\//g, `src="${baseUrl}/`);
+  const rewrittenHtml = html
+    .replace(/href="\/\//g, `href="${baseUrl}/`)
+    .replace(/src="\/\//g, `src="${baseUrl}/`)
+    .replace(/url\((\/\//g, `url(${baseUrl}/`);
+  return rewrittenHtml;
 }
 
 function rewriteJS(js, baseUrl) {
-  const rewrittenJs = js.replace(/\/\//g, `${baseUrl}/`);
+  const rewrittenJs = js
+    .replace(/\/\//g, `${baseUrl}/`)
+    .replace(/http:\/\//g, `${baseUrl}/`)
+    .replace(/https:\/\//g, `${baseUrl}/`);
   return rewrittenJs;
 }
 
 function rewriteCSS(css, baseUrl) {
-  const rewrittenCss = css.replace(/url\((\/\//g, `url(${baseUrl}/`);
+  const rewrittenCss = css
+    .replace(/url\((\/\//g, `url(${baseUrl}/`)
+    .replace(/http:\/\//g, `${baseUrl}/`)
+    .replace(/https:\/\//g, `${baseUrl}/`);
   return rewrittenCss;
+}
+
+function rewriteJSON(json, baseUrl) {
+  if (typeof json === 'object') {
+    for (const key in json) {
+      if (typeof json[key] === 'string') {
+        json[key] = json[key]
+          .replace(/\/\//g, `${baseUrl}/`)
+          .replace(/http:\/\//g, `${baseUrl}/`)
+          .replace(/https:\/\//g, `${baseUrl}/`);
+      } else if (typeof json[key] === 'object') {
+        json[key] = rewriteJSON(json[key], baseUrl);
+      }
+    }
+  }
+  return json;
 }
