@@ -139,25 +139,28 @@ export class TabManager {
 
     const oldTab = this.tabs.find((tab) => tab.id === this.activeTabId);
     if (oldTab) {
-      oldTab.iframeEl.style.display = 'none';
       oldTab.iframeEl.style.opacity = 0;
+      oldTab.iframeEl.style.zIndex = -1;
+      const oldTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
+      oldTabElement.classList.remove('active');
     }
 
     const newTab = this.tabs.find((tab) => tab.id === tabId);
-    if (newTab) {
-      newTab.iframeEl.style.display = 'block';
-      newTab.iframeEl.style.opacity = 1;
-      this.activeTabId = tabId;
-      this.onTabChange(tabId);
-    }
-  }
+    newTab.iframeEl.style.opacity = 1;
+    newTab.iframeEl.style.zIndex = 1;
+    const newTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === tabId)];
+    newTabElement.classList.add('active');
 
-  handleTabClose(tabId) {
-    this.removeTab(tabId);
+    this.activeTabId = tabId;
+    this.onTabChange(tabId);
   }
 
   handleTabClick(tabId) {
     this.switchTab(tabId);
+  }
+
+  handleTabClose(tabId) {
+    this.removeTab(tabId);
   }
 
   handleNewTab() {
@@ -172,15 +175,25 @@ export class TabManager {
   }
 
   renderTabBar() {
-    this.tabBarElement.style.setProperty('--tab-count', this.tabs.length);
+    // Add active class to active tab
+    const activeTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
+    if (activeTabElement) {
+      activeTabElement.classList.add('active');
+    }
+
+    // Update favicon and title for each tab
+    this.tabs.forEach((tab, index) => {
+      const tabElement = this.tabBarElement.children[index];
+      tabElement.querySelector('.tab-favicon').src = tab.favicon || 'https://example.com/globe-emoji.png';
+      tabElement.querySelector('.tab-title').textContent = tab.title || 'Untitled';
+    });
   }
 
-  navigate(tabId, url) {
+  navigateToUrl(tabId, url) {
     const tab = this.tabs.find((tab) => tab.id === tabId);
     if (tab) {
       tab.url = url;
       tab.iframeEl.src = url;
-      tab.iframeEl.contentWindow.location.href = url;
     }
   }
 }
