@@ -130,3 +130,26 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
   }
 });
+ 
+// Add new tab on Enter key press in search bar
+searchBarElement.addEventListener('keypress', (event) => {
+  if (event.key === 'Enter') {
+    const searchQuery = searchBar.getSearchQuery();
+    const encodedUrl = encode(searchQuery);
+    tabManager.navigate(encodedUrl);
+  }
+});
+
+// Initialize Service Worker configuration
+navigator.serviceWorker.addEventListener('message', (event) => {
+  if (event.data.type === 'config') {
+    const config = event.data.config;
+    searchBar.setSwConfig(config);
+  }
+});
+
+// Send Service Worker configuration
+navigator.serviceWorker.register('./sw.js')
+  .then((registration) => {
+    registration.active.postMessage({ type: 'config', config: { encode, decode } });
+  });
