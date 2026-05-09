@@ -2,156 +2,125 @@ const express = require('express');
 const http = require('http');
 const https = require('https');
 const WebSocket = require('ws');
-const axios = require('axios');
 const url = require('url');
-const fs = require('fs');
+const axios = require('axios');
 const config = require('./lib/config');
 const logger = require('./lib/logger');
-const cookieParser = require('cookie-parser');
-const cookieScoping = require('./lib/cookieScoping');
 const proxyEngine = require('./lib/proxyEngine');
 const authMiddleware = require('./middleware/auth');
 
 const app = express();
 
-app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 app.use(authMiddleware.authenticate);
+
+const httpServer = http.createServer(app);
+const httpsServer = https.createServer({
+  key: config.server.https.key,
+  cert: config.server.https.cert,
+}, app);
+
+const wss = new WebSocket.Server({ server: httpServer });
 
 app.get('/service/:encodedUrl', async (req, res) => {
   try {
     const encodedUrl = req.params.encodedUrl;
-    const decodedUrl = Buffer.from(encodedUrl, 'base64').toString('utf8');
-    const targetUrl = decodedUrl;
+    const targetUrl = Buffer.from(encodedUrl, 'base64').toString('utf8');
+    const parsedTargetUrl = url.parse(targetUrl);
 
-    const options = {
+    const response = await axios({
       method: req.method,
-      headers: req.headers,
       url: targetUrl,
+      headers: req.headers,
       data: req.body,
+    });
+
+    const rewrittenResponse = {
+      ...response,
+      headers: {
+        ...response.headers,
+        'content-security-policy': '',
+        'strict-transport-security': '',
+        'x-frame-options': '',
+      },
     };
 
-    const response = await axios(options);
-
-    // Strip CSP, HSTS, and X-Frame-Options
-    response.headers['content-security-policy'] = undefined;
-    response.headers['strict-transport-security'] = undefined;
-    response.headers['x-frame-options'] = undefined;
-
-    // Rewrite Location header
-    if (response.headers.location) {
-      const parsedLocation = url.parse(response.headers.location);
-      response.headers.location = `${parsedLocation.protocol}://${parsedLocation.host}${parsedLocation.path}`;
-    }
-
-    // Rewrite Set-Cookie header
     if (response.headers['set-cookie']) {
-      response.headers['set-cookie'] = response.headers['set-cookie'].map((cookie) => cookie.replace('Path=/', `Path=/; Domain=${req.headers.host}`));
-    }
-
-    // Rewrite absolute URLs in HTML, JS, and CSS response bodies
-    if (response.data && typeof response.data === 'string') {
-      response.data = response.data.replace(/https?:\/\/[^/]+/g, (match) => {
-        const parsedMatch = url.parse(match);
-        return `${parsedMatch.protocol}://${parsedMatch.host}`;
+      rewrittenResponse.headers['set-cookie'] = response.headers['set-cookie'].map((cookie) => {
+        return cookie.replace(/Secure;/, '');
       });
     }
 
-    res.set(response.headers);
-    res.status(response.status);
-    res.send(response.data);
+    if (response.headers.location) {
+      rewrittenResponse.headers.location = url.resolve(targetUrl, response.headers.location);
+    }
+
+    res.status(response.status).set(rewrittenResponse.headers).send(response.data);
   } catch (error) {
     logger.error('Proxy error:', error);
     res.status(500).send({ error: 'Internal Server Error' });
   }
 });
 
-app.use(cookieScoping);
-
-const httpServer = http.createServer(app);
-const wss = new WebSocket.Server({ noServer: true });
-
-wss.on('connection', (ws, req) => {
-  try {
-    const targetUrl = req.url.split('?url=')[1];
-    if (!targetUrl) {
-      return ws.close(1000, 'Bad Request');
-    }
-
-    const parsedTargetUrl = url.parse(targetUrl);
-
-    const wsTarget = new WebSocket(parsedTargetUrl.href);
-
-    ws.on('message', (message) => {
-      wsTarget.send(message);
-    });
-
-    wsTarget.on('message', (message) => {
-      ws.send(message);
-    });
-
-    wsTarget.on('error', (error) => {
-      logger.error('WebSocket target error:', error);
-      ws.close(1000, 'Internal Server Error');
-    });
-
-    ws.on('error', (error) => {
-      logger.error('WebSocket error:', error);
-      wsTarget.close(1000, 'Internal Server Error');
-    });
-
-    ws.on('close', () => {
-      wsTarget.close(1000, 'Client Closed');
-    });
-
-    wsTarget.on('close', () => {
-      ws.close(1000, 'Target Closed');
-    });
-  } catch (error) {
-    logger.error('WebSocket error:', error);
-    ws.close(1000, 'Internal Server Error');
-  }
+app.use((req, res) => {
+  res.status(404).send({ error: 'Not Found' });
 });
 
-httpServer.on('upgrade', (req, socket, head) => {
-  wss.handleUpgrade(req, socket, head, (ws) => {
-    wss.emit('connection', ws, req);
+httpServer.listen(config.server.port, config.server.host, () => {
+  logger.info(`HTTP server listening on ${config.server.host}:${config.server.port}`);
+});
+
+if (config.server.https.enabled) {
+  httpsServer.listen(config.server.https.port || config.server.port, config.server.host, () => {
+    logger.info(`HTTPS server listening on ${config.server.host}:${config.server.https.port || config.server.port}`);
+  });
+}
+
+wss.on('connection', (ws, req) => {
+  const targetUrl = req.url;
+  const parsedTargetUrl = url.parse(targetUrl);
+
+  const wsTarget = new WebSocket(targetUrl);
+
+  ws.on('message', (message) => {
+    wsTarget.send(message);
+  });
+
+  wsTarget.on('message', (message) => {
+    ws.send(message);
+  });
+
+  wsTarget.on('error', (error) => {
+    logger.error('WebSocket target error:', error);
+    ws.close();
+  });
+
+  ws.on('error', (error) => {
+    logger.error('WebSocket error:', error);
+    wsTarget.close();
+  });
+
+  ws.on('close', () => {
+    wsTarget.close();
+  });
+
+  wsTarget.on('close', () => {
+    ws.close();
   });
 });
 
-const startServer = async () => {
-  try {
-    const port = config.server.port;
-    const host = config.server.host;
+process.on('SIGINT', () => {
+  httpServer.close();
+  httpsServer.close();
+  wss.close();
+  process.exit(0);
+});
 
-    httpServer.listen(port, host, () => {
-      logger.info(`Server listening on ${host}:${port}`);
-    });
-
-    if (config.server.https.enabled) {
-      const httpsOptions = {
-        key: fs.readFileSync(config.server.https.key),
-        cert: fs.readFileSync(config.server.https.cert),
-      };
-
-      const httpsServer = https.createServer(httpsOptions, app);
-      const httpsPort = config.server.https.port || 8443;
-
-      httpsServer.listen(httpsPort, host, () => {
-        logger.info(`HTTPS Server listening on ${host}:${httpsPort}`);
-      });
-
-      httpsServer.on('upgrade', (req, socket, head) => {
-        wss.handleUpgrade(req, socket, head, (ws) => {
-          wss.emit('connection', ws, req);
-        });
-      });
-    }
-  } catch (error) {
-    logger.error('Server error:', error);
-    process.exit(1);
-  }
-};
-
-startServer();
+process.on('SIGTERM', () => {
+  httpServer.close();
+  httpsServer.close();
+  wss.close();
+  process.exit(0);
+});
