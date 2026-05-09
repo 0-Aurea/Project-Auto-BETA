@@ -1,19 +1,32 @@
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
+export const PREFIX = '/service/';
 
-const encodeUrl = (url) => {
+const KEY = 'nexus-proxy';
+
+function xor(uint8Array, key) {
+  const keyUint8Array = new TextEncoder().encode(key);
+  const result = new Uint8Array(uint8Array.length);
+  for (let i = 0; i < uint8Array.length; i++) {
+    result[i] = uint8Array[i] ^ keyUint8Array[i % keyUint8Array.length];
+  }
+  return result;
+}
+
+export function encode(url) {
+  const encoder = new TextEncoder();
   const uint8Array = encoder.encode(url);
-  const base64String = btoa(String.fromCharCode(...uint8Array));
-  const urlSafeBase64 = base64String.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  return urlSafeBase64;
-};
+  const encrypted = xor(uint8Array, KEY);
+  const base64String = btoa(String.fromCharCode(...encrypted));
+  const safeBase64String = base64String.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  return PREFIX + safeBase64String;
+}
 
-const decodeUrl = (urlSafeBase64) => {
-  const paddedBase64 = urlSafeBase64 + '==='.slice(0, (4 - urlSafeBase64.length % 4) % 4);
-  const base64String = paddedBase64.replace(/-/g, '+').replace(/_/g, '/');
-  const uint8Array = new Uint8Array(Array.from(atob(base64String), (c) => c.charCodeAt(0)));
-  const url = decoder.decode(uint8Array);
-  return url;
-};
-
-export { encodeUrl, decodeUrl };
+export function decode(encodedStr) {
+  if (!encodedStr.startsWith(PREFIX)) {
+    throw new Error('Invalid encoded string');
+  }
+  const safeBase64String = encodedStr.substring(PREFIX.length);
+  const paddedBase64String = safeBase64String + '='.repeat((4 - safeBase64String.length % 4) % 4);
+  const decrypted = new Uint8Array(atob(paddedBase64String.replace(/-/g, '+').replace(/_/g, '/')).split('').map(c => c.charCodeAt(0)));
+  const decoder = new TextDecoder();
+  return decoder.decode(xor(decrypted, KEY));
+}
