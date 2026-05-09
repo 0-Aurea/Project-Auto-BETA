@@ -127,10 +127,3 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
   }
 });
- 
-searchBarElement.addEventListener('submit', (event) => {
-  event.preventDefault();
-  const searchQuery = searchBar.getSearchQuery();
-  const encodedUrl = encode(searchQuery);
-  tabManager.navigate(encodedUrl);
-});
