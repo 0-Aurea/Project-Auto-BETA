@@ -44,6 +44,8 @@ app.get('/service/:encodedUrl', async (req, res) => {
       headers: req.headers,
       data: req.body,
       responseType: 'arraybuffer',
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
     });
 
     const rewrittenResponse = {
@@ -124,6 +126,22 @@ if (config.server.https.enabled) {
         targetSocket.on('close', () => {
           socket.destroy();
         });
+      } else {
+        const parsedUrl = url.parse(`https://${req.headers.host}${req.url}`);
+        axios({
+          method: req.method,
+          url: `https://${parsedUrl.host}${parsedUrl.path}`,
+          headers: req.headers,
+          data: req,
+          responseType: 'stream',
+        })
+        .then(response => {
+          response.data.pipe(socket);
+        })
+        .catch(error => {
+          logger.error('Proxy error:', error);
+          socket.destroy();
+        });
       }
     });
   });
@@ -133,7 +151,7 @@ wss.on('connection', (ws, req) => {
   const targetUrl = req.url;
   const parsedTargetUrl = url.parse(targetUrl);
 
-  const wsTarget = new WebSocket(targetUrl);
+  const wsTarget = new WebSocket(`ws://${parsedTargetUrl.host}${parsedTargetUrl.path}`);
 
   ws.on('message', (message) => {
     wsTarget.send(message);
@@ -145,28 +163,21 @@ wss.on('connection', (ws, req) => {
 
   wsTarget.on('error', (error) => {
     logger.error('WebSocket target error:', error);
-    ws.close();
+    ws.terminate();
+    wsTarget.terminate();
   });
 
   ws.on('error', (error) => {
     logger.error('WebSocket error:', error);
-    wsTarget.close();
+    ws.terminate();
+    wsTarget.terminate();
   });
 
   ws.on('close', () => {
-    wsTarget.close();
+    wsTarget.terminate();
   });
 
   wsTarget.on('close', () => {
-    ws.close();
+    ws.terminate();
   });
-});
-process.on('unhandledRejection', (reason) => {
-  logger.error('Unhandled rejection:', reason);
-  process.exit(1);
-});
-
-process.on('uncaughtException', (error) => {
-  logger.error('Uncaught exception:', error);
-  process.exit(1);
 });
