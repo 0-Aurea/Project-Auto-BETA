@@ -145,14 +145,6 @@ class WebSocketProxyUtils {
       return headers;
     }
   }
-
-  /**
-   * Handle WebSocket errors.
-   * @param {Error} error - The WebSocket error.
-   */
-  static handleError(error) {
-    console.error('WebSocket proxy error:', error);
-  }
 }
 
 module.exports = WebSocketProxyUtils;
