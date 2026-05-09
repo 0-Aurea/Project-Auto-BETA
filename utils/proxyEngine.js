@@ -124,15 +124,12 @@ class ProxyEngine {
     Object.keys(headers).forEach((key) => {
       res.setHeader(key, headers[key]);
     });
-    res.statusCode = response.statusCode;
-    if (headers['content-type'] && headers['content-type'].includes('text/html')) {
-      buffer = await HTMLRewriter.rewrite(buffer.toString(), this.rewriteUrl.bind(this));
-    } else if (headers['content-type'] && headers['content-type'].includes('text/css')) {
-      buffer = await CssRewriterUtils.rewrite(buffer.toString(), this.rewriteUrl.bind(this));
-    } else if (headers['content-type'] && headers['content-type'].includes('application/javascript')) {
-      buffer = await JSRewriterUtils.rewrite(buffer.toString(), this.rewriteUrl.bind(this));
+    res.writeHead(response.statusCode);
+    if (buffer) {
+      res.end(buffer);
+    } else {
+      res.end();
     }
-    res.end(buffer);
   }
 
   rewriteUrl(url) {
@@ -141,7 +138,7 @@ class ProxyEngine {
   }
 
   rewriteCookie(cookie) {
-    return cookie.replace(/domain=[^;]*/, '');
+    return HeaderRewriterUtils.rewriteCookie(cookie);
   }
 
   async establishTlsTunnel(url) {
@@ -166,6 +163,20 @@ class ProxyEngine {
       });
     });
   }
+
+  async start() {
+    this.server.listen(8080, () => {
+      console.log('Proxy server listening on port 8080');
+    });
+    this.httpsServer.listen(8443, () => {
+      console.log('Proxy server listening on port 8443');
+    });
+  }
+
+  async stop() {
+    this.server.close();
+    this.httpsServer.close();
+  }
 }
 
-module.exports = ProxyEngine;
+module.exports = { ProxyEngine };
