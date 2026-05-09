@@ -67,7 +67,7 @@ export class TabManager {
     const tabElement = document.createElement('div');
     tabElement.classList.add('tab');
     tabElement.innerHTML = `
-      <img class="tab-favicon" src="${favicon || 'https://example.com/globe-emoji.png'}">
+      <img class="tab-favicon" src="${favicon || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"%3E%3Cpath d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/%3E%3C/svg%3E'}">
       <span class="tab-title">${title || 'Untitled'}</span>
       <button class="tab-close" aria-label="Close tab">×</button>
     `;
@@ -135,29 +135,34 @@ export class TabManager {
   }
 
   switchTab(tabId) {
-    if (this.activeTabId === tabId) return;
+    const tabIndex = this.tabs.findIndex((tab) => tab.id === tabId);
+    if (tabIndex === -1) return;
 
-    const oldTab = this.tabs.find((tab) => tab.id === this.activeTabId);
-    if (oldTab) {
-      oldTab.iframeEl.style.display = 'none';
-      oldTab.iframeEl.style.opacity = 0;
-    }
+    const tab = this.tabs[tabIndex];
+    tab.iframeEl.style.display = 'block';
+    tab.iframeEl.style.zIndex = 1;
+    tab.iframeEl.style.opacity = 1;
 
-    const newTab = this.tabs.find((tab) => tab.id === tabId);
-    if (newTab) {
-      newTab.iframeEl.style.display = 'block';
-      newTab.iframeEl.style.opacity = 1;
-      newTab.iframeEl.style.zIndex = 1;
+    if (this.activeTabId !== null) {
+      const activeTabIndex = this.tabs.findIndex((tab) => tab.id === this.activeTabId);
+      this.tabs[activeTabIndex].iframeEl.style.display = 'none';
+      this.tabs[activeTabIndex].iframeEl.style.zIndex = -1;
+      this.tabs[activeTabIndex].iframeEl.style.opacity = 0;
     }
 
     this.activeTabId = tabId;
-    this.onTabChange(tabId);
 
     const tabElements = this.tabBarElement.children;
     for (let i = 0; i < tabElements.length; i++) {
       tabElements[i].classList.remove('active');
+      tabElements[i].style.borderBottom = '';
     }
-    tabElements[tabIndex(this.tabs, tabId)].classList.add('active');
+
+    const activeTabElement = tabElements[tabIndex];
+    activeTabElement.classList.add('active');
+    activeTabElement.style.borderBottom = '2px solid var(--accent)';
+
+    this.onTabChange(tab);
   }
 
   handleTabClose(tabId) {
@@ -180,21 +185,6 @@ export class TabManager {
   }
 
   renderTabBar() {
-    // Update tab bar styles and active tab indicator
-    const tabElements = this.tabBarElement.children;
-    for (let i = 0; i < tabElements.length; i++) {
-      if (i < this.tabs.length) {
-        tabElements[i].style.display = 'flex';
-      } else {
-        tabElements[i].style.display = 'none';
-      }
-    }
-  }
-
-  tabIndex(tabs, tabId) {
-    for (let i = 0; i < tabs.length; i++) {
-      if (tabs[i].id === tabId) return i;
-    }
-    return -1;
+    // Update tab bar UI
   }
 }
