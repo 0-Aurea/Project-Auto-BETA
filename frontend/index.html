@@ -14,7 +14,9 @@
   <div class="app-container">
     <header>
       <nav>
-        <div class="nav-logo" id="nav-logo"></div>
+        <div class="nav-logo" id="nav-logo">
+          <span class="logo-text">Nexus</span>
+        </div>
         <ul class="nav-links">
           <li><a href="#" id="history-toggle">History</a></li>
           <li><a href="#" id="bookmarks-toggle">Bookmarks</a></li>
@@ -25,7 +27,14 @@
     <main>
       <div class="loading-bar" id="loading-bar"></div>
       <div class="search-bar-container">
-        <div class="search-bar" id="search-bar"></div>
+        <div class="search-bar" id="search-bar">
+          <input type="text" id="search-input" placeholder="Search or enter a URL...">
+          <button id="search-button">Go</button>
+          <div class="engine-toggle">
+            <button class="engine-button" id="google-engine-button">Google</button>
+            <button class="engine-button" id="bing-engine-button">Bing</button>
+          </div>
+        </div>
       </div>
       <div class="tab-bar-container">
         <div class="tab-bar" id="tab-bar">
