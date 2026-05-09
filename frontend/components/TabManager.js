@@ -135,21 +135,27 @@ export class TabManager {
   }
 
   switchTab(tabId) {
-    if (this.activeTabId === tabId) return;
+    const tabIndex = this.tabs.findIndex((tab) => tab.id === tabId);
+    if (tabIndex === -1) return;
 
-    const oldTab = this.tabs.find((tab) => tab.id === this.activeTabId);
-    if (oldTab) {
-      oldTab.iframeEl.style.opacity = 0;
-      oldTab.iframeEl.style.zIndex = -1;
-      const oldTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
-      oldTabElement.classList.remove('active');
+    const tab = this.tabs[tabIndex];
+    tab.iframeEl.style.display = 'block';
+    tab.iframeEl.style.zIndex = 1;
+    tab.iframeEl.style.opacity = 1;
+    tab.iframeEl.style.transition = 'opacity 0.2s ease-in-out';
+
+    const activeTabElement = this.tabBarElement.children[tabIndex];
+    activeTabElement.classList.add('active');
+    activeTabElement.style.borderBottom = '2px solid var(--accent)';
+
+    if (this.activeTabId !== null) {
+      const prevTabIndex = this.tabs.findIndex((tab) => tab.id === this.activeTabId);
+      const prevTabElement = this.tabBarElement.children[prevTabIndex];
+      prevTabElement.classList.remove('active');
+      prevTabElement.style.borderBottom = '';
+      this.tabs[prevTabIndex].iframeEl.style.display = 'none';
+      this.tabs[prevTabIndex].iframeEl.style.opacity = 0;
     }
-
-    const newTab = this.tabs.find((tab) => tab.id === tabId);
-    newTab.iframeEl.style.opacity = 1;
-    newTab.iframeEl.style.zIndex = 1;
-    const newTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === tabId)];
-    newTabElement.classList.add('active');
 
     this.activeTabId = tabId;
     this.onTabChange(tabId);
@@ -175,6 +181,20 @@ export class TabManager {
   }
 
   renderTabBar() {
-    this.tabBarElement.style.width = `${this.tabs.length * 48}px`;
+    // Add active class to active tab
+    const activeTabIndex = this.tabs.findIndex((tab) => tab.id === this.activeTabId);
+    if (activeTabIndex !== -1) {
+      const activeTabElement = this.tabBarElement.children[activeTabIndex];
+      activeTabElement.classList.add('active');
+    }
+  }
+
+  navigate(tabId, url) {
+    const tabIndex = this.tabs.findIndex((tab) => tab.id === tabId);
+    if (tabIndex === -1) return;
+
+    const tab = this.tabs[tabIndex];
+    tab.url = url;
+    tab.iframeEl.src = encode(url);
   }
 }
