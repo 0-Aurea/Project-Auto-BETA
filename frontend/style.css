@@ -191,15 +191,15 @@ header nav a:hover {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background-color 0.2s ease;
 }
 
 .search-engine-pill.active {
-  background-color: var(--bg-elevated);
+  background-color: var(--accent);
+  color: var(--text-primary);
 }
 
-.search-engine-pill:not(:last-child) {
-  margin-right: var(--space-1);
+.search-engine-pill:not(.active):hover {
+  background-color: var(--bg-elevated);
 }
 
 #viewport {
@@ -213,9 +213,7 @@ iframe {
   height: 100%;
 }
 
-.settings-panel,
-.history-panel,
-.bookmarks-panel {
+.settings-panel, .history-panel, .bookmarks-panel {
   position: fixed;
   top: 0;
   right: 0;
@@ -228,15 +226,11 @@ iframe {
   transition: transform 0.2s cubic-bezier(0.16,1,0.3,1);
 }
 
-.settings-panel.show,
-.history-panel.show,
-.bookmarks-panel.show {
+.settings-panel.show, .history-panel.show, .bookmarks-panel.show {
   transform: translateX(0);
 }
 
-.settings-panel::before,
-.history-panel::before,
-.bookmarks-panel::before {
+.settings-panel::before, .history-panel::before, .bookmarks-panel::before {
   content: '';
   position: fixed;
   top: 0;
@@ -247,26 +241,20 @@ iframe {
   backdrop-filter: blur(10px);
 }
 
-.settings-header,
-.history-header,
-.bookmarks-header {
+.settings-header, .history-header, .bookmarks-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--space-2);
 }
 
-.settings-header h2,
-.history-header h2,
-.bookmarks-header h2 {
+.settings-header h2, .history-header h2, .bookmarks-header h2 {
   font-size: 1.25rem;
   font-weight: 600;
   margin: 0;
 }
 
-.settings-toggle,
-.history-toggle,
-.bookmarks-toggle {
+.settings-toggle, .history-toggle, .bookmarks-toggle {
   background-color: var(--bg-surface);
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--border);
@@ -274,21 +262,17 @@ iframe {
   cursor: pointer;
 }
 
-.settings-toggle:hover,
-.history-toggle:hover,
-.bookmarks-toggle:hover {
+.settings-toggle:hover, .history-toggle:hover, .bookmarks-toggle:hover {
   background-color: var(--bg-elevated);
 }
 
-.ad-block-toggle,
-.dark-mode-toggle {
+.ad-block-toggle, .dark-mode-toggle {
   display: flex;
   align-items: center;
   margin-bottom: var(--space-2);
 }
 
-.ad-block-toggle label,
-.dark-mode-toggle label {
+.ad-block-toggle label, .dark-mode-toggle label {
   margin-left: var(--space-1);
 }
 
@@ -299,58 +283,34 @@ iframe {
   border-radius: var(--radius-sm);
 }
 
-.search-engine-select option {
-  background-color: var(--bg-base);
-  color: var(--text-primary);
-}
-
-.history-list {
+.history-list, .bookmarks-list {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.history-list li {
+.history-item, .bookmark-item {
   padding: var(--space-1) var(--space-2);
   border-bottom: 1px solid var(--border);
 }
 
-.history-list li:last-child {
+.history-item:last-child, .bookmark-item:last-child {
   border-bottom: none;
 }
 
-.history-list a {
-  text-decoration: none;
-  color: var(--text-primary);
+.history-item:hover, .bookmark-item:hover {
+  background-color: var(--bg-elevated);
 }
 
-.bookmarks-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-2);
-}
-
-.bookmark-card {
-  background-color: var(--bg-surface);
-  padding: var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+.bookmark-item {
   display: flex;
-  flex-direction: column;
   align-items: center;
 }
 
-.bookmark-card img {
-  width: 100%;
-  height: 100px;
-  object-fit: cover;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-}
-
-.bookmark-card h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0;
+.bookmark-favicon {
+  width: 16px;
+  height: 16px;
+  margin-right: var(--space-1);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -367,9 +327,9 @@ iframe {
 
 ::-webkit-scrollbar-thumb {
   background-color: var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
 }
 
 ::-webkit-scrollbar-track {
-  background-color: var(--bg-base);
+  background-color: transparent;
 }
