@@ -3,6 +3,7 @@ import { SearchBar } from './components/SearchBar.js';
 import { SettingsManager } from './components/SettingsManager.js';
 import { HistoryManager } from './components/HistoryManager.js';
 import { BookmarkManager } from './components/BookmarkManager.js';
+import { NexusLogo } from './components/NexusLogo.js';
 import { encode, decode } from './sw-config.js';
 
 const settingsToggle = document.getElementById('settings-toggle');
@@ -24,6 +25,7 @@ document.body.appendChild(settingsPanelElement);
 document.body.appendChild(bookmarksPanelElement);
 document.body.appendChild(historyPanelElement);
 
+const nexusLogo = new NexusLogo({ logoContainerElement: navLogoElement });
 const tabManager = new TabManager({ 
   tabBarElement, 
   viewportElement, 
@@ -125,45 +127,5 @@ document.addEventListener('keydown', (event) => {
   } else if (event.ctrlKey && event.key === 'l') {
     searchBar.focus();
     event.preventDefault();
-  }
-});
- 
-// Add new tab on Enter key press in search bar
-searchBarElement.addEventListener('keypress', (event) => {
-  if (event.key === 'Enter') {
-    tabManager.addTab();
-  }
-});
-
-// Initialize Service Worker configuration
-navigator.serviceWorker.addEventListener('message', (event) => {
-  if (event.data.type === 'config') {
-    const config = event.data.config;
-    searchBar.setSearchEngines(config.searchEngines);
-  }
-});
-
-// Load Service Worker configuration on startup
-navigator.serviceWorker.register('./sw.js')
-  .then((registration) => {
-    registration.active.postMessage({ type: 'getConfig' });
-  });
-
-// Handle tab updates from Service Worker
-navigator.serviceWorker.addEventListener('message', (event) => {
-  if (event.data.type === 'tabUpdate') {
-    const tabId = event.data.tabId;
-    const tab = tabManager.getTab(tabId);
-    if (tab) {
-      tabManager.updateTab(tabId, event.data.tabData);
-    }
-  }
-});
-
-// Handle tab removal from Service Worker
-navigator.serviceWorker.addEventListener('message', (event) => {
-  if (event.data.type === 'tabRemove') {
-    const tabId = event.data.tabId;
-    tabManager.removeTab(tabId);
   }
 });
