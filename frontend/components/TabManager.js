@@ -175,18 +175,6 @@ export class TabManager {
   }
 
   renderTabBar() {
-    // Update tab bar styles and active tab indicator
-    const activeTabElement = this.tabBarElement.children[this.tabs.findIndex((tab) => tab.id === this.activeTabId)];
-    if (activeTabElement) {
-      activeTabElement.classList.add('active');
-    }
-  }
-
-  navigate(tabId, url) {
-    const tab = this.tabs.find((tab) => tab.id === tabId);
-    if (tab) {
-      tab.url = url;
-      tab.iframeEl.src = encode(url);
-    }
+    this.tabBarElement.style.width = `${this.tabs.length * 48}px`;
   }
 }
