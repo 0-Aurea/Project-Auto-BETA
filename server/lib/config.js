@@ -8,6 +8,10 @@ const config = {
       cert: process.env.NEXUS_HTTPS_CERT || 'server.crt',
       allowHTTP2: true,
       tlsVersions: ['TLSv1', 'TLSv1.1', 'TLSv1.2', 'TLSv1.3'],
+      http2: {
+        enabled: true,
+        push: true,
+      },
     },
     auth: {
       secret: process.env.NEXUS_AUTH_SECRET || 'nexus-auth-secret',
@@ -18,6 +22,12 @@ const config = {
         secure: true,
         sameSite: 'strict',
       },
+      strategies: {
+        local: {
+          username: 'admin',
+          password: 'password',
+        },
+      },
     },
     cors: {
       enabled: true,
@@ -26,6 +36,7 @@ const config = {
       preflightContinue: false,
       optionsSuccessStatus: 200,
       allowedHeaders: 'Content-Type, Authorization',
+      credentials: true,
     },
   },
   // Service Worker configuration
@@ -42,6 +53,11 @@ const config = {
       enabled: true,
       prefetchThreshold: 0.5,
       prefetchAhead: 10,
+    },
+    workbox: {
+      enabled: true,
+      globPatterns: ['**/*.{js,css,html}'],
+      globDirectory: './',
     },
   },
   // Encoding configuration
@@ -112,6 +128,11 @@ const config = {
           'style-src': ["'self'"],
         },
       },
+    },
+    rateLimit: {
+      enabled: true,
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 100, // limit each IP to 100 requests per windowMs
     },
   },
   // Performance configuration
