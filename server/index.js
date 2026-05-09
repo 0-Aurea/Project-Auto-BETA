@@ -5,14 +5,17 @@ const fs = require('fs');
 const url = require('url');
 const config = require('./lib/config');
 const logger = require('./lib/logger');
-const proxyEngine = require('./lib/proxyEngine');
+const cookieParser = require('cookie-parser');
 const cookieScoping = require('./lib/cookieScoping');
+const authMiddleware = require('./middleware/auth');
 
 const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 app.use(cookieScoping);
+app.use(authMiddleware);
 
 app.get('/service/:encodedUrl', async (req, res) => {
   try {
@@ -27,10 +30,18 @@ app.get('/service/:encodedUrl', async (req, res) => {
       host: parsedTargetUrl.host,
     };
 
-    const targetReq = http.request(options, (targetRes) => {
-      res.writeHead(targetRes.statusCode, targetRes.headers);
-      targetRes.pipe(res);
-    });
+    let targetReq;
+    if (parsedTargetUrl.protocol === 'https:') {
+      targetReq = https.request(options, (targetRes) => {
+        res.writeHead(targetRes.statusCode, targetRes.headers);
+        targetRes.pipe(res);
+      });
+    } else {
+      targetReq = http.request(options, (targetRes) => {
+        res.writeHead(targetRes.statusCode, targetRes.headers);
+        targetRes.pipe(res);
+      });
+    }
 
     targetReq.on('error', (err) => {
       logger.error(err);
@@ -38,15 +49,6 @@ app.get('/service/:encodedUrl', async (req, res) => {
     });
 
     req.pipe(targetReq);
-  } catch (err) {
-    logger.error(err);
-    res.status(500).send({ error: 'Internal Server Error' });
-  }
-});
-
-app.use(async (req, res) => {
-  try {
-    await proxyEngine(req, res);
   } catch (err) {
     logger.error(err);
     res.status(500).send({ error: 'Internal Server Error' });
@@ -64,8 +66,8 @@ httpServer.listen(config.server.port, config.server.host, () => {
 });
 
 if (config.server.https.enabled) {
-  httpsServer.listen(443, config.server.host, () => {
-    logger.info(`HTTPS server listening on ${config.server.host}:443`);
+  httpsServer.listen(config.server.https.port || 443, config.server.host, () => {
+    logger.info(`HTTPS server listening on ${config.server.host}:${config.server.https.port || 443}`);
   });
 }
 
