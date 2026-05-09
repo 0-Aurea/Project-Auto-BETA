@@ -1,12 +1,11 @@
 import { encode } from '../sw-config.js';
 
 export class TabManager {
-  constructor({ tabBarElement, viewportElement, onTabChange, searchBarElement, swConfig }) {
+  constructor({ tabBarElement, viewportElement, onTabChange, searchBarElement }) {
     this.tabBarElement = tabBarElement;
     this.viewportElement = viewportElement;
     this.onTabChange = onTabChange;
     this.searchBarElement = searchBarElement;
-    this.swConfig = swConfig;
     this.tabs = [];
     this.activeTabId = null;
     this.tabIdCounter = 0;
@@ -136,27 +135,22 @@ export class TabManager {
   }
 
   switchTab(tabId) {
-    const tabIndex = this.tabs.findIndex((tab) => tab.id === tabId);
-    if (tabIndex === -1) return;
+    if (this.activeTabId === tabId) return;
+
+    const oldTab = this.tabs.find((tab) => tab.id === this.activeTabId);
+    if (oldTab) {
+      oldTab.iframeEl.style.display = 'none';
+      oldTab.iframeEl.style.opacity = 0;
+    }
+
+    const newTab = this.tabs.find((tab) => tab.id === tabId);
+    newTab.iframeEl.style.display = 'block';
+    newTab.iframeEl.style.opacity = 1;
 
     this.activeTabId = tabId;
-    this.tabs.forEach((tab, index) => {
-      tab.iframeEl.style.display = index === tabIndex ? 'block' : 'none';
-      tab.iframeEl.style.zIndex = index === tabIndex ? 1 : -1;
-      tab.iframeEl.style.opacity = index === tabIndex ? 1 : 0;
-    });
 
-    const tabElement = this.tabBarElement.children[tabIndex];
-    tabElement.classList.add('active');
-    this.tabs.forEach((tab, index) => {
-      if (index !== tabIndex) {
-        this.tabBarElement.children[index].classList.remove('active');
-      }
-    });
-
-    if (this.onTabChange) {
-      this.onTabChange(tabId);
-    }
+    this.renderTabBar();
+    this.onTabChange && this.onTabChange(newTab);
   }
 
   handleTabClick(tabId) {
@@ -179,23 +173,23 @@ export class TabManager {
   }
 
   renderTabBar() {
-    // Add active class to active tab
-    this.tabs.forEach((tab, index) => {
-      const tabElement = this.tabBarElement.children[index];
-      if (tab.id === this.activeTabId) {
-        tabElement.classList.add('active');
-      } else {
+    const tabElements = this.tabBarElement.children;
+    for (let i = 0; i < tabElements.length; i++) {
+      const tabElement = tabElements[i];
+      if (tabElement.classList.contains('tab')) {
         tabElement.classList.remove('active');
+        if (this.tabs.find((tab) => tab.id === i)) {
+          tabElement.classList.add('active');
+        }
       }
-    });
+    }
   }
 
-  navigateTab(tabId, url) {
-    const tabIndex = this.tabs.findIndex((tab) => tab.id === tabId);
-    if (tabIndex === -1) return;
-
-    const tab = this.tabs[tabIndex];
-    tab.url = url;
-    tab.iframeEl.src = url;
+  navigateToUrl(url) {
+    const activeTab = this.tabs.find((tab) => tab.id === this.activeTabId);
+    if (activeTab) {
+      activeTab.url = url;
+      activeTab.iframeEl.src = encode(url);
+    }
   }
 }
