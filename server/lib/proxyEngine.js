@@ -13,11 +13,12 @@ const crypto = require('crypto');
 
 const proxyEngine = async (req, res) => {
   try {
-    const targetUrl = req.query.url;
-    if (!targetUrl) {
+    const encodedUrl = req.params.encodedUrl;
+    if (!encodedUrl) {
       return res.status(400).send({ error: 'Bad Request' });
     }
 
+    const targetUrl = Buffer.from(encodedUrl, 'base64').toString('utf8');
     const parsedTargetUrl = url.parse(targetUrl);
     if (!parsedTargetUrl.protocol || !parsedTargetUrl.host) {
       return res.status(400).send({ error: 'Invalid target URL' });
@@ -65,7 +66,7 @@ const proxyEngine = async (req, res) => {
       if (rewrittenHeaders['location']) {
         const locationUrl = url.parse(rewrittenHeaders['location']);
         if (locationUrl.host) {
-          rewrittenHeaders['location'] = `${req.protocol}://${req.get('host')}${locationUrl.pathname}${locationUrl.search}`;
+          rewrittenHeaders['location'] = `${req.protocol}://${req.get('host')}/service/${Buffer.from(locationUrl.href).toString('base64')}`;
         } else {
           rewrittenHeaders['location'] = `${req.protocol}://${req.get('host')}${locationUrl.pathname}${locationUrl.search}`;
         }
@@ -128,92 +129,29 @@ const handleWebSocketProxy = (req, res, targetUrl) => {
       },
     };
     res.writeHead(101, webSocketResponse.headers);
-    res.socket.setKeepAlive(true);
-
-    const pipeWebSocketData = (wsProxy, socket) => {
-      wsProxy.on('message', (message) => {
-        socket.write(message);
-      });
-
-      wsProxy.on('close', () => {
-        socket.destroy();
-      });
-
-      wsProxy.on('error', (error) => {
-        logger.error(`WebSocket proxy error: ${error.message}`);
-        socket.destroy();
-      });
-
-      socket.on('message', (message) => {
-        wsProxy.send(message);
-      });
-
-      socket.on('close', () => {
-        wsProxy.close();
-      });
-
-      socket.on('error', (error) => {
-        logger.error(`WebSocket socket error: ${error.message}`);
-        wsProxy.close();
-      });
-    };
-
-    pipeWebSocketData(wsProxy, res.socket);
+    wsProxy.pipe(res).pipe(wsProxy);
   });
 
   wsProxy.on('error', (error) => {
     logger.error(`WebSocket proxy error: ${error.message}`);
-    res.status(500).send({ error: 'Internal Server Error' });
   });
 };
 
 const handleHttpsConnect = (req, res, targetUrl) => {
-  const parsedTargetUrl = url.parse(targetUrl);
+  const targetHost = url.parse(targetUrl).host;
   const options = {
-    hostname: parsedTargetUrl.hostname,
+    host: targetHost,
     port: 443,
-    method: 'CONNECT',
+    rejectUnauthorized: false,
   };
 
-  const httpsSocket = tls.connect(options, () => {
-    res.writeHead(200, { 'Connection': 'keep-alive' });
-    res.end();
-
-    const pipeData = (source, destination) => {
-      source.on('data', (data) => {
-        destination.write(data);
-      });
-
-      source.on('end', () => {
-        destination.end();
-      });
-
-      source.on('error', (error) => {
-        logger.error(`HTTPS connect error: ${error.message}`);
-        destination.destroy();
-      });
-
-      destination.on('data', (data) => {
-        source.write(data);
-      });
-
-      destination.on('end', () => {
-        source.end();
-      });
-
-      destination.on('error', (error) => {
-        logger.error(`HTTPS connect error: ${error.message}`);
-        source.destroy();
-      });
-    };
-
-    pipeData(req.socket, httpsSocket);
-    pipeData(httpsSocket, req.socket);
+  const tlsSocket = tls.connect(options, () => {
+    res.writeHead(200, { 'Connection': 'established' });
+    req.pipe(tlsSocket).pipe(res);
   });
 
-  httpsSocket.on('error', (error) => {
+  tlsSocket.on('error', (error) => {
     logger.error(`HTTPS connect error: ${error.message}`);
-    res.status(500).send({ error: 'Internal Server Error' });
   });
 };
 
