@@ -194,12 +194,13 @@ header nav a:hover {
   transition: background-color 0.2s ease;
 }
 
-.search-engine-pill.active {
+.search-engine-pill:hover {
   background-color: var(--bg-elevated);
 }
 
-.search-engine-pill:not(:last-child) {
-  margin-right: var(--space-1);
+.search-engine-pill.active {
+  background-color: var(--accent);
+  color: var(--text-primary);
 }
 
 #viewport {
@@ -254,87 +255,142 @@ iframe {
   margin: 0;
 }
 
-.settings-toggle, .history-toggle, .bookmarks-toggle {
-  background-color: var(--bg-surface);
+.settings-header button, .history-header button, .bookmarks-header button {
+  background-color: transparent;
+  border: none;
   padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  font-size: 1rem;
   cursor: pointer;
 }
 
-.settings-toggle:hover, .history-toggle:hover, .bookmarks-toggle:hover {
-  background-color: var(--bg-elevated);
-}
-
-.settings-list, .history-list, .bookmarks-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.settings-list li, .history-list li, .bookmarks-list li {
-  margin-bottom: var(--space-1);
-}
-
-.settings-list label, .history-list label, .bookmarks-list label {
-  font-size: 1rem;
-  margin-right: var(--space-1);
-}
-
-.settings-list input[type="checkbox"], .settings-list input[type="select"] {
-  margin-right: var(--space-1);
-}
-
-.history-item {
+.settings-toggle, .history-toggle, .bookmarks-toggle {
   display: flex;
   align-items: center;
-  margin-bottom: var(--space-1);
 }
 
-.history-item favicon {
-  width: 16px;
-  height: 16px;
-  margin-right: var(--space-1);
+.settings-toggle label, .history-toggle label, .bookmarks-toggle label {
+  margin-left: var(--space-1);
+  cursor: pointer;
+}
+
+.settings-toggle input[type="checkbox"], .history-toggle input[type="checkbox"], .bookmarks-toggle input[type="checkbox"] {
+  display: none;
+}
+
+.settings-toggle .switch, .history-toggle .switch, .bookmarks-toggle .switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.settings-toggle .switch::before, .history-toggle .switch::before, .bookmarks-toggle .switch::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.settings-toggle input[type="checkbox"]:checked + .switch::before, .history-toggle input[type="checkbox"]:checked + .switch::before, .bookmarks-toggle input[type="checkbox"]:checked + .switch::before {
+  background-color: var(--accent);
+  transform: translateX(20px);
 }
 
 .bookmarks-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 
-.bookmarks-card {
+.bookmark-card {
   background-color: var(--bg-surface);
-  padding: var(--space-1);
+  padding: var(--space-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
-.bookmarks-card favicon {
-  width: 24px;
-  height: 24px;
+.bookmark-card img {
+  width: 100%;
+  height: 100px;
+  object-fit: cover;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.bookmark-card .bookmark-info {
+  padding: var(--space-1) var(--space-2);
+  text-align: center;
+}
+
+.bookmark-card .bookmark-info h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.bookmark-card .bookmark-info p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.history-item {
+  background-color: var(--bg-surface);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   margin-bottom: var(--space-1);
 }
 
-.bookmarks-card span {
+.history-item img {
+  width: 20px;
+  height: 20px;
+  object-fit: cover;
+  border-radius: var(--radius-full);
+  margin-right: var(--space-1);
+}
+
+.history-item .history-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.history-item .history-info h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.history-item .history-info p {
   font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0;
 }
 
-.loading-bar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background-color: var(--accent);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.2s ease;
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
 }
 
-.loading-bar.show {
-  transform: scaleX(1);
+::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-track {
+  background-color: transparent;
 }
