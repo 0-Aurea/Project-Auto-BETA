@@ -9,6 +9,7 @@ const logger = require('./lib/logger');
 const proxyEngine = require('./lib/proxyEngine');
 const authMiddleware = require('./middleware/auth');
 const cookieScoping = require('./lib/cookieScoping');
+const cookieParser = require('cookie-parser');
 
 const app = express();
 
@@ -46,6 +47,8 @@ app.get('/service/:encodedUrl', async (req, res) => {
         'content-security-policy': '',
         'strict-transport-security': '',
         'x-frame-options': '',
+        'access-control-allow-origin': '*',
+        'access-control-allow-headers': 'Origin, X-Requested-With, Content-Type, Accept',
       },
     };
 
@@ -149,18 +152,4 @@ httpsServer.on('connection', (socket) => {
       });
     }
   });
-});
-
-process.on('SIGINT', () => {
-  httpServer.close();
-  httpsServer.close();
-  wss.close();
-  process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-  httpServer.close();
-  httpsServer.close();
-  wss.close();
-  process.exit(0);
 });
