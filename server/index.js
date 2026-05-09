@@ -4,6 +4,7 @@ const https = require('https');
 const WebSocket = require('ws');
 const url = require('url');
 const axios = require('axios');
+const tls = require('tls');
 const config = require('./lib/config');
 const logger = require('./lib/logger');
 const proxyEngine = require('./lib/proxyEngine');
@@ -42,6 +43,7 @@ app.get('/service/:encodedUrl', async (req, res) => {
       url: targetUrl,
       headers: req.headers,
       data: req.body,
+      responseType: 'arraybuffer',
     });
 
     const rewrittenResponse = {
@@ -66,7 +68,7 @@ app.get('/service/:encodedUrl', async (req, res) => {
       rewrittenResponse.headers.location = url.resolve(targetUrl, response.headers.location);
     }
 
-    res.status(response.status).set(rewrittenResponse.headers).send(response.data);
+    res.status(response.status).set(rewrittenResponse.headers).send(Buffer.from(response.data));
   } catch (error) {
     logger.error('Proxy error:', error);
     res.status(500).send({ error: 'Internal Server Error' });
@@ -84,6 +86,46 @@ httpServer.listen(config.server.port, config.server.host, () => {
 if (config.server.https.enabled) {
   httpsServer.listen(config.server.https.port || config.server.port, config.server.host, () => {
     logger.info(`HTTPS server listening on ${config.server.host}:${config.server.https.port || config.server.port}`);
+  });
+
+  httpsServer.on('connection', (socket) => {
+    socket.on('data', (chunk) => {
+      const req = chunk.toString();
+      if (req.startsWith('CONNECT')) {
+        const [, targetHost, targetPort] = req.split(' ');
+        const targetSocket = tls.connect(targetPort, targetHost, () => {
+          socket.write(`HTTP/1.1 200 Connection Established\r\n\r\n`);
+        });
+
+        socket.on('data', (chunk) => {
+          targetSocket.write(chunk);
+        });
+
+        targetSocket.on('data', (chunk) => {
+          socket.write(chunk);
+        });
+
+        targetSocket.on('error', (error) => {
+          logger.error('Target socket error:', error);
+          socket.destroy();
+          targetSocket.destroy();
+        });
+
+        socket.on('error', (error) => {
+          logger.error('Socket error:', error);
+          socket.destroy();
+          targetSocket.destroy();
+        });
+
+        socket.on('close', () => {
+          targetSocket.destroy();
+        });
+
+        targetSocket.on('close', () => {
+          socket.destroy();
+        });
+      }
+    });
   });
 }
 
@@ -119,43 +161,12 @@ wss.on('connection', (ws, req) => {
     ws.close();
   });
 });
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled rejection:', reason);
+  process.exit(1);
+});
 
-if (httpsServer) {
-  httpsServer.on('connection', (socket) => {
-    socket.on('data', (chunk) => {
-      const req = chunk.toString();
-      if (req.startsWith('CONNECT')) {
-        const [, targetHost, targetPort] = req.split(' ');
-        const targetSocket = tls.connect(targetPort, targetHost, () => {
-          socket.write(`HTTP/1.1 200 Connection Established\r\n\r\n`);
-        });
-
-        socket.on('data', (chunk) => {
-          targetSocket.write(chunk);
-        });
-
-        targetSocket.on('data', (chunk) => {
-          socket.write(chunk);
-        });
-
-        targetSocket.on('error', (error) => {
-          logger.error('Target socket error:', error);
-          socket.destroy();
-        });
-
-        socket.on('error', (error) => {
-          logger.error('Socket error:', error);
-          targetSocket.destroy();
-        });
-
-        socket.on('close', () => {
-          targetSocket.destroy();
-        });
-
-        targetSocket.on('close', () => {
-          socket.destroy();
-        });
-      }
-    });
-  });
-}
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught exception:', error);
+  process.exit(1);
+});
