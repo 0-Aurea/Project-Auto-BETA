@@ -3,6 +3,7 @@ import { SearchBar } from './components/SearchBar.js';
 import { SettingsManager } from './components/SettingsManager.js';
 import { HistoryManager } from './components/HistoryManager.js';
 import { BookmarkManager } from './components/BookmarkManager.js';
+import { NexusLogo } from './components/NexusLogo.js';
 import { encode, decode } from './sw-config.js';
 
 const settingsToggle = document.getElementById('settings-toggle');
@@ -23,6 +24,8 @@ historyPanelElement.classList.add('history-panel');
 document.body.appendChild(settingsPanelElement);
 document.body.appendChild(bookmarksPanelElement);
 document.body.appendChild(historyPanelElement);
+
+const nexusLogo = new NexusLogo({ logoContainerElement: navLogoElement });
 
 const tabManager = new TabManager({ 
   tabBarElement, 
@@ -129,43 +132,9 @@ document.addEventListener('keydown', (event) => {
   }
 });
  
-// Add event listener to handle mousedown event on document
-document.addEventListener('mousedown', (event) => {
-  // If the click is outside the panels, close them
-  if (!settingsPanelElement.contains(event.target) && !bookmarksPanelElement.contains(event.target) && !historyPanelElement.contains(event.target)) {
-    settingsPanelElement.classList.remove('open');
-    bookmarksPanelElement.classList.remove('open');
-    historyPanelElement.classList.remove('open');
-  }
-});
-
-// Load settings from local storage
-settingsManager.loadSettings();
-
-// Initialize tab manager with saved tabs
-tabManager.loadTabs();
-
-// Update UI based on settings
-settingsManager.updateUI();
-
-// Update search bar based on current tab
-tabManager.onTabChange(tabManager.getActiveTab());
-
-// Handle service worker messages
-navigator.serviceWorker.addEventListener('message', (event) => {
-  if (event.data.type === 'tabUpdate') {
-    tabManager.updateTab(event.data.tab);
-  } else if (event.data.type === 'tabClose') {
-    tabManager.closeTab(event.data.tabId);
-  }
-});
-
-// Handle tab updates from service worker
-tabManager.onTabUpdate((tab) => {
-  navigator.serviceWorker.controller.postMessage({ type: 'tabUpdate', tab });
-});
-
-// Handle tab close from service worker
-tabManager.onTabClose((tab) => {
-  navigator.serviceWorker.controller.postMessage({ type: 'tabClose', tabId: tab.id });
+searchBarElement.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const searchQuery = searchBar.getSearchQuery();
+  const encodedUrl = encode(searchQuery);
+  tabManager.navigate(encodedUrl);
 });
