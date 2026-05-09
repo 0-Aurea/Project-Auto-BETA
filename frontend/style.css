@@ -213,7 +213,9 @@ iframe {
   height: 100%;
 }
 
-.settings-panel, .history-panel, .bookmarks-panel {
+.settings-panel,
+.history-panel,
+.bookmarks-panel {
   position: fixed;
   top: 0;
   right: 0;
@@ -226,144 +228,110 @@ iframe {
   transition: transform 0.2s cubic-bezier(0.16,1,0.3,1);
 }
 
-.settings-panel.show, .history-panel.show, .bookmarks-panel.show {
+.settings-panel.show,
+.history-panel.show,
+.bookmarks-panel.show {
   transform: translateX(0);
 }
 
-.settings-panel::before, .history-panel::before, .bookmarks-panel::before {
-  content: '';
+.settings-panel-overlay,
+.history-panel-overlay,
+.bookmarks-panel-overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   background-color: rgba(0,0,0,0.5);
-  backdrop-filter: blur(10px);
-}
-
-.settings-panel {
-  width: 300px;
-}
-
-.history-panel {
-  width: 400px;
-}
-
-.bookmarks-panel {
-  width: 300px;
-}
-
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-2);
-}
-
-.panel-header h2 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.panel-close {
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
-.settings-switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
-}
-
-.settings-switch input {
   opacity: 0;
-  width: 0;
-  height: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 
-.settings-switch .slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--bg-surface);
-  transition: 0.2s;
+.settings-panel-overlay.show,
+.history-panel-overlay.show,
+.bookmarks-panel-overlay.show {
+  opacity: 1;
+  pointer-events: all;
 }
 
-.settings-switch .slider:before {
-  position: absolute;
-  content: "";
-  height: 20px;
-  width: 20px;
-  left: 2px;
-  bottom: 2px;
-  background-color: var(--bg-base);
-  transition: 0.2s;
+.settings-panel-content {
+  display: flex;
+  flex-direction: column;
 }
 
-.settings-switch input:checked + .slider {
-  background-color: var(--accent);
+.settings-panel-content label {
+  margin-bottom: var(--space-1);
 }
 
-.settings-switch input:checked + .slider:before {
-  transform: translateX(20px);
+.settings-panel-content input[type="checkbox"] {
+  margin-right: var(--space-1);
 }
 
-.settings-select {
-  background-color: var(--bg-surface);
+.settings-panel-content select {
+  padding: var(--space-1) var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-2);
-  font-size: 1rem;
 }
 
-.history-item {
+.history-panel-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.history-panel-content .history-item {
   padding: var(--space-1) var(--space-2);
   border-bottom: 1px solid var(--border);
 }
 
-.history-item:last-child {
+.history-panel-content .history-item:last-child {
   border-bottom: none;
 }
 
-.history-item .favicon {
+.history-panel-content .history-item .favicon {
   width: 16px;
   height: 16px;
   margin-right: var(--space-1);
 }
 
-.bookmark-card {
+.bookmarks-panel-content {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.bookmarks-panel-content .bookmark-card {
   background-color: var(--bg-surface);
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
+  margin: var(--space-1);
+  width: calc(33.33% - var(--space-2));
+}
+
+.bookmarks-panel-content .bookmark-card .favicon {
+  width: 24px;
+  height: 24px;
   margin-bottom: var(--space-1);
 }
 
-.bookmark-card .favicon {
-  width: 16px;
-  height: 16px;
-  margin-right: var(--space-1);
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }
 
 ::-webkit-scrollbar {
   width: 10px;
-}
-
-::-webkit-scrollbar-track {
-  background-color: var(--bg-base);
+  height: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
   background-color: var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background-color: var(--border-bright);
+::-webkit-scrollbar-track {
+  background-color: transparent;
 }
