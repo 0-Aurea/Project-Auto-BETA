@@ -213,7 +213,9 @@ iframe {
   height: 100%;
 }
 
-.settings-panel, .history-panel, .bookmarks-panel {
+.settings-panel,
+.history-panel,
+.bookmarks-panel {
   position: fixed;
   top: 0;
   right: 0;
@@ -226,11 +228,15 @@ iframe {
   transition: transform 0.2s cubic-bezier(0.16,1,0.3,1);
 }
 
-.settings-panel.show, .history-panel.show, .bookmarks-panel.show {
+.settings-panel.show,
+.history-panel.show,
+.bookmarks-panel.show {
   transform: translateX(0);
 }
 
-.settings-panel::before, .history-panel::before, .bookmarks-panel::before {
+.settings-panel::before,
+.history-panel::before,
+.bookmarks-panel::before {
   content: '';
   position: fixed;
   top: 0;
@@ -241,86 +247,79 @@ iframe {
   backdrop-filter: blur(10px);
 }
 
-.settings-header, .history-header, .bookmarks-header {
+.settings-header,
+.history-header,
+.bookmarks-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--space-2);
 }
 
-.settings-header h2, .history-header h2, .bookmarks-header h2 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.settings-toggle, .history-toggle, .bookmarks-toggle {
+.settings-header button,
+.history-header button,
+.bookmarks-header button {
   background-color: var(--bg-surface);
+  border: none;
   padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  font-size: 1rem;
   cursor: pointer;
 }
 
-.settings-toggle:hover, .history-toggle:hover, .bookmarks-toggle:hover {
-  background-color: var(--bg-elevated);
-}
-
-.settings-section {
-  margin-bottom: var(--space-4);
-}
-
-.settings-section h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  margin-bottom: var(--space-1);
-}
-
-.settings-switch {
+.settings-toggle,
+.history-toggle,
+.bookmarks-toggle {
   position: relative;
   display: inline-block;
   width: 44px;
   height: 24px;
 }
 
-.settings-switch input[type="checkbox"] {
+.settings-toggle input,
+.history-toggle input,
+.bookmarks-toggle input {
   opacity: 0;
   width: 0;
   height: 0;
 }
 
-.settings-switch .slider {
+.settings-toggle .slider,
+.history-toggle .slider,
+.bookmarks-toggle .slider {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border);
+  background-color: var(--border);
   border-radius: 24px;
-  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.settings-switch .slider::before {
+.settings-toggle .slider::before,
+.history-toggle .slider::before,
+.bookmarks-toggle .slider::before {
   content: '';
   position: absolute;
   top: 2px;
   left: 2px;
   width: 20px;
   height: 20px;
-  background-color: var(--bg-base);
+  background-color: var(--bg-surface);
   border-radius: 50%;
-  transition: transform 0.2s ease;
+  transition: all 0.2s ease;
 }
 
-.settings-switch input[type="checkbox"]:checked + .slider::before {
+.settings-toggle input:checked + .slider,
+.history-toggle input:checked + .slider,
+.bookmarks-toggle input:checked + .slider {
+  background-color: var(--accent);
+}
+
+.settings-toggle input:checked + .slider::before,
+.history-toggle input:checked + .slider::before,
+.bookmarks-toggle input:checked + .slider::before {
   transform: translateX(20px);
-}
-
-.history-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
 }
 
 .history-item {
@@ -338,38 +337,19 @@ iframe {
   margin-right: var(--space-1);
 }
 
-.history-item .title {
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.history-item .url {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-.bookmarks-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-2);
-}
-
 .bookmark-card {
   background-color: var(--bg-surface);
   padding: var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  margin: var(--space-1);
+  width: calc(33.33% - var(--space-2));
 }
 
 .bookmark-card .favicon {
   width: 24px;
   height: 24px;
   margin-bottom: var(--space-1);
-}
-
-.bookmark-card .title {
-  font-size: 1rem;
-  font-weight: 600;
 }
 
 .loading-bar {
