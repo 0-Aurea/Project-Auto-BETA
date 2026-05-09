@@ -121,37 +121,63 @@ const handleWebSocketProxy = (req, res, targetUrl) => {
   const wsProxy = new WebSocket(webSocketTarget.href, webSocketOptions);
 
   wsProxy.on('open', () => {
-    const webSocketResponse = {
-      status: 101,
-      headers: {
-        'Upgrade': 'WebSocket',
-        'Connection': 'Upgrade',
-      },
-    };
-    res.writeHead(101, webSocketResponse.headers);
-    wsProxy.pipe(res).pipe(wsProxy);
+    res.writeHead(101, {
+      'Upgrade': 'WebSocket',
+      'Connection': 'Upgrade',
+    });
+    res.end();
+  });
+
+  wsProxy.on('message', (message) => {
+    res.socket.write(message);
   });
 
   wsProxy.on('error', (error) => {
     logger.error(`WebSocket proxy error: ${error.message}`);
+  });
+
+  wsProxy.on('close', () => {
+    res.socket.destroy();
+  });
+
+  res.socket.on('message', (message) => {
+    wsProxy.send(message);
+  });
+
+  res.socket.on('error', (error) => {
+    logger.error(`WebSocket proxy error: ${error.message}`);
+  });
+
+  res.socket.on('close', () => {
+    wsProxy.close();
   });
 };
 
 const handleHttpsConnect = (req, res, targetUrl) => {
   const targetHost = url.parse(targetUrl).host;
   const options = {
-    host: targetHost,
+    hostname: targetHost,
     port: 443,
-    rejectUnauthorized: false,
+    servername: targetHost,
   };
 
   const tlsSocket = tls.connect(options, () => {
-    res.writeHead(200, { 'Connection': 'established' });
-    req.pipe(tlsSocket).pipe(res);
+    res.writeHead(200, {
+      'Connection': 'established',
+    });
+    res.end();
+
+    req.socket.pipe(tlsSocket);
+    tlsSocket.pipe(req.socket);
   });
 
   tlsSocket.on('error', (error) => {
     logger.error(`HTTPS connect error: ${error.message}`);
+    req.socket.destroy();
+  });
+
+  tlsSocket.on('close', () => {
+    req.socket.destroy();
   });
 };
 
