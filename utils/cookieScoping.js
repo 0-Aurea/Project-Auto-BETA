@@ -62,6 +62,18 @@ class CookieScopingUtils {
    */
   static clearCookies(origin) {
     // Implementation of clearing cookies (e.g., using the Cache API or IndexedDB)
+    // For simplicity, we will use document.cookie to clear cookies in a browser environment
+    // However, in a Node.js environment, you would need to use a library or a custom implementation
+    if (typeof document !== 'undefined') {
+      document.cookie.split(';').forEach((cookie) => {
+        const [name] = cookie.split('=');
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+      });
+    } else {
+      // For Node.js environment, you can use a library like jsdom or a custom implementation
+      // For simplicity, we will throw an error
+      throw new Error('Clearing cookies is not implemented for Node.js environment');
+    }
   }
 }
 
