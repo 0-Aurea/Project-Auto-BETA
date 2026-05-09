@@ -6,7 +6,6 @@ const https = require('https');
 const WebSocket = require('ws');
 const config = require('./config');
 const logger = require('./logger');
-const cookieScoping = require('./cookieScoping');
 const { Transform } = require('stream');
 
 const proxyEngine = async (req, res) => {
@@ -134,11 +133,11 @@ const handleWebSocketProxy = (req, res, targetUrl) => {
   });
 
   req.on('close', () => {
-    wsProxy.close();
+    wsProxy.terminate();
   });
 
-  req.on('data', (data) => {
-    wsProxy.send(data);
+  res.on('close', () => {
+    wsProxy.terminate();
   });
 };
 
